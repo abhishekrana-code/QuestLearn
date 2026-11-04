@@ -1,0 +1,40 @@
+# Java / Maven
+questlearn-backend/target/
+*.class
+*.jar.original
+hs_err_pid*
+
+# Maven wrapper cache
+.mvn/wrapper/maven-wrapper.jar
+
+# Runtime logs
+*.log
+
+# Databases created by the optional H2 profile
+questlearn-backend/data/
+*.mv.db
+*.trace.db
+
+# Node / Vite
+questlearn-frontend/node_modules/
+questlearn-frontend/dist/
+questlearn-frontend/.vite/
+npm-debug.log*
+yarn-error.log*
+
+# Environment / secrets (local DB credentials, JWT secret)
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+Thumbs.db
+.DS_Store
