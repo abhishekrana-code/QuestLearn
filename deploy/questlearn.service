@@ -1,0 +1,35 @@
+[Unit]
+Description=QuestLearn backend
+Documentation=file:///opt/questlearn/DEPLOY.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=questlearn
+Group=questlearn
+WorkingDirectory=/opt/questlearn/backend
+
+# Secrets live here, never in the unit file or the jar.
+EnvironmentFile=/opt/questlearn/backend/app.env
+
+# Sized for a 1-2 GB VPS. Raise -Xmx only if the instance has the RAM.
+ExecStart=/usr/bin/java -Xms256m -Xmx768m -XX:+UseSerialGC -jar /opt/questlearn/backend/questlearn.jar
+
+Restart=always
+RestartSec=5
+SuccessExitStatus=143
+TimeoutStopSec=30
+
+# The app only needs to write its log directory.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/questlearn/backend/logs
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

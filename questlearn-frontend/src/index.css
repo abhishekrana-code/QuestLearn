@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    @apply bg-ink-900 text-slate-100 antialiased;
+    background-image:
+      radial-gradient(circle at 15% -10%, rgba(139, 92, 246, 0.22), transparent 55%),
+      radial-gradient(circle at 85% 0%, rgba(34, 211, 238, 0.14), transparent 50%),
+      radial-gradient(circle at 50% 120%, rgba(244, 201, 93, 0.12), transparent 55%);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    @apply bg-gold/30 text-white;
+  }
+
+  *:focus-visible {
+    @apply outline-none ring-2 ring-gold/70 ring-offset-2 ring-offset-ink-900;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-white/10 bg-ink-800/70 backdrop-blur-sm;
+  }
+
+  .panel-raised {
+    @apply panel shadow-[0_18px_50px_-25px_rgba(0,0,0,0.9)];
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-gold text-ink-900 hover:bg-gold-soft active:translate-y-px;
+  }
+
+  .btn-arcane {
+    @apply btn bg-arcane text-white hover:bg-arcane/90 active:translate-y-px;
+  }
+
+  .btn-ghost {
+    @apply btn border border-white/15 bg-white/5 text-slate-100 hover:bg-white/10;
+  }
+
+  .btn-danger {
+    @apply btn border border-rose-400/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-white/10 bg-ink-900/70 px-3.5 py-2.5 text-sm text-slate-100
+      placeholder:text-slate-500 focus:border-gold/60;
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1
+      text-[11px] font-semibold uppercase tracking-wider text-slate-300;
+  }
+
+  .stat-value {
+    @apply font-display text-2xl font-bold text-slate-50;
+  }
+
+  .grid-floor {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+}
+
+/* Slim scrollbars keep the dashboard compact on small screens. */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.28);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}

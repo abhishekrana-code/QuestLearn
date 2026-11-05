@@ -1,0 +1,179 @@
+# Deploying QuestLearn for a real class
+
+This is the shortest path from this repository to a URL your students can open,
+plus the operations you actually need: backups, upgrades, and the three support
+requests a class generates.
+
+Target: one small Linux VPS (1–2 vCPU, 2 GB RAM, Ubuntu LTS) running PostgreSQL,
+the Spring Boot jar under systemd, and nginx serving the built frontend over HTTPS.
+No Docker required.
+
+---
+
+## 1. Create the server and point DNS at it
+
+1. Create an Ubuntu LTS server with your SSH key.
+2. Add an `A` record for `questlearn.example.com` (and `www` if you want it) pointing
+   at the server's public IP.
+3. Open only SSH, HTTP and HTTPS:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y openjdk-21-jre-headless nginx postgresql certbot python3-certbot-nginx git
+sudo ufw allow OpenSSH && sudo ufw allow "Nginx Full" && sudo ufw --force enable
+```
+
+## 2. Create the database and application user
+
+Give the app its own role rather than using `postgres`:
+
+```bash
+sudo -u postgres psql <<'SQL'
+CREATE ROLE questlearn LOGIN PASSWORD 'replace-with-a-long-random-password';
+CREATE DATABASE questlearn OWNER questlearn;
+SQL
+```
+
+The schema is created by Flyway on first start; do not create tables by hand.
+
+## 3. Lay out the application
+
+```bash
+sudo useradd --system --create-home --shell /usr/sbin/nologin questlearn
+sudo mkdir -p /opt/questlearn/backend/logs /var/www/questlearn
+sudo chown -R questlearn:questlearn /opt/questlearn
+```
+
+Build locally and copy the artifacts (or build on the server if it has a JDK):
+
+```bash
+# on your machine, from the repository root
+cd questlearn-backend && mvn -B -DskipTests package
+cd ../questlearn-frontend && npm ci && npm run build
+```
+
+```bash
+# upload
+scp questlearn-backend/target/questlearn-1.0.0.jar  you@server:/opt/questlearn/backend/questlearn.jar
+scp -r questlearn-frontend/dist/*                  you@server:/var/www/questlearn/
+```
+
+## 4. Configure and start the backend
+
+```bash
+sudo install -m 600 -o questlearn -g questlearn deploy/app.env.example \
+     /opt/questlearn/backend/app.env
+sudo nano /opt/questlearn/backend/app.env      # fill in the values
+sudo cp deploy/questlearn.service /etc/systemd/system/questlearn.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now questlearn
+sudo systemctl status questlearn --no-pager
+curl -s localhost:8080/actuator/health          # {"status":"UP"}
+```
+
+`JWT_SECRET` and `CORS_ORIGINS` have **no defaults in the prod profile** — the app
+refuses to start without them, which is intentional. Generate the secret with
+`openssl rand -base64 48`.
+
+## 5. Serve it with HTTPS
+
+```bash
+sudo cp deploy/nginx.conf /etc/nginx/sites-available/questlearn.conf
+sudo nano /etc/nginx/sites-available/questlearn.conf   # set server_name
+sudo ln -sf /etc/nginx/sites-available/questlearn.conf /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d questlearn.example.com --agree-tos -m you@example.com
+```
+
+Then set `CORS_ORIGINS=https://questlearn.example.com` in `app.env`, restart the
+backend, and open the site.
+
+## 6. Verify the deployment
+
+```bash
+curl -s https://questlearn.example.com/actuator/health        # UP
+curl -s -o /dev/null -w '%{http_code}\n' https://questlearn.example.com/   # 200
+curl -s -o /dev/null -w '%{http_code}\n' https://questlearn.example.com/api/v1/courses  # 401
+```
+
+Sign in as an admin, open **War room**, and confirm the account list loads — that
+proves browser → nginx → Spring → PostgreSQL end to end.
+
+---
+
+## Backups (do this before students sign up)
+
+```bash
+sudo -u postgres mkdir -p /var/backups/questlearn
+sudo crontab -e
+```
+
+```cron
+15 2 * * * pg_dump -Fc questlearn | gzip > /var/backups/questlearn/questlearn-$(date +\%F).dump.gz
+30 2 * * * find /var/backups/questlearn -name '*.dump.gz' -mtime +14 -delete
+```
+
+Restore into a scratch database to prove the backup works:
+
+```bash
+gunzip -c /var/backups/questlearn/questlearn-YYYY-MM-DD.dump.gz \
+  | pg_restore -d questlearn_restore_test --clean --if-exists
+```
+
+Copy dumps off the machine (object storage or your laptop). A backup on the same
+disk as the database is not a backup.
+
+---
+
+## Upgrading
+
+```bash
+sudo cp questlearn-1.0.1.jar /opt/questlearn/backend/questlearn.jar
+sudo systemctl restart questlearn
+```
+
+Flyway applies any new `V<n>__*.sql` migrations at startup and Hibernate runs in
+`validate` mode, so a mismatch fails the start instead of corrupting data. If it
+fails, the old jar plus the previous dump gets you back.
+
+**Never** re-enable `spring.jpa.hibernate.ddl-auto=update`.
+
+---
+
+## Support runbook
+
+| Request | How to handle it |
+|---|---|
+| Student forgot their password | War room → **Reset** next to the account → read the one-time temporary password to them. They can change it from the API (`PATCH /api/v1/auth/password`) or ask you again. |
+| Student wants to retake a node | Nothing to do — completed nodes are replayable and keep the best score, with no extra XP. |
+| A node shows as completed but the score is wrong | `DELETE /api/v1/admin/users/{userId}/modules/{moduleId}/progress` as admin; XP for that node is removed and the node becomes playable again. |
+| New instructor needs an account | Give them `INSTRUCTOR_INVITE_CODE`, or create the account and change its role in War room. |
+| Someone is brute-forcing logins | The account locks for 15 minutes after 5 failures and nginx limits `/auth/login` to 10 requests/minute per IP. Check `journalctl -u questlearn`. |
+
+---
+
+## Known limits of this deployment
+
+These are deliberate trade-offs, not bugs:
+
+- **No email is sent.** There is no mail transport, so password recovery is the
+  admin-issued temporary password. Add an email provider before signup goes public.
+- **Login throttling is in-memory.** Correct for one instance; a second instance
+  needs a shared store or edge limiter.
+- **No class/cohort model.** Every published course is visible to every student and
+  the leaderboard is global.
+- **24-hour tokens, no refresh.** A session expires a day after sign-in; the user
+  signs in again.
+- **Files live on one server.** No object storage; uploads are not a feature yet.
+
+## Pre-launch checklist
+
+- [ ] `JWT_SECRET` is random and not the development default
+- [ ] `CORS_ORIGINS` lists only your real origin
+- [ ] `DB_USERNAME` is not `postgres`
+- [ ] HTTPS works and HTTP redirects to it
+- [ ] `/actuator/health` is reachable, `/v3/api-docs` is **not** (prod disables it)
+- [ ] A restore from backup has been tested
+- [ ] Admin account password changed from the demo value
+- [ ] `INSTRUCTOR_INVITE_CODE` set, or instructor signup intentionally disabled
