@@ -75,6 +75,47 @@ curl -s localhost:8080/actuator/health          # {"status":"UP"}
 refuses to start without them, which is intentional. Generate the secret with
 `openssl rand -base64 48`.
 
+### Voice viva and AI authoring (Groq)
+
+The AI features are optional. Create a key at <https://console.groq.com/keys> and
+add it to `app.env`; the app keeps working without it, but the viva and the AI
+quest builder will answer `503` so students see a clear message instead of a
+broken button.
+
+```bash
+GROQ_API_KEY=gsk_...                 # never commit this
+GROQ_REASONING_MODEL=openai/gpt-oss-120b
+GROQ_TRANSCRIPTION_MODEL=whisper-large-v3-turbo
+AI_HOURLY_LIMIT=30                   # AI calls per account per rolling hour
+```
+
+Cost notes:
+
+- One viva attempt = one transcription + one chat completion. At the time of
+  writing that is well under a cent per attempt on Groq's pricing.
+- `AI_HOURLY_LIMIT` is the ceiling on how much one student can spend in an hour;
+  lower it for large cohorts and keep the key out of the frontend entirely.
+- `spring.servlet.multipart.max-file-size` is 25 MB, matching Groq's whisper
+  upload limit. Recordings are streamed for grading and never written to disk.
+- Nginx must allow the larger body: the shipped `deploy/nginx.conf` sets
+  `client_max_body_size 30m`.
+
+The examiner derives its topics from each node's lesson content, so existing
+courses need no authoring. An instructor can override it per node by adding a
+`viva` block to the node's `content` JSONB:
+
+```json
+{
+  "viva": {
+    "bossName": "The Complexity Warden",
+    "openingQuestion": "Defend why a hash map beats a sorted array here.",
+    "topics": ["hash maps", "amortised cost"],
+    "passThreshold": 70,
+    "maxHp": 100
+  }
+}
+```
+
 ## 5. Serve it with HTTPS
 
 ```bash
@@ -166,6 +207,9 @@ These are deliberate trade-offs, not bugs:
 - **24-hour tokens, no refresh.** A session expires a day after sign-in; the user
   signs in again.
 - **Files live on one server.** No object storage; uploads are not a feature yet.
+  Viva recordings are not an exception: they are graded and discarded.
+- **AI output is a draft.** Generated courses are always created unpublished and
+  must be reviewed — like any model output, the content can be wrong.
 
 ## Pre-launch checklist
 
@@ -177,3 +221,6 @@ These are deliberate trade-offs, not bugs:
 - [ ] A restore from backup has been tested
 - [ ] Admin account password changed from the demo value
 - [ ] `INSTRUCTOR_INVITE_CODE` set, or instructor signup intentionally disabled
+- [ ] `GROQ_API_KEY` set and `GET /api/v1/ai/status` reports `configured: true`
+- [ ] One viva recorded from a phone, over HTTPS, and graded successfully
+- [ ] `client_max_body_size` in nginx is at least 30 MB (large viva uploads)

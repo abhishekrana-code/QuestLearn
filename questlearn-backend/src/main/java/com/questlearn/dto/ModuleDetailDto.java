@@ -13,6 +13,7 @@ public record ModuleDetailDto(
         int xpReward,
         ProgressStatus status,
         int score,
-        QuizDto quiz
+        QuizDto quiz,
+        VivaConfig viva
 ) {
 }

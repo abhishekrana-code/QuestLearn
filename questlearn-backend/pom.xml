@@ -41,6 +41,14 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- RestClient's multipart body writer links against reactive-streams at runtime,
+             even though this app is fully blocking. Without it the whisper upload dies
+             with NoClassDefFoundError: org/reactivestreams/Publisher. -->
+        <dependency>
+            <groupId>org.reactivestreams</groupId>
+            <artifactId>reactive-streams</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>

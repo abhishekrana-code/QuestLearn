@@ -6,6 +6,7 @@ import com.questlearn.dto.LeaderboardEntry;
 import com.questlearn.dto.ModuleDetailDto;
 import com.questlearn.dto.SkillNodeDto;
 import com.questlearn.dto.SkillTreeDto;
+import com.questlearn.dto.VivaConfig;
 import com.questlearn.dto.XpAwardResponse;
 import com.questlearn.exception.ApiException;
 import com.questlearn.model.Course;
@@ -150,7 +151,8 @@ public class ProgressService {
                 module.getXpReward(),
                 status,
                 score,
-                quizService.sanitize(quiz)
+                quizService.sanitize(quiz),
+                VivaConfig.forModule(module)
         );
     }
 
@@ -244,23 +246,7 @@ public class ProgressService {
         boolean streakIncremented = gamificationService.registerActivity(user);
         userRepository.save(user);
 
-        List<Long> unlockedModuleIds = new ArrayList<>();
-        for (Module child : moduleRepository.findByParentModuleId(module.getId())) {
-            UserModuleProgress childProgress = progressRepository
-                    .findByUserIdAndModuleId(user.getId(), child.getId())
-                    .orElseGet(() -> UserModuleProgress.builder()
-                            .user(user)
-                            .module(child)
-                            .score(0)
-                            .attempts(0)
-                            .status(ProgressStatus.LOCKED)
-                            .build());
-            if (childProgress.getStatus() == ProgressStatus.LOCKED) {
-                childProgress.setStatus(ProgressStatus.UNLOCKED);
-                progressRepository.save(childProgress);
-                unlockedModuleIds.add(child.getId());
-            }
-        }
+        List<Long> unlockedModuleIds = unlockChildren(user, module);
 
         boolean leveledUp = newLevel > previousLevel;
         String message = leveledUp
@@ -280,6 +266,31 @@ public class ProgressService {
                 streakIncremented,
                 message
         );
+    }
+
+    /**
+     * Opens every child of a cleared node. Shared by the quiz and the voice-viva
+     * paths so both reward routes unlock the tree the same way.
+     */
+    public List<Long> unlockChildren(User user, Module module) {
+        List<Long> unlockedModuleIds = new ArrayList<>();
+        for (Module child : moduleRepository.findByParentModuleId(module.getId())) {
+            UserModuleProgress childProgress = progressRepository
+                    .findByUserIdAndModuleId(user.getId(), child.getId())
+                    .orElseGet(() -> UserModuleProgress.builder()
+                            .user(user)
+                            .module(child)
+                            .score(0)
+                            .attempts(0)
+                            .status(ProgressStatus.LOCKED)
+                            .build());
+            if (childProgress.getStatus() == ProgressStatus.LOCKED) {
+                childProgress.setStatus(ProgressStatus.UNLOCKED);
+                progressRepository.save(childProgress);
+                unlockedModuleIds.add(child.getId());
+            }
+        }
+        return unlockedModuleIds;
     }
 
     @Transactional(readOnly = true)

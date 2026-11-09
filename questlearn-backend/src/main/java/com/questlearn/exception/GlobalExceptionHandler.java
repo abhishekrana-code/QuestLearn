@@ -10,8 +10,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
@@ -27,6 +30,49 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleApiException(ApiException ex,
                                                                   HttpServletRequest request) {
         return build(ex.getStatus(), ex.getMessage(), request.getRequestURI());
+    }
+
+    /**
+     * Groq failures already carry the right status: 503 when no key is configured
+     * (the school can fix that) and 502 when the upstream call failed.
+     */
+    @ExceptionHandler(GroqAiException.class)
+    public ResponseEntity<Map<String, Object>> handleGroqFailure(GroqAiException ex,
+                                                                HttpServletRequest request) {
+        return build(ex.getStatus(), ex.getMessage(), request.getRequestURI());
+    }
+
+    /**
+     * A request body in the wrong format - typically a multipart upload sent as
+     * JSON because a client default header leaked through.
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<Map<String, Object>> handleUnsupportedMediaType(
+            HttpMediaTypeNotSupportedException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                "Unsupported content type"
+                        + (ex.getSupportedMediaTypes().isEmpty()
+                        ? "."
+                        : " - this endpoint expects " + ex.getSupportedMediaTypes().get(0) + "."),
+                request.getRequestURI());
+    }
+
+    /** A viva posted without its audio part is a bad request, not a server error. */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingPart(MissingServletRequestPartException ex,
+                                                                HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST,
+                "An audio recording is required for the viva.",
+                request.getRequestURI());
+    }
+
+    /** A recording above the multipart limit is a 413, not a generic 500. */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleUploadTooLarge(MaxUploadSizeExceededException ex,
+                                                                   HttpServletRequest request) {
+        return build(HttpStatus.PAYLOAD_TOO_LARGE,
+                "That recording is too large. Keep viva answers under 80 seconds.",
+                request.getRequestURI());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

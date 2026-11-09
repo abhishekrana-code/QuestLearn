@@ -5,13 +5,16 @@ import {
   ArrowLeft,
   BookOpen,
   CheckCircle2,
+  Crown,
   Lock,
   Map,
+  Mic,
   Sparkles,
   X,
 } from 'lucide-react';
 import QuizPlayer from '../components/quiz/QuizPlayer.jsx';
 import SkillTreeCanvas from '../components/skilltree/SkillTreeCanvas.jsx';
+import VoiceVivaDialog from '../components/viva/VoiceVivaDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useGamification } from '../context/GamificationContext.jsx';
 import api, { apiError } from '../services/api.js';
@@ -34,6 +37,7 @@ export default function SkillTreePage() {
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [vivaOpen, setVivaOpen] = useState(false);
 
   const isPreview = user.role === 'INSTRUCTOR';
 
@@ -67,6 +71,7 @@ export default function SkillTreePage() {
   const openNode = async (node) => {
     setSelectedId(node.id);
     setDetail(null);
+    setVivaOpen(false);
     setDetailLoading(true);
     try {
       const { data } = await api.get(`/modules/${node.id}`);
@@ -77,6 +82,21 @@ export default function SkillTreePage() {
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  /** Applies a graded viva: celebrate the XP, then refresh the tree and briefing. */
+  const handleVivaGraded = async (result) => {
+    if (result.passed) {
+      award(result);
+      await loadTree();
+      try {
+        const refreshed = await api.get(`/modules/${selectedId}`);
+        setDetail(refreshed.data);
+      } catch {
+        /* the tree refresh is enough */
+      }
+    }
+    setToast(result.message);
   };
 
   const handleLockedClick = () => {
@@ -320,6 +340,36 @@ export default function SkillTreePage() {
                           )}
                         </div>
                       )}
+
+                      {!isPreview && detail.viva && (
+                        <div className="mt-5 rounded-2xl border border-gold/25 bg-gradient-to-br from-gold/[0.08] to-arcane/[0.06] p-4">
+                          <div className="flex flex-wrap items-start gap-3">
+                            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-gold/30 bg-gold/15 text-gold">
+                              <Crown size={18} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-gold/70">
+                                Boss battle · voice viva
+                              </p>
+                              <h4 className="font-display text-sm font-bold text-slate-50">
+                                {detail.viva.bossName}
+                              </h4>
+                              <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                                Answer out loud. Groq transcribes your response and the AI examiner
+                                grades it against {detail.viva.passThreshold}% for +{detail.xpReward}{' '}
+                                XP.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setVivaOpen(true)}
+                            className="btn-primary mt-3 w-full text-xs"
+                          >
+                            <Mic size={14} /> Enter the arena
+                          </button>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -328,6 +378,16 @@ export default function SkillTreePage() {
           </div>
         </section>
       </div>
+
+      {vivaOpen && detail?.viva && (
+        <VoiceVivaDialog
+          key={detail.id}
+          module={detail}
+          viva={detail.viva}
+          onClose={() => setVivaOpen(false)}
+          onGraded={handleVivaGraded}
+        />
+      )}
 
       <AnimatePresence>
         {toast && (

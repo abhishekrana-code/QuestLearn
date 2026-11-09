@@ -8,8 +8,10 @@ import {
   Plus,
   Save,
   Sparkles,
+  Wand2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { generateCourse as requestGeneratedCourse, getAiStatus } from '../services/ai.js';
 import api, { apiError } from '../services/api.js';
 
 const QUIZ_TEMPLATES = {
@@ -77,6 +79,9 @@ export default function InstructorStudio() {
     passingScore: 60,
     payload: QUIZ_TEMPLATES.MULTIPLE_CHOICE,
   });
+  const [aiStatus, setAiStatus] = useState(null);
+  const [aiForm, setAiForm] = useState({ topic: '', audience: '', category: '', nodeCount: 6 });
+  const [generating, setGenerating] = useState(false);
 
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === selectedId) ?? null,
@@ -121,6 +126,12 @@ export default function InstructorStudio() {
   }, [loadCourses, loadNodes]);
 
   useEffect(() => {
+    getAiStatus()
+      .then(setAiStatus)
+      .catch(() => setAiStatus({ configured: false, unreachable: true }));
+  }, []);
+
+  useEffect(() => {
     if (selectedId) {
       loadNodes(selectedId).catch((error) =>
         notify('error', apiError(error, 'Could not load this skill tree.')),
@@ -147,6 +158,33 @@ export default function InstructorStudio() {
       notify('error', apiError(error, 'Could not create the course.'));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const generateWithAi = async (event) => {
+    event.preventDefault();
+    if (!aiForm.topic.trim()) return;
+    setGenerating(true);
+    try {
+      const draft = await requestGeneratedCourse({
+        topic: aiForm.topic.trim(),
+        audience: aiForm.audience.trim() || undefined,
+        category: aiForm.category.trim() || undefined,
+        nodeCount: Number(aiForm.nodeCount),
+      });
+      setAiForm((previous) => ({ ...previous, topic: '' }));
+      await loadCourses(draft.courseId);
+      await loadNodes(draft.courseId);
+      const warnings = draft.warnings ?? [];
+      notify(
+        'success',
+        `Drafted "${draft.title}" with ${draft.nodeCount} node(s). Review it, then publish.` +
+          (warnings.length > 0 ? ` ${warnings[0]}` : ''),
+      );
+    } catch (error) {
+      notify('error', apiError(error, 'The AI could not draft that course.'));
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -275,6 +313,80 @@ export default function InstructorStudio() {
 
       <div className="grid gap-6 lg:grid-cols-[330px_1fr]">
         <aside className="space-y-5">
+          <div className="panel p-5">
+            <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-slate-100">
+              <Wand2 size={15} className="text-arcane-soft" /> AI quest builder
+            </h2>
+
+            {aiStatus && !aiStatus.configured ? (
+              <p className="mt-3 text-xs leading-relaxed text-slate-400">
+                {aiStatus.unreachable
+                  ? 'The AI status endpoint is unreachable - is the API running?'
+                  : 'Add GROQ_API_KEY to questlearn-backend/.env and restart the API to draft a whole quest from one sentence.'}
+              </p>
+            ) : (
+              <form onSubmit={generateWithAi} className="mt-4 space-y-3">
+                <div>
+                  <label className="label" htmlFor="ai-topic">
+                    Topic
+                  </label>
+                  <textarea
+                    id="ai-topic"
+                    required
+                    rows={2}
+                    className="field resize-none"
+                    placeholder="Graph algorithms for beginners: BFS, DFS, shortest paths"
+                    value={aiForm.topic}
+                    onChange={(event) => setAiForm({ ...aiForm, topic: event.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label" htmlFor="ai-audience">
+                      Audience
+                    </label>
+                    <input
+                      id="ai-audience"
+                      className="field"
+                      placeholder="First-year CS"
+                      value={aiForm.audience}
+                      onChange={(event) => setAiForm({ ...aiForm, audience: event.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="ai-nodes">
+                      Nodes
+                    </label>
+                    <select
+                      id="ai-nodes"
+                      className="field"
+                      value={aiForm.nodeCount}
+                      onChange={(event) =>
+                        setAiForm({ ...aiForm, nodeCount: Number(event.target.value) })
+                      }
+                    >
+                      {[3, 4, 5, 6, 7, 8].map((count) => (
+                        <option key={count} value={count}>
+                          {count}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <button type="submit" disabled={generating || busy} className="btn-arcane w-full">
+                  <Sparkles size={15} />
+                  {generating ? 'Drafting your quest…' : 'Generate draft quest'}
+                </button>
+                <p className="text-[10px] leading-relaxed text-slate-500">
+                  Each node gets lesson sections, takeaways, a multiple-choice quiz and a voice
+                  viva. Generates as a draft you can edit.
+                </p>
+              </form>
+            )}
+          </div>
+
           <form onSubmit={createCourse} className="panel-raised p-5">
             <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-slate-100">
               <FilePlus2 size={15} className="text-gold" /> New course
