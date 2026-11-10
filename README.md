@@ -1,5 +1,7 @@
 # QuestLearn: Gamified RPG-Style LMS
 
+[![CI](https://github.com/abhishekrana-code/QuestLearn/actions/workflows/ci.yml/badge.svg)](https://github.com/abhishekrana-code/QuestLearn/actions/workflows/ci.yml)
+
 QuestLearn is an interactive, full-stack Learning Management System (LMS) that turns traditional
 course curricula into visual RPG-style **skill trees**. Students unlock modules dynamically, earn XP
 (Experience Points), maintain daily learning streaks, and complete interactive assessments.
