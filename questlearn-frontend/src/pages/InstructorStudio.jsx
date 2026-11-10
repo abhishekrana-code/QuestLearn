@@ -10,10 +10,39 @@ import {
   Sparkles,
   Wand2,
 } from 'lucide-react';
+import LessonEditor from '../components/studio/LessonEditor.jsx';
 import VideoUploader from '../components/studio/VideoUploader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { generateCourse as requestGeneratedCourse, getAiStatus } from '../services/ai.js';
 import api, { apiError } from '../services/api.js';
+
+/**
+ * Turns the editor's draft into the content object the API stores, dropping the
+ * blank rows a teacher left behind and any key that ended up empty. Null means
+ * "this node has no lesson text yet".
+ */
+const lessonPayload = (draft) => {
+  const rest = { ...(draft ?? {}) };
+  delete rest.sections;
+  delete rest.keyTakeaways;
+
+  const sections = (draft?.sections ?? [])
+    .map((section) => ({
+      heading: (section?.heading ?? '').trim(),
+      body: (section?.body ?? '').trim(),
+    }))
+    .filter((section) => section.heading || section.body);
+  const keyTakeaways = (draft?.keyTakeaways ?? [])
+    .map((takeaway) => String(takeaway ?? '').trim())
+    .filter(Boolean);
+
+  const payload = { ...rest };
+  if (sections.length > 0) payload.sections = sections;
+  if (keyTakeaways.length > 0) payload.keyTakeaways = keyTakeaways;
+  return Object.keys(payload).length > 0 ? payload : null;
+};
+
+const EMPTY_LESSON = { sections: [], keyTakeaways: [] };
 
 const QUIZ_TEMPLATES = {
   MULTIPLE_CHOICE: JSON.stringify(
@@ -72,7 +101,7 @@ export default function InstructorStudio() {
     parentModuleId: '',
     positionX: 0,
     positionY: 0,
-    content: '',
+    content: EMPTY_LESSON,
   });
   const [quizForm, setQuizForm] = useState({
     moduleId: '',
@@ -221,10 +250,6 @@ export default function InstructorStudio() {
     if (!selectedId) return;
     setBusy(true);
     try {
-      let content = null;
-      if (moduleForm.content.trim()) {
-        content = JSON.parse(moduleForm.content);
-      }
       await api.post(`/courses/${selectedId}/modules`, {
         title: moduleForm.title,
         summary: moduleForm.summary,
@@ -232,7 +257,7 @@ export default function InstructorStudio() {
         parentModuleId: moduleForm.parentModuleId ? Number(moduleForm.parentModuleId) : null,
         positionX: Number(moduleForm.positionX),
         positionY: Number(moduleForm.positionY),
-        content,
+        content: lessonPayload(moduleForm.content),
       });
       setModuleForm({
         title: '',
@@ -241,18 +266,13 @@ export default function InstructorStudio() {
         parentModuleId: moduleForm.parentModuleId,
         positionX: Number(moduleForm.positionX) + 1,
         positionY: Number(moduleForm.positionY) + 1,
-        content: '',
+        content: EMPTY_LESSON,
       });
       await loadNodes(selectedId);
       await loadCourses(selectedId);
       notify('success', 'Skill node added to the tree.');
     } catch (error) {
-      notify(
-        'error',
-        error instanceof SyntaxError
-          ? 'Lesson content must be valid JSON.'
-          : apiError(error, 'Could not add the node.'),
-      );
+      notify('error', apiError(error, 'Could not add the node.'));
     } finally {
       setBusy(false);
     }
@@ -674,19 +694,11 @@ export default function InstructorStudio() {
                     />
                   </div>
 
-                  <div className="sm:col-span-2">
-                    <label className="label" htmlFor="module-content">
-                      Lesson content (JSONB, optional)
-                    </label>
-                    <textarea
-                      id="module-content"
-                      rows={4}
-                      className="field resize-y font-mono text-[12px]"
-                      placeholder={`{\n  "sections": [{ "heading": "Idea", "body": "..." }],\n  "keyTakeaways": ["..."]\n}`}
+                  <div className="sm:col-span-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                    <LessonEditor
                       value={moduleForm.content}
-                      onChange={(event) =>
-                        setModuleForm({ ...moduleForm, content: event.target.value })
-                      }
+                      onChange={(content) => setModuleForm({ ...moduleForm, content })}
+                      disabled={busy}
                     />
                   </div>
                 </div>

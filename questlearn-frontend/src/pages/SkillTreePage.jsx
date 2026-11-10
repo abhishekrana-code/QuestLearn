@@ -345,12 +345,12 @@ export default function SkillTreePage() {
                         </figure>
                       )}
 
-                      {(detail.content?.sections ?? []).map((section) => (
-                        <div key={section.heading} className="mt-4">
+                      {(detail.content?.sections ?? []).map((section, index) => (
+                        <div key={`${index}-${section.heading}`} className="mt-4">
                           <h4 className="text-[11px] font-bold uppercase tracking-widest text-arcane-soft">
                             {section.heading}
                           </h4>
-                          <p className="mt-1 text-sm leading-relaxed text-slate-300">
+                          <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-300">
                             {section.body}
                           </p>
                         </div>
@@ -359,9 +359,9 @@ export default function SkillTreePage() {
                       {Array.isArray(detail.content?.keyTakeaways) &&
                         detail.content.keyTakeaways.length > 0 && (
                           <ul className="mt-4 space-y-1.5 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                            {detail.content.keyTakeaways.map((takeaway) => (
+                            {detail.content.keyTakeaways.map((takeaway, index) => (
                               <li
-                                key={takeaway}
+                                key={`${index}-${takeaway}`}
                                 className="flex items-start gap-2 text-xs text-slate-300"
                               >
                                 <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-gold" />
