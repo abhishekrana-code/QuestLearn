@@ -85,17 +85,27 @@ export default function AdminPanel() {
 
   if (loading) {
     return (
-      <div className="grid min-h-[70vh] place-items-center text-sm text-slate-400">
+      <div className="grid min-h-[70vh] place-items-center text-sm text-fg-muted">
         Opening the war room…
       </div>
     );
   }
 
   const cards = [
-    { label: 'Accounts', value: stats?.totalUsers ?? 0, icon: Users, tone: 'text-rune' },
-    { label: 'Students', value: stats?.students ?? 0, icon: Users, tone: 'text-gold' },
-    { label: 'Instructors', value: stats?.instructors ?? 0, icon: ShieldCheck, tone: 'text-arcane-soft' },
-    { label: 'Live courses', value: stats?.publishedCourses ?? 0, icon: BookOpen, tone: 'text-emerald-300' },
+    { label: 'Accounts', value: stats?.totalUsers ?? 0, icon: Users, tone: 'text-rune-text' },
+    { label: 'Students', value: stats?.students ?? 0, icon: Users, tone: 'text-gold-text' },
+    {
+      label: 'Instructors',
+      value: stats?.instructors ?? 0,
+      icon: ShieldCheck,
+      tone: 'text-arcane-text',
+    },
+    {
+      label: 'Live courses',
+      value: stats?.publishedCourses ?? 0,
+      icon: BookOpen,
+      tone: 'text-success',
+    },
   ];
 
   return (
@@ -110,17 +120,17 @@ export default function AdminPanel() {
 
       {message && (
         <div
-          className={`mb-5 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${
+          className={`mb-5 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${
             message.type === 'error'
-              ? 'border-rose-400/30 bg-rose-500/10 text-rose-200'
-              : 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
+              ? 'border-danger/30 bg-danger/[0.07] text-danger'
+              : 'border-success/30 bg-success/[0.07] text-success'
           }`}
         >
-          <span>{message.text}</span>
+          <span className="leading-relaxed">{message.text}</span>
           <button
             type="button"
             onClick={() => setMessage(null)}
-            className="text-xs font-semibold opacity-70 hover:opacity-100"
+            className="shrink-0 text-xs font-semibold opacity-70 transition-opacity hover:opacity-100"
           >
             Dismiss
           </button>
@@ -130,9 +140,11 @@ export default function AdminPanel() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {cards.map(({ label, value, icon: Icon, tone }) => (
           <div key={label} className="panel p-4">
-            <Icon size={16} className={tone} />
-            <p className="stat-value mt-2">{value}</p>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span className="grid h-8 w-8 place-items-center rounded-lg border border-line bg-muted/60">
+              <Icon size={15} className={tone} />
+            </span>
+            <p className="stat-value mt-3">{value}</p>
+            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
               {label}
             </p>
           </div>
@@ -141,32 +153,37 @@ export default function AdminPanel() {
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.35fr_1fr]">
         <section className="panel-raised overflow-hidden">
-          <div className="border-b border-white/10 px-5 py-3">
-            <h2 className="font-display text-sm font-semibold text-slate-100">Accounts</h2>
+          <div className="flex items-baseline justify-between border-b border-line px-5 py-3.5">
+            <h2 className="text-sm font-semibold text-foreground">Accounts</h2>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle tabular-nums">
+              {users.length} total
+            </span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-white/[0.02] text-[10px] uppercase tracking-wider text-slate-500">
+              <thead className="border-b border-line bg-muted/40 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
                 <tr>
-                  <th className="px-5 py-2.5">User</th>
-                  <th className="px-3 py-2.5">Level</th>
-                  <th className="px-3 py-2.5">XP</th>
-                  <th className="px-3 py-2.5">Role</th>
-                  <th className="px-5 py-2.5">Support</th>
+                  <th className="px-5 py-2.5 font-semibold">User</th>
+                  <th className="px-3 py-2.5 font-semibold">Level</th>
+                  <th className="px-3 py-2.5 font-semibold">XP</th>
+                  <th className="px-3 py-2.5 font-semibold">Role</th>
+                  <th className="px-5 py-2.5 font-semibold">Support</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-line">
                 {users.map((row) => (
-                  <tr key={row.id} className="hover:bg-white/[0.02]">
+                  <tr key={row.id} className="transition-colors hover:bg-muted/40">
                     <td className="px-5 py-3">
-                      <p className="font-medium text-slate-100">{row.name}</p>
-                      <p className="text-[11px] text-slate-500">{row.email}</p>
+                      <p className="font-medium text-foreground">{row.name}</p>
+                      <p className="text-[11px] text-fg-subtle">{row.email}</p>
                     </td>
-                    <td className="px-3 py-3 text-slate-300">{row.currentLevel}</td>
-                    <td className="px-3 py-3 font-semibold text-gold">{row.totalXp}</td>
+                    <td className="px-3 py-3 tabular-nums text-fg-muted">{row.currentLevel}</td>
+                    <td className="px-3 py-3 font-semibold tabular-nums text-gold-text">
+                      {row.totalXp}
+                    </td>
                     <td className="px-3 py-3">
                       <select
-                        className="field px-2 py-1.5 text-[11px]"
+                        className="field w-[7.5rem] px-2 py-1.5 text-[11px]"
                         value={row.role}
                         disabled={row.id === user.id || busyId === row.id}
                         onChange={(event) => changeRole(row, event.target.value)}
@@ -199,27 +216,35 @@ export default function AdminPanel() {
         </section>
 
         <section className="panel-raised overflow-hidden">
-          <div className="border-b border-white/10 px-5 py-3">
-            <h2 className="font-display text-sm font-semibold text-slate-100">Course moderation</h2>
+          <div className="flex items-baseline justify-between border-b border-line px-5 py-3.5">
+            <h2 className="text-sm font-semibold text-foreground">Course moderation</h2>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle tabular-nums">
+              {courses.filter((course) => course.published).length} live
+            </span>
           </div>
-          <ul className="divide-y divide-white/5">
+          <ul className="divide-y divide-line">
             {courses.length === 0 && (
-              <li className="px-5 py-6 text-xs text-slate-500">No courses created yet.</li>
+              <li className="px-5 py-6 text-xs text-fg-subtle">No courses created yet.</li>
             )}
             {courses.map((course) => (
-              <li key={course.id} className="flex items-center gap-3 px-5 py-3">
-                <span className="text-xl">{course.emoji || '🗺️'}</span>
+              <li
+                key={course.id}
+                className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/40"
+              >
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-line bg-muted/60 text-base">
+                  {course.emoji || '🗺️'}
+                </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-semibold text-slate-100">{course.title}</p>
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                  <p className="truncate text-xs font-semibold text-foreground">{course.title}</p>
+                  <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-fg-subtle">
                     {course.instructorName} · {course.moduleCount} nodes
                   </p>
                 </div>
                 <span
                   className={`chip px-2 py-0.5 text-[9px] ${
                     course.published
-                      ? 'border-emerald-400/30 text-emerald-300'
-                      : 'border-amber-400/30 text-amber-300'
+                      ? 'border-success/35 bg-success/[0.08] text-success'
+                      : 'border-warning/35 bg-warning/[0.08] text-warning'
                   }`}
                 >
                   {course.published ? 'live' : 'draft'}
@@ -235,7 +260,7 @@ export default function AdminPanel() {
                 </button>
                 <Link
                   to={`/courses/${course.id}`}
-                  className="text-[11px] font-semibold text-gold hover:underline"
+                  className="text-[11px] font-semibold text-gold-text hover:underline"
                 >
                   Open
                 </Link>

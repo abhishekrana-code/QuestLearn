@@ -85,6 +85,12 @@
     background: hsl(var(--border));
   }
 
+  /* Dialog scrim: darkens the page behind a modal in both themes. */
+  .scrim {
+    background: hsl(var(--scrim) / var(--scrim-alpha));
+    backdrop-filter: blur(6px);
+  }
+
   /* --- Typography -------------------------------------------------------- */
   .eyebrow {
     @apply text-[11px] font-semibold uppercase;

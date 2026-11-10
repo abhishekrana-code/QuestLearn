@@ -695,8 +695,8 @@ export default function InstructorStudio() {
               </form>
 
               <form onSubmit={attachQuiz} className="panel-raised p-5">
-                <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-slate-100">
-                  <Sparkles size={15} className="text-arcane-soft" /> Attach a JSONB quiz
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Sparkles size={15} className="text-arcane-text" /> Attach a JSONB quiz
                 </h3>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -769,7 +769,7 @@ export default function InstructorStudio() {
                     </label>
                     <button
                       type="button"
-                      className="mb-1.5 text-[11px] font-semibold text-gold hover:underline"
+                      className="mb-1.5 text-[11px] font-semibold text-gold-text hover:underline"
                       onClick={() =>
                         setQuizForm({ ...quizForm, payload: QUIZ_TEMPLATES[quizForm.type] })
                       }
@@ -781,7 +781,7 @@ export default function InstructorStudio() {
                     id="quiz-payload"
                     rows={12}
                     spellCheck={false}
-                    className="field resize-y font-mono text-[12px] leading-relaxed"
+                    className="field resize-y bg-muted/40 font-mono text-[12px] leading-relaxed"
                     value={quizForm.payload}
                     onChange={(event) =>
                       setQuizForm({ ...quizForm, payload: event.target.value })
