@@ -20,8 +20,30 @@ import { apiError } from '../../services/api.js';
 
 const MAX_RECORDING_MS = 80_000;
 const MIN_WRITTEN_CHARS = 15;
+/** Where a 70%-plus answer usually lands: three to five real sentences. */
+const TARGET_WRITTEN_CHARS = 250;
 const MAX_WRITTEN_CHARS = 4000;
 const BAR_COUNT = 24;
+
+/** Guidance shown while typing, so the length is known before submitting. */
+function writtenHint(length) {
+  if (length < MIN_WRITTEN_CHARS) {
+    return {
+      tone: 'text-slate-500',
+      text: `Write at least ${MIN_WRITTEN_CHARS} characters - a full sentence.`,
+    };
+  }
+  if (length < TARGET_WRITTEN_CHARS) {
+    return {
+      tone: 'text-amber-200/80',
+      text: `You are at ${length} of about ${TARGET_WRITTEN_CHARS}+ characters - add another sentence or two.`,
+    };
+  }
+  return {
+    tone: 'text-rune',
+    text: 'Good length. The examiner grades your reasoning, not the word count.',
+  };
+}
 
 const IDLE_LEVELS = Array.from({ length: BAR_COUNT }, (_, index) =>
   0.16 + 0.12 * Math.abs(Math.sin(index * 0.9)),
@@ -217,7 +239,7 @@ function VerdictBody({ result, onRetry, onClose }) {
  * with the platform speech synthesiser, so the battle reads as a conversation
  * without shipping any extra audio.</p>
  */
-export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
+export default function VoiceVivaDialog({ module, viva, standing, onClose, onGraded }) {
   const [phase, setPhase] = useState('idle');
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -244,6 +266,10 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
 
   const bossName = viva?.bossName ?? 'The Warden';
   const openingQuestion = viva?.openingQuestion ?? 'Defend your understanding of this node.';
+  const passThreshold = viva?.passThreshold ?? 70;
+  const attempts = standing?.attempts ?? 0;
+  const bestScore = standing?.score ?? 0;
+  const hint = writtenHint(written.trim().length);
 
   useEffect(() => {
     onGradedRef.current = onGraded;
@@ -613,6 +639,25 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
                       ? 'Type your answer and the same examiner will grade it. Written answers earn the same XP and unlock the same nodes.'
                       : 'Speak your answer out loud. The recording is transcribed by Groq whisper and graded by the AI examiner, who awards XP and damages the boss.'}
                   </p>
+                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-wider">
+                    {attempts > 0 ? (
+                      <>
+                        <span className="text-gold">
+                          Best attempt {bestScore}% after {attempts}{' '}
+                          {attempts === 1 ? 'try' : 'tries'}
+                        </span>
+                        <span className="text-slate-500"> · {passThreshold}% clears the node</span>
+                      </>
+                    ) : (
+                      <span className="text-slate-500">
+                        First attempt · {passThreshold}% clears the node
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                    Speaking: answer in 3-5 sentences, up to{' '}
+                    {Math.round(MAX_RECORDING_MS / 1000)}s. Typing: about 250-600 characters.
+                  </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button type="button" onClick={startRecording} className="btn-primary text-xs">
                       <Mic size={15} /> Start answering
@@ -654,6 +699,10 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
                   <label htmlFor="viva-answer" className="sr-only">
                     Your answer to the examiner
                   </label>
+                  <p className="mt-1.5 text-[10px] text-slate-500">
+                    Aim for 3-5 sentences - roughly {TARGET_WRITTEN_CHARS}-600 characters.
+                    {attempts > 0 ? ` Your best so far is ${bestScore}%.` : ''}
+                  </p>
                   <textarea
                     id="viva-answer"
                     value={written}
@@ -683,10 +732,9 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
                       <RotateCcw size={14} /> Back
                     </button>
                   </div>
-                  <p className="mt-2 text-[10px] text-slate-500">
-                    {written.trim().length < MIN_WRITTEN_CHARS
-                      ? `Write at least ${MIN_WRITTEN_CHARS} characters - a full sentence.`
-                      : 'Graded exactly like a spoken answer: same examiner, same XP, same unlocks.'}
+                  <p className={`mt-2 text-[10px] ${hint.tone}`}>{hint.text}</p>
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Graded exactly like a spoken answer: same examiner, same XP, same unlocks.
                   </p>
                 </motion.div>
               )}

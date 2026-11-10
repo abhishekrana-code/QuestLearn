@@ -126,6 +126,7 @@ public class ProgressService {
 
         ProgressStatus status = ProgressStatus.UNLOCKED;
         int score = 0;
+        int attempts = 0;
 
         if (principal.role() != Role.INSTRUCTOR) {
             UserModuleProgress progress = progressRepository
@@ -134,6 +135,7 @@ public class ProgressService {
             if (progress != null) {
                 status = progress.getStatus();
                 score = progress.getScore();
+                attempts = progress.getAttempts();
             } else if (module.getParentModule() != null) {
                 status = ProgressStatus.LOCKED;
             }
@@ -151,6 +153,7 @@ public class ProgressService {
                 module.getXpReward(),
                 status,
                 score,
+                attempts,
                 quizService.sanitize(quiz),
                 VivaConfig.forModule(module)
         );

@@ -84,17 +84,21 @@ export default function SkillTreePage() {
     }
   };
 
-  /** Applies a graded viva: celebrate the XP, then refresh the tree and briefing. */
+  /**
+   * Applies a graded viva: celebrate the XP, then refresh the tree and briefing.
+   * The briefing is refreshed on failures too, so the node shows the attempt the
+   * student just made before they retry.
+   */
   const handleVivaGraded = async (result) => {
     if (result.passed) {
       award(result);
-      await loadTree();
-      try {
-        const refreshed = await api.get(`/modules/${selectedId}`);
-        setDetail(refreshed.data);
-      } catch {
-        /* the tree refresh is enough */
-      }
+    }
+    await loadTree().catch(() => {});
+    try {
+      const refreshed = await api.get(`/modules/${selectedId}`);
+      setDetail(refreshed.data);
+    } catch {
+      /* the tree refresh is enough */
     }
     setToast(result.message);
   };
@@ -359,6 +363,27 @@ export default function SkillTreePage() {
                                 examiner grades it against {detail.viva.passThreshold}% for +
                                 {detail.xpReward} XP.
                               </p>
+                              <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-semibold uppercase tracking-wider">
+                                {detail.status === 'COMPLETED' ? (
+                                  <span className="text-rune">
+                                    Cleared at {detail.score}%
+                                    {detail.attempts > 1 ? ` · ${detail.attempts} attempts` : ''}
+                                  </span>
+                                ) : detail.attempts > 0 ? (
+                                  <>
+                                    <span className="text-gold">Best attempt {detail.score}%</span>
+                                    <span className="text-slate-500">
+                                      · {detail.attempts}{' '}
+                                      {detail.attempts === 1 ? 'attempt' : 'attempts'} ·{' '}
+                                      {detail.viva.passThreshold}% to pass
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-slate-500">
+                                    Not attempted yet · {detail.viva.passThreshold}% to pass
+                                  </span>
+                                )}
+                              </p>
                             </div>
                           </div>
                           <button
@@ -384,6 +409,7 @@ export default function SkillTreePage() {
           key={detail.id}
           module={detail}
           viva={detail.viva}
+          standing={{ score: detail.score ?? 0, attempts: detail.attempts ?? 0 }}
           onClose={() => setVivaOpen(false)}
           onGraded={handleVivaGraded}
         />
