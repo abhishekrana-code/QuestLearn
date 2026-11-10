@@ -33,7 +33,7 @@ export default function MCQCard({ questions, answers, onSelect, disabled }) {
                     className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded text-[10px] font-bold transition-colors duration-150 ${
                       selected
                         ? 'bg-gold text-[hsl(var(--primary-foreground))]'
-                        : 'bg-muted text-fg-subtle'
+                        : 'bg-muted text-fg-muted'
                     }`}
                   >
                     {String.fromCharCode(65 + optionIndex)}

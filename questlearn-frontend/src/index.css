@@ -284,18 +284,6 @@
     color: hsl(var(--muted-foreground));
   }
 
-  .light .text-slate-500 {
-    color: hsl(var(--subtle-foreground));
-  }
-
-  .light .text-slate-600 {
-    color: hsl(var(--subtle-foreground) / 0.85);
-  }
-
-  .light .placeholder\:text-slate-500::placeholder {
-    color: hsl(var(--subtle-foreground));
-  }
-
   /* Translucent whites become muted surface tints. */
   .light .bg-white\/5,
   .light .hover\:bg-white\/5:hover {

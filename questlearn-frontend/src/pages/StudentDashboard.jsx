@@ -174,7 +174,7 @@ export default function StudentDashboard() {
             </div>
 
             {leaderboard.length === 0 ? (
-              <p className="text-xs text-slate-500">No ranked students yet.</p>
+              <p className="text-xs text-fg-subtle">No ranked students yet.</p>
             ) : (
               <ol className="space-y-2">
                 {leaderboard.map((entry) => (

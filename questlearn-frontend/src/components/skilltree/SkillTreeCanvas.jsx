@@ -98,7 +98,7 @@ export default function SkillTreeCanvas({ nodes, onSelect, onLockedClick, active
         })}
 
         {nodes.length === 0 && (
-          <div className="absolute inset-0 grid place-items-center text-sm text-slate-500">
+          <div className="absolute inset-0 grid place-items-center text-sm text-fg-subtle">
             This course has no skill nodes yet.
           </div>
         )}

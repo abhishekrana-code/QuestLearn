@@ -26,7 +26,7 @@ import { isPlayableVideo } from '../services/media.js';
 const STATUS_STYLE = {
   COMPLETED: 'border-gold/50 bg-gold/10 text-gold',
   UNLOCKED: 'border-rune/40 bg-rune/10 text-rune',
-  LOCKED: 'border-white/10 bg-white/5 text-slate-400',
+  LOCKED: 'border-line bg-muted text-fg-muted',
 };
 
 const ATTEMPT_LABEL = {
@@ -264,13 +264,13 @@ export default function SkillTreePage() {
               {!selectedId && (
                 <div className="grid h-full place-items-center text-center">
                   <div>
-                    <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white/5 text-slate-500">
+                    <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white/5 text-fg-subtle">
                       <Map size={24} />
                     </div>
                     <p className="mt-3 text-sm font-medium text-slate-300">
                       Pick a node on the map
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-fg-subtle">
                       Pulses mean the node is unlocked and ready to play.
                     </p>
                   </div>
@@ -304,9 +304,9 @@ export default function SkillTreePage() {
 
                   {detail.status === 'LOCKED' ? (
                     <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-4 text-center">
-                      <Lock size={22} className="mx-auto text-slate-500" />
+                      <Lock size={22} className="mx-auto text-fg-subtle" />
                       <p className="mt-2 text-sm font-medium text-slate-300">Sealed node</p>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-fg-subtle">
                         Finish the prerequisite connected above this node to unlock it.
                       </p>
                     </div>
@@ -426,14 +426,14 @@ export default function SkillTreePage() {
                                 ) : detail.attempts > 0 ? (
                                   <>
                                     <span className="text-gold">Best attempt {detail.score}%</span>
-                                    <span className="text-slate-500">
+                                    <span className="text-fg-subtle">
                                       · {detail.attempts}{' '}
                                       {detail.attempts === 1 ? 'attempt' : 'attempts'} ·{' '}
                                       {detail.viva.passThreshold}% to pass
                                     </span>
                                   </>
                                 ) : (
-                                  <span className="text-slate-500">
+                                  <span className="text-fg-subtle">
                                     Not attempted yet · {detail.viva.passThreshold}% to pass
                                   </span>
                                 )}
@@ -453,11 +453,11 @@ export default function SkillTreePage() {
                       {!isPreview && (detail.history?.length ?? 0) > 0 && (
                         <div className="mt-4 rounded-2xl border border-white/10 bg-ink-900/60 p-3.5">
                           <div className="flex items-center gap-2">
-                            <History size={13} className="text-slate-500" />
-                            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                            <History size={13} className="text-fg-subtle" />
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-fg-subtle">
                               Attempt history
                             </p>
-                            <span className="ml-auto text-[9px] uppercase tracking-wider text-slate-600">
+                            <span className="ml-auto text-[9px] uppercase tracking-wider text-fg-subtle">
                               {detail.attempts > detail.history.length
                                 ? `last ${detail.history.length} of ${detail.attempts}`
                                 : `${detail.history.length} total`}
@@ -481,7 +481,7 @@ export default function SkillTreePage() {
                                 <span className="text-slate-400">
                                   {ATTEMPT_LABEL[attempt.source] ?? 'Attempt'}
                                 </span>
-                                <span className="ml-auto shrink-0 text-slate-600">
+                                <span className="ml-auto shrink-0 text-fg-subtle">
                                   {timeAgo(attempt.at)}
                                 </span>
                               </li>

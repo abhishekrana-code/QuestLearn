@@ -398,7 +398,7 @@ export default function InstructorStudio() {
                   <Sparkles size={15} />
                   {generating ? 'Drafting your quest…' : 'Generate draft quest'}
                 </button>
-                <p className="text-[10px] leading-relaxed text-slate-500">
+                <p className="text-[10px] leading-relaxed text-fg-subtle">
                   Each node gets lesson sections, takeaways, a multiple-choice quiz and a voice
                   viva. Generates as a draft you can edit.
                 </p>
@@ -488,7 +488,7 @@ export default function InstructorStudio() {
 
             <div className="mt-3 space-y-2">
               {courses.length === 0 && (
-                <p className="text-xs text-slate-500">No courses yet — create your first draft.</p>
+                <p className="text-xs text-fg-subtle">No courses yet — create your first draft.</p>
               )}
               {courses.map((course) => {
                 const active = course.id === selectedId;
@@ -519,7 +519,7 @@ export default function InstructorStudio() {
                         {course.published ? 'live' : 'draft'}
                       </span>
                     </div>
-                    <p className="mt-1 text-[10px] uppercase tracking-wider text-slate-500">
+                    <p className="mt-1 text-[10px] uppercase tracking-wider text-fg-subtle">
                       {course.moduleCount} nodes{owned ? '' : ' · read only'}
                     </p>
                   </button>

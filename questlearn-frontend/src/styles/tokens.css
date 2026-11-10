@@ -32,7 +32,10 @@
   --surface-raised: 222 34% 12%;
   --muted: 220 24% 14%;
   --muted-foreground: 218 15% 64%;
-  --subtle-foreground: 218 12% 48%;
+  /* Caption grey. 48% measured 3.5:1 on muted surfaces - too faint for the
+     helper text and 9-10px labels it carries. 56% clears 4.5:1 on every dark
+     surface while staying clearly quieter than --muted-foreground. */
+  --subtle-foreground: 218 12% 56%;
 
   --border: 220 22% 18%;
   --border-strong: 220 20% 28%;

@@ -44,7 +44,7 @@ export default function SkillNode({ node, x, y, active, onSelect, onLockedClick 
           completed
             ? 'border-gold bg-gradient-to-br from-gold/30 to-gold/5 text-gold shadow-glow'
             : locked
-              ? 'cursor-not-allowed border-white/10 bg-ink-700/60 text-slate-500'
+              ? 'cursor-not-allowed border-white/10 bg-ink-700/60 text-fg-subtle'
               : 'border-rune/60 bg-gradient-to-br from-arcane/30 to-ink-700 text-rune shadow-arcane'
         } ${active ? 'ring-2 ring-white/40 ring-offset-2 ring-offset-ink-900' : ''}`}
         style={{ width: NODE_SIZE, height: NODE_SIZE }}
@@ -76,14 +76,14 @@ export default function SkillNode({ node, x, y, active, onSelect, onLockedClick 
       </motion.button>
 
       <div className="mt-3 text-center">
-        <p className={`text-xs font-semibold leading-tight ${locked ? 'text-slate-500' : 'text-slate-100'}`}>
+        <p className={`text-xs font-semibold leading-tight ${locked ? 'text-fg-subtle' : 'text-foreground'}`}>
           {node.title}
         </p>
         <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gold/80">
           +{node.xpReward} XP
         </p>
         {locked && (
-          <p className="mt-0.5 text-[10px] uppercase tracking-wider text-slate-600">Locked</p>
+          <p className="mt-0.5 text-[10px] uppercase tracking-wider text-fg-subtle">Locked</p>
         )}
       </div>
     </motion.div>
