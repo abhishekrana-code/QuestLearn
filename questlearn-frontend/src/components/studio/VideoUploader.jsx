@@ -101,11 +101,11 @@ export default function VideoUploader({ node, onSaved }) {
   };
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+    <div className="rounded-lg border border-line bg-card/60 p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-xs font-semibold text-slate-200">{node.title}</p>
-          <p className="mt-0.5 text-[11px] text-slate-500">
+          <p className="truncate text-xs font-semibold text-foreground">{node.title}</p>
+          <p className="mt-0.5 text-[11px] text-fg-subtle">
             {videoUrl ? (videoLabel || 'Lesson video attached') : 'No lesson video yet'}
           </p>
         </div>
@@ -114,7 +114,7 @@ export default function VideoUploader({ node, onSaved }) {
             type="button"
             onClick={remove}
             disabled={busy}
-            className="shrink-0 text-slate-500 transition hover:text-rose-300 disabled:opacity-50"
+            className="shrink-0 text-fg-subtle transition-colors hover:text-danger disabled:opacity-50"
             aria-label={`Remove the video from ${node.title}`}
           >
             <Trash2 size={14} />
@@ -123,7 +123,7 @@ export default function VideoUploader({ node, onSaved }) {
       </div>
 
       {videoUrl && (
-        <div className="mt-2 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+        <div className="mt-2 overflow-hidden rounded-md border border-line bg-black/40">
           {isPlayableVideo(videoUrl) ? (
             <video src={videoUrl} controls preload="metadata" className="max-h-40 w-full" />
           ) : (
@@ -131,7 +131,7 @@ export default function VideoUploader({ node, onSaved }) {
               href={videoUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-arcane-soft hover:underline"
+              className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-arcane-text hover:underline"
             >
               <Link2 size={13} /> Open the attached video
             </a>
@@ -146,10 +146,10 @@ export default function VideoUploader({ node, onSaved }) {
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
-        className={`mt-2 rounded-lg border border-dashed px-3 py-3 text-center transition ${
+        className={`mt-2 rounded-md border border-dashed px-3 py-3 text-center transition-colors duration-150 ${
           dragging
-            ? 'border-gold/70 bg-gold/10'
-            : 'border-white/15 hover:border-white/30 hover:bg-white/[0.03]'
+            ? 'border-gold/70 bg-gold/[0.08]'
+            : 'border-line-strong hover:border-gold/40 hover:bg-muted/40'
         }`}
       >
         <input
@@ -161,24 +161,24 @@ export default function VideoUploader({ node, onSaved }) {
         />
 
         {busy ? (
-          <div className="flex items-center justify-center gap-2 text-[11px] text-slate-300">
+          <div className="flex items-center justify-center gap-2 text-[11px] text-fg-muted">
             <Loader2 size={13} className="animate-spin" />
             {progress > 0 ? `Uploading ${progress}%` : 'Working…'}
           </div>
         ) : (
           <>
-            <Film size={16} className="mx-auto text-slate-500" />
-            <p className="mt-1 text-[11px] text-slate-400">
+            <Film size={16} className="mx-auto text-fg-subtle" />
+            <p className="mt-1 text-[11px] text-fg-muted">
               Drag a video here, or{' '}
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
-                className="font-semibold text-gold hover:underline"
+                className="font-semibold text-gold-text hover:underline"
               >
                 choose a file
               </button>
             </p>
-            <p className="mt-0.5 text-[10px] uppercase tracking-wider text-slate-600">
+            <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-fg-subtle">
               MP4 · WebM · MOV · up to {MAX_MB} MB
             </p>
             <button
@@ -214,7 +214,7 @@ export default function VideoUploader({ node, onSaved }) {
                 setLink('');
                 setError(null);
               }}
-              className="text-slate-500 hover:text-slate-300"
+              className="text-fg-subtle transition-colors hover:text-foreground"
               aria-label="Cancel attaching a link"
             >
               <X size={14} />
@@ -224,14 +224,14 @@ export default function VideoUploader({ node, onSaved }) {
           <button
             type="button"
             onClick={() => setShowLink(true)}
-            className="text-[11px] font-medium text-slate-400 hover:text-arcane-soft"
+            className="text-[11px] font-medium text-fg-subtle transition-colors hover:text-arcane-text"
           >
             or attach a video link
           </button>
         )}
       </div>
 
-      {error && <p className="mt-2 text-[11px] leading-relaxed text-rose-300">{error}</p>}
+      {error && <p className="mt-2 text-[11px] leading-relaxed text-danger">{error}</p>}
     </div>
   );
 }

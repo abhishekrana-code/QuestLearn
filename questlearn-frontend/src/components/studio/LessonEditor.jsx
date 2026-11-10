@@ -73,7 +73,7 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="label mb-0">Lesson content as JSON</span>
-          <span className="text-[11px] text-slate-500">
+          <span className="text-[11px] tabular-nums text-fg-subtle">
             {sections.length} section(s) · {takeaways.length} takeaway(s)
           </span>
         </div>
@@ -81,14 +81,14 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
           rows={14}
           spellCheck={false}
           disabled={disabled}
-          className="field mt-2 resize-y font-mono text-[12px] leading-relaxed"
+          className="field mt-2 resize-y bg-muted/40 font-mono text-[12px] leading-relaxed"
           value={jsonDraft}
           onChange={(event) => {
             setJsonDraft(event.target.value);
             setJsonError(null);
           }}
         />
-        {jsonError && <p className="mt-1.5 text-[11px] text-rose-300">{jsonError}</p>}
+        {jsonError && <p className="mt-1.5 text-[11px] text-danger">{jsonError}</p>}
         <div className="mt-2 flex flex-wrap gap-2">
           <button type="button" className="btn-primary px-3 py-1.5 text-xs" onClick={applyJson}>
             Apply JSON
@@ -110,12 +110,12 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="label mb-0">Lesson content</span>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-slate-500">
+          <span className="text-[11px] tabular-nums text-fg-subtle">
             {sections.length} section(s) · {takeaways.length} takeaway(s)
           </span>
           <button
             type="button"
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-gold hover:underline"
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-gold-text hover:underline"
             onClick={() => setShowJson(true)}
           >
             <Braces size={12} /> Edit as JSON
@@ -125,7 +125,7 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
 
       <div className="space-y-2">
         {sections.length === 0 && (
-          <p className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-center text-[11px] text-slate-500">
+          <p className="rounded-lg border border-dashed border-line-strong px-3 py-4 text-center text-[11px] leading-relaxed text-fg-subtle">
             No sections yet. A lesson usually has two or three: the idea, a worked example, then a
             gotcha.
           </p>
@@ -134,10 +134,10 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
         {sections.map((section, index) => (
           <div
             key={index}
-            className="rounded-xl border border-white/10 bg-white/[0.02] p-3 transition hover:border-white/20"
+            className="rounded-lg border border-line bg-card/60 p-3 transition-colors duration-150 hover:border-line-strong"
           >
             <div className="flex items-center gap-2">
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-white/5 text-[11px] font-semibold text-slate-400">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-muted text-[11px] font-semibold tabular-nums text-fg-subtle">
                 {index + 1}
               </span>
               <input
@@ -153,7 +153,7 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
                 aria-label={`Move section ${index + 1} up`}
                 title="Move up"
                 disabled={disabled || index === 0}
-                className="rounded-md p-1.5 text-slate-400 hover:bg-white/5 hover:text-slate-200 disabled:opacity-30"
+                className="rounded-md p-1.5 text-fg-subtle transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
                 onClick={() => moveSection(index, -1)}
               >
                 <ArrowUp size={14} />
@@ -163,7 +163,7 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
                 aria-label={`Move section ${index + 1} down`}
                 title="Move down"
                 disabled={disabled || index === sections.length - 1}
-                className="rounded-md p-1.5 text-slate-400 hover:bg-white/5 hover:text-slate-200 disabled:opacity-30"
+                className="rounded-md p-1.5 text-fg-subtle transition-colors hover:bg-muted hover:text-foreground disabled:opacity-30"
                 onClick={() => moveSection(index, 1)}
               >
                 <ArrowDown size={14} />
@@ -173,7 +173,7 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
                 aria-label={`Remove section ${index + 1}`}
                 title="Remove section"
                 disabled={disabled}
-                className="rounded-md p-1.5 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300"
+                className="rounded-md p-1.5 text-fg-subtle transition-colors hover:bg-danger/10 hover:text-danger"
                 onClick={() => write({ sections: sections.filter((_, i) => i !== index) })}
               >
                 <Trash2 size={14} />
@@ -206,7 +206,7 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
         <div className="space-y-1.5">
           {takeaways.map((takeaway, index) => (
             <div key={index} className="flex items-center gap-2">
-              <CheckCircle2 size={14} className="shrink-0 text-gold/70" />
+              <CheckCircle2 size={14} className="shrink-0 text-gold-text" />
               <input
                 className="field flex-1 py-1.5 text-[13px]"
                 placeholder="One thing they should remember"
@@ -226,10 +226,8 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
                 aria-label={`Remove takeaway ${index + 1}`}
                 title="Remove takeaway"
                 disabled={disabled}
-                className="rounded-md p-1.5 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300"
-                onClick={() =>
-                  write({ keyTakeaways: takeaways.filter((_, i) => i !== index) })
-                }
+                className="rounded-md p-1.5 text-fg-subtle transition-colors hover:bg-danger/10 hover:text-danger"
+                onClick={() => write({ keyTakeaways: takeaways.filter((_, i) => i !== index) })}
               >
                 <Trash2 size={14} />
               </button>
@@ -238,7 +236,7 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
           <button
             type="button"
             disabled={disabled}
-            className="text-[11px] font-semibold text-gold hover:underline"
+            className="text-[11px] font-semibold text-gold-text hover:underline"
             onClick={() => write({ keyTakeaways: [...takeaways, ''] })}
           >
             + Add a takeaway

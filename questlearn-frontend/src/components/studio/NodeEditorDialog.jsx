@@ -86,7 +86,7 @@ export default function NodeEditorDialog({ node, onClose, onSaved }) {
         type="button"
         aria-label="Close the node editor"
         onClick={onClose}
-        className="absolute inset-0 cursor-default bg-ink-900/85 backdrop-blur-sm"
+        className="absolute inset-0 cursor-default scrim"
       />
       <motion.div
         role="dialog"
@@ -95,20 +95,17 @@ export default function NodeEditorDialog({ node, onClose, onSaved }) {
         initial={{ opacity: 0, y: 26, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        className="panel-raised relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden shadow-glow"
+        className="panel-raised relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden shadow-raised"
       >
-        <div className="flex items-start gap-3 border-b border-white/10 px-4 py-3.5 sm:px-5">
-          <span className="mt-0.5 grid h-8 w-8 place-items-center rounded-xl border border-gold/30 bg-gold/15 text-gold">
+        <div className="flex items-start gap-3 border-b border-line px-4 py-3.5 sm:px-5">
+          <span className="mt-0.5 grid h-8 w-8 place-items-center rounded-lg border border-gold/30 bg-gold/[0.12] text-gold-text">
             <Save size={15} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[9px] font-bold uppercase tracking-[0.26em] text-gold/70">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-gold-text">
               Edit node
             </p>
-            <h2
-              id="node-editor-title"
-              className="truncate font-display text-sm font-bold text-slate-50"
-            >
+            <h2 id="node-editor-title" className="truncate text-sm font-semibold text-foreground">
               {node.title}
             </h2>
           </div>
@@ -116,7 +113,7 @@ export default function NodeEditorDialog({ node, onClose, onSaved }) {
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-lg border border-white/10 bg-white/[0.04] p-1.5 text-slate-400 transition hover:border-white/20 hover:text-white"
+            className="rounded-lg border border-line bg-muted/60 p-1.5 text-fg-muted transition-colors duration-150 hover:border-line-strong hover:text-foreground"
           >
             <X size={14} />
           </button>
@@ -125,11 +122,11 @@ export default function NodeEditorDialog({ node, onClose, onSaved }) {
         <form onSubmit={save} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
             {loading ? (
-              <div className="flex items-center justify-center gap-2 py-10 text-xs text-slate-400">
+              <div className="flex items-center justify-center gap-2 py-10 text-xs text-fg-muted">
                 <Loader2 size={14} className="animate-spin" /> Opening the node…
               </div>
             ) : !form ? (
-              <div className="flex items-start gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2.5 text-xs text-rose-100">
+              <div className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/[0.08] px-3 py-2.5 text-xs leading-relaxed text-danger">
                 <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                 {error ?? 'This node could not be loaded.'}
               </div>
@@ -179,7 +176,7 @@ export default function NodeEditorDialog({ node, onClose, onSaved }) {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                <div className="rounded-lg border border-line bg-muted/30 p-3">
                   <LessonEditor
                     value={form.content}
                     onChange={(content) => set({ content })}
@@ -188,7 +185,7 @@ export default function NodeEditorDialog({ node, onClose, onSaved }) {
                 </div>
 
                 {error && (
-                  <div className="flex items-start gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2.5 text-xs text-rose-100">
+                  <div className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/[0.08] px-3 py-2.5 text-xs leading-relaxed text-danger">
                     <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                     {error}
                   </div>
@@ -197,7 +194,7 @@ export default function NodeEditorDialog({ node, onClose, onSaved }) {
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-white/[0.07] bg-ink-900/60 px-4 py-2.5 sm:px-5">
+          <div className="flex items-center justify-end gap-2 border-t border-line bg-muted/40 px-4 py-2.5 sm:px-5">
             <button type="button" onClick={onClose} className="btn-ghost text-xs">
               Cancel
             </button>
