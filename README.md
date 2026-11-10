@@ -170,7 +170,17 @@ All routes are under `/api/v1`. Protected routes need `Authorization: Bearer <to
 | `POST` | `/courses` | Instructor, Admin | Create a draft course |
 | `PATCH` | `/courses/{id}/publish?published=true` | Instructor (owner), Admin | Publish / unpublish |
 | `POST` | `/courses/{id}/modules` | Instructor (owner), Admin | Add a skill node |
+| `PUT` | `/modules/{id}` | Instructor (owner), Admin | Edit a node's title, summary, lesson and XP |
 | `POST` | `/modules/{id}/quiz` | Instructor (owner), Admin | Attach or replace a JSONB quiz |
+| `POST` | `/modules/{id}/video` | Instructor (owner), Admin | Upload a lesson video (multipart `file`) |
+| `PUT` | `/modules/{id}/video-url` | Instructor (owner), Admin | Attach a lesson video hosted elsewhere |
+| `DELETE` | `/modules/{id}/video` | Instructor (owner), Admin | Remove the lesson video |
+
+### Media
+
+| Method | Path | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/media/videos/{name}` | public | Stream an uploaded lesson video (`Range` supported) |
 
 ### Progression
 

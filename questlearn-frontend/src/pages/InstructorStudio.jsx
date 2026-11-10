@@ -5,44 +5,19 @@ import {
   EyeOff,
   FilePlus2,
   ListTree,
+  PencilLine,
   Plus,
   Save,
   Sparkles,
   Wand2,
 } from 'lucide-react';
 import LessonEditor from '../components/studio/LessonEditor.jsx';
+import NodeEditorDialog from '../components/studio/NodeEditorDialog.jsx';
 import VideoUploader from '../components/studio/VideoUploader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { generateCourse as requestGeneratedCourse, getAiStatus } from '../services/ai.js';
 import api, { apiError } from '../services/api.js';
-
-/**
- * Turns the editor's draft into the content object the API stores, dropping the
- * blank rows a teacher left behind and any key that ended up empty. Null means
- * "this node has no lesson text yet".
- */
-const lessonPayload = (draft) => {
-  const rest = { ...(draft ?? {}) };
-  delete rest.sections;
-  delete rest.keyTakeaways;
-
-  const sections = (draft?.sections ?? [])
-    .map((section) => ({
-      heading: (section?.heading ?? '').trim(),
-      body: (section?.body ?? '').trim(),
-    }))
-    .filter((section) => section.heading || section.body);
-  const keyTakeaways = (draft?.keyTakeaways ?? [])
-    .map((takeaway) => String(takeaway ?? '').trim())
-    .filter(Boolean);
-
-  const payload = { ...rest };
-  if (sections.length > 0) payload.sections = sections;
-  if (keyTakeaways.length > 0) payload.keyTakeaways = keyTakeaways;
-  return Object.keys(payload).length > 0 ? payload : null;
-};
-
-const EMPTY_LESSON = { sections: [], keyTakeaways: [] };
+import { EMPTY_LESSON, lessonPayload } from '../services/lesson.js';
 
 const QUIZ_TEMPLATES = {
   MULTIPLE_CHOICE: JSON.stringify(
@@ -103,6 +78,7 @@ export default function InstructorStudio() {
     positionY: 0,
     content: EMPTY_LESSON,
   });
+  const [editingNode, setEditingNode] = useState(null);
   const [quizForm, setQuizForm] = useState({
     moduleId: '',
     type: 'MULTIPLE_CHOICE',
@@ -229,6 +205,19 @@ export default function InstructorStudio() {
     );
     notify('success', data.videoUrl ? 'Lesson video saved.' : 'Lesson video removed.');
   }, []);
+
+  /** Refreshes the tree after a node edit, so the table and tree agree. */
+  const saveNodeEdits = useCallback(
+    async (saved) => {
+      setEditingNode(null);
+      if (selectedId) {
+        await loadNodes(selectedId).catch(() => {});
+        await loadCourses(selectedId).catch(() => {});
+      }
+      notify('success', `"${saved?.title ?? 'Node'}" updated.`);
+    },
+    [selectedId, loadNodes, loadCourses],
+  );
 
   const togglePublish = async (course) => {
     setBusy(true);
@@ -845,7 +834,8 @@ export default function InstructorStudio() {
                           <th className="pb-2 pr-3">Prerequisite</th>
                           <th className="pb-2 pr-3">Pos</th>
                           <th className="pb-2 pr-3">XP</th>
-                          <th className="pb-2">Quiz</th>
+                          <th className="pb-2 pr-3">Quiz</th>
+                          <th className="pb-2 text-right">Edit</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
@@ -860,7 +850,17 @@ export default function InstructorStudio() {
                               {node.positionX},{node.positionY}
                             </td>
                             <td className="py-2 pr-3 text-gold">{node.xpReward}</td>
-                            <td className="py-2 text-slate-400">{node.quizType ?? 'none'}</td>
+                            <td className="py-2 pr-3 text-slate-400">{node.quizType ?? 'none'}</td>
+                            <td className="py-2 text-right">
+                              <button
+                                type="button"
+                                aria-label={`Edit ${node.title}`}
+                                onClick={() => setEditingNode(node)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] font-semibold text-slate-300 transition hover:border-gold/40 hover:text-gold"
+                              >
+                                <PencilLine size={12} /> Edit
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -868,6 +868,14 @@ export default function InstructorStudio() {
                   </div>
                 )}
               </div>
+
+              {editingNode && (
+                <NodeEditorDialog
+                  node={editingNode}
+                  onClose={() => setEditingNode(null)}
+                  onSaved={saveNodeEdits}
+                />
+              )}
             </>
           )}
         </section>
