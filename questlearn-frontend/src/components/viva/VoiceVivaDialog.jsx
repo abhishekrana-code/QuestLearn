@@ -251,6 +251,9 @@ export default function VoiceVivaDialog({ module, viva, standing, onClose, onGra
   const [written, setWritten] = useState('');
   const [micBlocked, setMicBlocked] = useState(false);
   const [gradingFrom, setGradingFrom] = useState('voice');
+  // A 429 means the examiner is rate-limited or busy. Retrying at once usually
+  // fails again, so the panel offers the two routes that still work.
+  const [busyExaminer, setBusyExaminer] = useState(false);
 
   const streamRef = useRef(null);
   const recorderRef = useRef(null);
@@ -449,6 +452,7 @@ export default function VoiceVivaDialog({ module, viva, standing, onClose, onGra
           onGradedRef.current?.(graded);
         } catch (gradeError) {
           setError(apiError(gradeError, 'The Warden could not grade that answer.'));
+          setBusyExaminer(gradeError?.response?.status === 429);
           setPhase('error');
         }
       };
@@ -494,6 +498,7 @@ export default function VoiceVivaDialog({ module, viva, standing, onClose, onGra
       onGradedRef.current?.(graded);
     } catch (gradeError) {
       setError(apiError(gradeError, 'The Warden could not grade that answer.'));
+      setBusyExaminer(gradeError?.response?.status === 429);
       setPhase('error');
     }
   }, [module.id, written]);
@@ -508,6 +513,7 @@ export default function VoiceVivaDialog({ module, viva, standing, onClose, onGra
     }
     setResult(null);
     setError(null);
+    setBusyExaminer(false);
     setElapsedMs(0);
     setPhase('idle');
   }, []);
@@ -806,7 +812,7 @@ export default function VoiceVivaDialog({ module, viva, standing, onClose, onGra
                     <button type="button" onClick={handleRetry} className="btn-ghost text-xs">
                       <RotateCcw size={14} /> Try again
                     </button>
-                    {micBlocked && (
+                    {(micBlocked || busyExaminer) && (
                       <button
                         type="button"
                         onClick={() => {
@@ -816,6 +822,11 @@ export default function VoiceVivaDialog({ module, viva, standing, onClose, onGra
                         className="btn-primary text-xs"
                       >
                         <PenLine size={14} /> Type your answer instead
+                      </button>
+                    )}
+                    {busyExaminer && (
+                      <button type="button" onClick={onClose} className="btn-ghost text-xs">
+                        <X size={14} /> Take the quiz instead
                       </button>
                     )}
                   </div>
