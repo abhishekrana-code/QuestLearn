@@ -105,7 +105,9 @@ public class ProgressService {
                     module.getOrderIndex(),
                     status,
                     progress == null ? 0 : progress.getScore(),
-                    module.getQuiz() == null ? null : module.getQuiz().getType()
+                    module.getQuiz() == null ? null : module.getQuiz().getType(),
+                    videoField(module, "videoUrl"),
+                    videoField(module, "videoLabel")
             ));
         }
 
@@ -181,6 +183,11 @@ public class ProgressService {
      * awards XP, recalculates level and streak, then unlocks child nodes.
      */
     @Transactional
+    /** Reads one string out of the node's JSONB lesson content; null when absent. */
+    private static String videoField(Module module, String field) {
+        return module.getContent() == null ? null : module.getContent().path(field).asText(null);
+    }
+
     public XpAwardResponse completeModule(Long moduleId,
                                           AppUserPrincipal principal,
                                           List<AnswerRequest> answers) {

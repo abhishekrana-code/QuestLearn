@@ -6,6 +6,8 @@ import {
   BookOpen,
   CheckCircle2,
   Crown,
+  ExternalLink,
+  Film,
   Lock,
   Map,
   Mic,
@@ -19,6 +21,7 @@ import VoiceVivaDialog from '../components/viva/VoiceVivaDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useGamification } from '../context/GamificationContext.jsx';
 import api, { apiError } from '../services/api.js';
+import { isPlayableVideo } from '../services/media.js';
 
 const STATUS_STYLE = {
   COMPLETED: 'border-gold/50 bg-gold/10 text-gold',
@@ -311,6 +314,37 @@ export default function SkillTreePage() {
                     </div>
                   ) : (
                     <>
+                      {detail.content?.videoUrl && (
+                        <figure className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                          {isPlayableVideo(detail.content.videoUrl) ? (
+                            <video
+                              key={detail.content.videoUrl}
+                              src={detail.content.videoUrl}
+                              controls
+                              preload="metadata"
+                              className="w-full"
+                            />
+                          ) : (
+                            <a
+                              href={detail.content.videoUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center justify-between gap-2 px-3 py-3 text-sm font-medium text-arcane-soft hover:underline"
+                            >
+                              <span className="flex items-center gap-2">
+                                <Film size={15} /> Watch the lesson video
+                              </span>
+                              <ExternalLink size={13} />
+                            </a>
+                          )}
+                          {detail.content.videoLabel && (
+                            <figcaption className="truncate px-3 py-2 text-[11px] text-slate-400">
+                              {detail.content.videoLabel}
+                            </figcaption>
+                          )}
+                        </figure>
+                      )}
+
                       {(detail.content?.sections ?? []).map((section) => (
                         <div key={section.heading} className="mt-4">
                           <h4 className="text-[11px] font-bold uppercase tracking-widest text-arcane-soft">

@@ -14,6 +14,9 @@ public record SkillNodeDto(
         int orderIndex,
         ProgressStatus status,
         int score,
-        QuizType quizType
+        QuizType quizType,
+        /** Lesson video attached to this node, null when it has none. */
+        String videoUrl,
+        String videoLabel
 ) {
 }

@@ -10,6 +10,7 @@ import {
   Sparkles,
   Wand2,
 } from 'lucide-react';
+import VideoUploader from '../components/studio/VideoUploader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { generateCourse as requestGeneratedCourse, getAiStatus } from '../services/ai.js';
 import api, { apiError } from '../services/api.js';
@@ -187,6 +188,18 @@ export default function InstructorStudio() {
       setGenerating(false);
     }
   };
+
+  /** Keeps the node list in step with an upload, link or removal. */
+  const saveVideo = useCallback((moduleId, data) => {
+    setNodes((previous) =>
+      previous.map((item) =>
+        item.id === moduleId
+          ? { ...item, videoUrl: data.videoUrl, videoLabel: data.videoLabel }
+          : item,
+      ),
+    );
+    notify('success', data.videoUrl ? 'Lesson video saved.' : 'Lesson video removed.');
+  }, []);
 
   const togglePublish = async (course) => {
     setBusy(true);
@@ -782,6 +795,30 @@ export default function InstructorStudio() {
                   <Save size={15} /> Attach quiz
                 </button>
               </form>
+
+              <div className="panel p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-display text-sm font-semibold text-slate-100">
+                    Lesson videos
+                  </h3>
+                  <span className="chip border-white/10 text-slate-400">
+                    drag · upload · link
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                  Students see this at the top of the node briefing. Drop a file, upload one, or
+                  point at a video that is already hosted somewhere.
+                </p>
+                {nodes.length === 0 ? (
+                  <p className="mt-3 text-xs text-slate-500">Add a node first.</p>
+                ) : (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {nodes.map((node) => (
+                      <VideoUploader key={node.id} node={node} onSaved={saveVideo} />
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="panel p-5">
                 <h3 className="font-display text-sm font-semibold text-slate-100">Node overview</h3>
