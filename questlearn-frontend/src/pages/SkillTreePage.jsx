@@ -163,7 +163,7 @@ export default function SkillTreePage() {
     return (
       <div className="mx-auto max-w-3xl px-4 py-16 text-center">
         <div className="panel p-8">
-          <p className="text-sm text-rose-200">{error}</p>
+          <p className="text-sm text-danger">{error}</p>
           <Link to="/" className="btn-ghost mt-4">
             <ArrowLeft size={15} /> Back to dashboard
           </Link>
@@ -473,7 +473,7 @@ export default function SkillTreePage() {
                                   className={`w-10 shrink-0 rounded-md py-0.5 text-center font-mono text-[10px] font-bold ${
                                     attempt.passed
                                       ? 'bg-rune/15 text-rune'
-                                      : 'bg-rose-500/10 text-rose-300'
+                                      : 'bg-danger/10 text-danger'
                                   }`}
                                 >
                                   {attempt.score}%

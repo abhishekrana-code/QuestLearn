@@ -83,7 +83,7 @@ export default function StudentDashboard() {
       </div>
 
       {error && (
-        <p className="mt-5 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+        <p className="mt-5 rounded-xl border border-danger/30 bg-danger/[0.07] px-4 py-3 text-sm text-danger">
           {error}
         </p>
       )}

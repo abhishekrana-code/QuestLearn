@@ -348,16 +348,6 @@
     color: hsl(var(--rune-text));
   }
 
-  .light .text-rose-100,
-  .light .text-rose-200 {
-    color: hsl(347 68% 38%);
-  }
-
-  .light .text-rose-300,
-  .light .text-rose-400 {
-    color: hsl(347 66% 44%);
-  }
-
   .light .text-emerald-200,
   .light .text-emerald-300,
   .light .text-emerald-400 {

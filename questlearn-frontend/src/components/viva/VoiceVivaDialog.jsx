@@ -135,7 +135,7 @@ function BossHpBar({ viva, score }) {
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
           className={`h-full rounded-full ${
             critical
-              ? 'bg-gradient-to-r from-rose-500 via-rose-400 to-orange-300'
+              ? 'bg-gradient-to-r from-danger via-danger to-warning'
               : 'bg-gradient-to-r from-gold via-gold to-gold-soft'
           }`}
         />
@@ -774,7 +774,7 @@ export default function VoiceVivaDialog({ module, viva, standing, onClose, onGra
                   <button
                     type="button"
                     onClick={stopRecording}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:from-rose-400 hover:to-rose-500"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-danger px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-danger/90"
                   >
                     <Square size={14} /> Stop &amp; submit to the Warden
                   </button>

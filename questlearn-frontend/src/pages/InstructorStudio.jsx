@@ -315,8 +315,8 @@ export default function InstructorStudio() {
         <div
           className={`mb-5 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${
             message.type === 'error'
-              ? 'border-rose-400/30 bg-rose-500/10 text-rose-200'
-              : 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
+              ? 'border-danger/30 bg-danger/[0.07] text-danger'
+              : 'border-success/30 bg-success/[0.07] text-success'
           }`}
         >
           <span>{message.text}</span>
