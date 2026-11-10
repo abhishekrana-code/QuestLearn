@@ -17,7 +17,6 @@ import com.questlearn.repository.ModuleAttemptRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
 import com.questlearn.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -28,6 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.Semaphore;
 
 /**
  * Voice viva ("boss battle") grading.
@@ -40,7 +40,6 @@ import java.util.List;
  * streamed to Groq and never stored on disk.</p>
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class VivaService {
 
@@ -62,13 +61,55 @@ public class VivaService {
     @Value("${questlearn.ai.max-audio-bytes:26214400}")
     private long maxAudioBytes;
 
+    /**
+     * Bounds how many answers are in flight at once. Each spoken attempt holds its
+     * recording in the heap while Groq works, so on a small host four is already
+     * generous; callers that cannot get a permit are told to retry rather than queued.
+     */
+    private final Semaphore vivaPermits;
+
+    public VivaService(ModuleRepository moduleRepository,
+                       ModuleAttemptRepository attemptRepository,
+                       UserRepository userRepository,
+                       UserModuleProgressRepository progressRepository,
+                       CourseService courseService,
+                       ProgressService progressService,
+                       GamificationService gamificationService,
+                       GroqAiService groqAiService,
+                       VivaGrader vivaGrader,
+                       AiQuotaService aiQuotaService,
+                       @Value("${questlearn.ai.max-concurrent-vivas:4}") int maxConcurrentVivas) {
+        this.moduleRepository = moduleRepository;
+        this.attemptRepository = attemptRepository;
+        this.userRepository = userRepository;
+        this.progressRepository = progressRepository;
+        this.courseService = courseService;
+        this.progressService = progressService;
+        this.gamificationService = gamificationService;
+        this.groqAiService = groqAiService;
+        this.vivaGrader = vivaGrader;
+        this.aiQuotaService = aiQuotaService;
+        this.vivaPermits = new Semaphore(Math.max(1, maxConcurrentVivas));
+    }
+
     @Transactional
     public VivaGradeResponse gradeViva(Long moduleId,
                                        AppUserPrincipal principal,
                                        MultipartFile audio) {
 
+        acquirePermit();
+        try {
+            return gradeSpokenAnswer(moduleId, principal, audio);
+        } finally {
+            vivaPermits.release();
+        }
+    }
+
+    private VivaGradeResponse gradeSpokenAnswer(Long moduleId,
+                                                AppUserPrincipal principal,
+                                                MultipartFile audio) {
+
         Attempt attempt = openAttempt(moduleId, principal);
-        Module module = attempt.module();
 
         if (audio == null || audio.isEmpty()) {
             throw ApiException.badRequest("Record an answer before submitting the viva.");
@@ -107,20 +148,33 @@ public class VivaService {
                                                 AppUserPrincipal principal,
                                                 String answer) {
 
-        Attempt attempt = openAttempt(moduleId, principal);
+        acquirePermit();
+        try {
+            Attempt attempt = openAttempt(moduleId, principal);
 
-        String transcript = answer == null ? "" : answer.strip();
-        if (transcript.length() < MIN_TRANSCRIPT_CHARS) {
-            throw ApiException.badRequest(
-                    "Write at least a sentence or two - the examiner grades what you actually explain.");
-        }
-        if (transcript.length() > MAX_TRANSCRIPT_CHARS) {
-            throw ApiException.badRequest(
-                    "Keep your written answer under " + MAX_TRANSCRIPT_CHARS + " characters.");
-        }
+            String transcript = answer == null ? "" : answer.strip();
+            if (transcript.length() < MIN_TRANSCRIPT_CHARS) {
+                throw ApiException.badRequest(
+                        "Write at least a sentence or two - the examiner grades what you actually explain.");
+            }
+            if (transcript.length() > MAX_TRANSCRIPT_CHARS) {
+                throw ApiException.badRequest(
+                        "Keep your written answer under " + MAX_TRANSCRIPT_CHARS + " characters.");
+            }
 
-        aiQuotaService.consume(attempt.user().getId());
-        return judge(attempt, transcript, VivaInput.WRITTEN);
+            aiQuotaService.consume(attempt.user().getId());
+            return judge(attempt, transcript, VivaInput.WRITTEN);
+        } finally {
+            vivaPermits.release();
+        }
+    }
+
+    /** Fails fast instead of queueing: a waiting student would just see a spinner. */
+    private void acquirePermit() {
+        if (!vivaPermits.tryAcquire()) {
+            throw ApiException.tooManyRequests(
+                    "Several students are being examined right now. Wait a few seconds and try again.");
+        }
     }
 
     /** Shared checks: the caller may view the course, the node is not locked. */
