@@ -24,6 +24,8 @@ Built with a focus on fluid animations, clean modular architecture, and low-memo
   there is no microphone; either way `openai/gpt-oss-120b` grades it against the node's own topics
   and replies with a score, strengths, gaps, actionable feedback and a follow-up question. The verdict
   is spoken back with the browser speech synthesiser. Audio is streamed for grading and never stored.
+  Every attempt is kept, so the node shows the trail — 52% typed, then 75% spoken — behind the best
+  score.
 - **AI quest authoring** — an instructor describes a topic and gets a whole draft quest: linked
   nodes, lesson sections, takeaways, quizzes and a boss viva each, ready to review and publish.
   Generated content is validated server-side before it is saved.

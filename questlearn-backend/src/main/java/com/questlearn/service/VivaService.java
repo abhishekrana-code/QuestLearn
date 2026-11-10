@@ -5,12 +5,15 @@ import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.VivaConfig;
 import com.questlearn.dto.VivaGradeResponse;
 import com.questlearn.exception.ApiException;
+import com.questlearn.model.AttemptSource;
 import com.questlearn.model.Course;
 import com.questlearn.model.Module;
+import com.questlearn.model.ModuleAttempt;
 import com.questlearn.model.ProgressStatus;
 import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.model.UserModuleProgress;
+import com.questlearn.repository.ModuleAttemptRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
 import com.questlearn.repository.UserRepository;
@@ -46,6 +49,7 @@ public class VivaService {
     private static final int MAX_TRANSCRIPT_CHARS = 4000;
 
     private final ModuleRepository moduleRepository;
+    private final ModuleAttemptRepository attemptRepository;
     private final UserRepository userRepository;
     private final UserModuleProgressRepository progressRepository;
     private final CourseService courseService;
@@ -171,6 +175,14 @@ public class VivaService {
             }
         }
         progressRepository.save(progress);
+        attemptRepository.save(ModuleAttempt.builder()
+                .user(user)
+                .module(module)
+                .score(verdict.score())
+                .passed(verdict.passed())
+                .source(input == VivaInput.SPOKEN ? AttemptSource.VIVA_SPOKEN : AttemptSource.VIVA_WRITTEN)
+                .createdAt(Instant.now())
+                .build());
 
         if (!verdict.passed()) {
             log.info("Viva {} failed for {} on node {} at {}% (needs {}%)",

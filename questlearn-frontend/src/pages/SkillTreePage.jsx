@@ -11,6 +11,7 @@ import {
   Mic,
   Sparkles,
   X,
+  History,
 } from 'lucide-react';
 import QuizPlayer from '../components/quiz/QuizPlayer.jsx';
 import SkillTreeCanvas from '../components/skilltree/SkillTreeCanvas.jsx';
@@ -24,6 +25,27 @@ const STATUS_STYLE = {
   UNLOCKED: 'border-rune/40 bg-rune/10 text-rune',
   LOCKED: 'border-white/10 bg-white/5 text-slate-400',
 };
+
+const ATTEMPT_LABEL = {
+  VIVA_SPOKEN: 'Spoken viva',
+  VIVA_WRITTEN: 'Typed viva',
+  QUIZ: 'Quiz',
+};
+
+/** "just now", "12m ago", "3h ago", "2d ago", then the date. */
+function timeAgo(iso) {
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return '';
+  const seconds = Math.max(0, Math.round((Date.now() - then.getTime()) / 1000));
+  if (seconds < 60) return 'just now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
 
 export default function SkillTreePage() {
   const { courseId } = useParams();
@@ -393,6 +415,46 @@ export default function SkillTreePage() {
                           >
                             <Mic size={14} /> Enter the arena
                           </button>
+                        </div>
+                      )}
+
+                      {!isPreview && (detail.history?.length ?? 0) > 0 && (
+                        <div className="mt-4 rounded-2xl border border-white/10 bg-ink-900/60 p-3.5">
+                          <div className="flex items-center gap-2">
+                            <History size={13} className="text-slate-500" />
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                              Attempt history
+                            </p>
+                            <span className="ml-auto text-[9px] uppercase tracking-wider text-slate-600">
+                              {detail.attempts > detail.history.length
+                                ? `last ${detail.history.length} of ${detail.attempts}`
+                                : `${detail.history.length} total`}
+                            </span>
+                          </div>
+                          <ol className="mt-2 space-y-1">
+                            {detail.history.map((attempt, index) => (
+                              <li
+                                key={`${attempt.at}-${index}`}
+                                className="flex items-center gap-2 rounded-lg px-1 py-1 text-[11px] odd:bg-white/[0.02]"
+                              >
+                                <span
+                                  className={`w-10 shrink-0 rounded-md py-0.5 text-center font-mono text-[10px] font-bold ${
+                                    attempt.passed
+                                      ? 'bg-rune/15 text-rune'
+                                      : 'bg-rose-500/10 text-rose-300'
+                                  }`}
+                                >
+                                  {attempt.score}%
+                                </span>
+                                <span className="text-slate-400">
+                                  {ATTEMPT_LABEL[attempt.source] ?? 'Attempt'}
+                                </span>
+                                <span className="ml-auto shrink-0 text-slate-600">
+                                  {timeAgo(attempt.at)}
+                                </span>
+                              </li>
+                            ))}
+                          </ol>
                         </div>
                       )}
                     </>
