@@ -76,7 +76,8 @@ public class VivaService {
         if (audio.getSize() > maxAudioBytes) {
             throw new ApiException(HttpStatus.PAYLOAD_TOO_LARGE,
                     "That recording exceeds the " + (maxAudioBytes / (1024 * 1024))
-                            + " MB transcription limit. Keep the answer under 80 seconds.");
+                            + " MB transcription limit. Keep the answer under 80 seconds, "
+                            + "or type your answer instead.");
         }
 
         // Spend one quota slot per attempt, before the paid calls go out.
