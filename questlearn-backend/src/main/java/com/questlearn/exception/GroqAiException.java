@@ -41,4 +41,13 @@ public class GroqAiException extends RuntimeException {
     public static GroqAiException upstream(String message, Throwable cause) {
         return new GroqAiException(HttpStatus.BAD_GATEWAY, message, cause);
     }
+
+    /**
+     * Groq rate-limited us and the fallback model was rate-limited too. This is
+     * temporary, not a server fault, so the client gets 429 and a suggestion to
+     * use the quiz or the typed answer.
+     */
+    public static GroqAiException busy(String message, Throwable cause) {
+        return new GroqAiException(HttpStatus.TOO_MANY_REQUESTS, message, cause);
+    }
 }
