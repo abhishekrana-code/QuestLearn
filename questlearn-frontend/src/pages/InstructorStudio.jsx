@@ -303,7 +303,7 @@ export default function InstructorStudio() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <header className="mb-7">
-        <p className="eyebrow">Instructor studio</p>
+        <p className="eyebrow">Course studio</p>
         <h1 className="page-title mt-2">Build the quest map</h1>
         <p className="page-subtitle mt-1.5 max-w-2xl">
           Create a course, link nodes as a tree, then attach a lesson, a video and a quiz to each

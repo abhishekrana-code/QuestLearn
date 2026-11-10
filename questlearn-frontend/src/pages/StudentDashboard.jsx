@@ -69,12 +69,12 @@ export default function StudentDashboard() {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-1">
           <StreakCounter />
           <div className="panel-raised flex items-center gap-4 p-4">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-rune/15 text-rune">
+            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-rune/15 text-rune-text">
               <Zap size={22} />
             </div>
             <div>
               <p className="stat-value">{clearedNodes}</p>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
                 Nodes cleared
               </p>
             </div>

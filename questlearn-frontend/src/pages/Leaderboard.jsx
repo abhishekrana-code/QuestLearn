@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Crown, Flame, Medal, Trophy } from 'lucide-react';
+import { Crown, Flame, Medal } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import api, { apiError } from '../services/api.js';
 
@@ -44,18 +44,16 @@ export default function Leaderboard() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <header className="mb-7 text-center">
-        <span className="mx-auto grid h-12 w-12 place-items-center rounded-xl border border-gold/25 bg-gold/[0.12] text-gold">
-          <Trophy size={21} />
-        </span>
-        <h1 className="page-title mt-3">Hall of adventurers</h1>
-        <p className="page-subtitle mx-auto mt-1.5 max-w-md">
+      <header className="mb-7">
+        <p className="eyebrow">Standings</p>
+        <h1 className="page-title mt-2">Hall of adventurers</h1>
+        <p className="page-subtitle mt-1.5 max-w-2xl">
           Ranked by total XP earned across every completed node.
         </p>
       </header>
 
       {error && (
-        <p className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+        <p className="rounded-xl border border-danger/30 bg-danger/[0.07] px-4 py-3 text-sm text-danger">
           {error}
         </p>
       )}

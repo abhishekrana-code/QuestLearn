@@ -91,21 +91,13 @@ export default function AdminPanel() {
     );
   }
 
+  /* Counters are not states, so they share the one brand accent: a row of four
+     different hues read as decoration, and success was doing duty as a colour. */
   const cards = [
-    { label: 'Accounts', value: stats?.totalUsers ?? 0, icon: Users, tone: 'text-rune-text' },
-    { label: 'Students', value: stats?.students ?? 0, icon: Users, tone: 'text-gold-text' },
-    {
-      label: 'Instructors',
-      value: stats?.instructors ?? 0,
-      icon: ShieldCheck,
-      tone: 'text-arcane-text',
-    },
-    {
-      label: 'Live courses',
-      value: stats?.publishedCourses ?? 0,
-      icon: BookOpen,
-      tone: 'text-success',
-    },
+    { label: 'Accounts', value: stats?.totalUsers ?? 0, icon: Users },
+    { label: 'Students', value: stats?.students ?? 0, icon: Users },
+    { label: 'Instructors', value: stats?.instructors ?? 0, icon: ShieldCheck },
+    { label: 'Live courses', value: stats?.publishedCourses ?? 0, icon: BookOpen },
   ];
 
   return (
@@ -138,10 +130,10 @@ export default function AdminPanel() {
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {cards.map(({ label, value, icon: Icon, tone }) => (
+        {cards.map(({ label, value, icon: Icon }) => (
           <div key={label} className="panel p-4">
             <span className="grid h-8 w-8 place-items-center rounded-lg border border-line bg-muted/60">
-              <Icon size={15} className={tone} />
+              <Icon size={15} className="text-gold-text" />
             </span>
             <p className="stat-value mt-3">{value}</p>
             <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">

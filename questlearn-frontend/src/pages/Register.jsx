@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { GraduationCap, Compass } from 'lucide-react';
+import { Check, GraduationCap, Compass, Sword } from 'lucide-react';
 import { apiError } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import ThemeToggle from '../components/common/ThemeToggle.jsx';
 
 const ROLES = [
   {
@@ -48,17 +49,35 @@ export default function Register() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-lg items-center px-4 py-10">
+    <div className="relative mx-auto grid min-h-screen max-w-md items-center px-4 py-12">
+      <div className="absolute right-4 top-5">
+        <ThemeToggle />
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         className="panel-raised w-full p-7"
       >
-        <span className="font-display text-xl font-bold text-slate-50">
-          Quest<span className="text-gold">Learn</span>
-        </span>
-        <h1 className="mt-3 font-display text-2xl font-bold text-slate-50">Start a new quest</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <div className="mb-6 flex items-center gap-2.5">
+          <span className="grid h-9 w-9 place-items-center rounded-xl border border-gold/25 bg-gold/[0.12] text-gold">
+            <Sword size={17} />
+          </span>
+          <span className="leading-none">
+            <span className="block font-display text-lg font-extrabold tracking-[-0.045em] text-foreground">
+              Quest<span className="text-gold">Learn</span>
+            </span>
+            <span className="mt-1.5 block text-[9px] font-semibold uppercase tracking-[0.19em] text-fg-subtle">
+              Playable curriculum
+            </span>
+          </span>
+        </div>
+
+        <p className="eyebrow">Create account</p>
+        <h1 className="mt-2 font-display text-2xl font-bold tracking-[-0.03em] text-foreground">
+          Start a new quest
+        </h1>
+        <p className="mt-1.5 text-sm text-fg-muted">
           Students need the institution code from their teacher. Instructor accounts need an
           invite code from an admin.
         </p>
@@ -121,15 +140,29 @@ export default function Register() {
                     key={value}
                     type="button"
                     onClick={() => setForm({ ...form, role: value })}
-                    className={`rounded-xl border p-3 text-left transition ${
+                    aria-pressed={active}
+                    className={`relative rounded-xl border p-3 text-left transition ${
                       active
-                        ? 'border-gold/60 bg-gold/10 text-gold-soft'
-                        : 'border-white/10 bg-ink-900/60 text-slate-300 hover:border-white/25'
+                        ? 'border-gold/60 bg-card ring-1 ring-inset ring-gold/25'
+                        : 'border-line bg-card/60 hover:border-line-strong'
                     }`}
                   >
-                    <Icon size={16} className={active ? 'text-gold' : 'text-slate-400'} />
-                    <p className="mt-2 text-sm font-semibold">{label}</p>
-                    <p className="mt-0.5 text-[11px] leading-snug text-slate-500">{description}</p>
+                    {active && (
+                      <Check
+                        size={13}
+                        strokeWidth={3}
+                        className="absolute right-2.5 top-2.5 text-gold"
+                      />
+                    )}
+                    <Icon size={16} className={active ? 'text-gold' : 'text-fg-subtle'} />
+                    <p
+                      className={`mt-2 text-sm font-semibold ${
+                        active ? 'text-foreground' : 'text-fg-muted'
+                      }`}
+                    >
+                      {label}
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-fg-subtle">{description}</p>
                   </button>
                 );
               })}
@@ -151,7 +184,7 @@ export default function Register() {
               value={form.inviteCode}
               onChange={(event) => setForm({ ...form, inviteCode: event.target.value })}
             />
-            <p className="mt-1 text-[11px] text-slate-500">
+            <p className="mt-1 text-[11px] text-fg-subtle">
               {form.role === 'INSTRUCTOR'
                 ? 'Instructor sign-up is disabled unless the deployment sets an invite code.'
                 : 'Left blank on a local install. A class deployment asks for the code your teacher gave you.'}
@@ -159,7 +192,7 @@ export default function Register() {
           </div>
 
           {error && (
-            <p className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+            <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
               {error}
             </p>
           )}
@@ -169,9 +202,9 @@ export default function Register() {
           </button>
         </form>
 
-        <p className="mt-5 text-center text-xs text-slate-400">
+        <p className="mt-5 text-center text-xs text-fg-muted">
           Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-gold hover:underline">
+          <Link to="/login" className="font-semibold text-gold-text hover:underline">
             Sign in
           </Link>
         </p>

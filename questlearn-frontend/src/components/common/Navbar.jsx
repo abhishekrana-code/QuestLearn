@@ -10,7 +10,7 @@ const LINKS_BY_ROLE = {
     { to: '/dashboard', label: 'Dashboard' },
     { to: '/leaderboard', label: 'Leaderboard' },
   ],
-  INSTRUCTOR: [{ to: '/studio', label: 'Instructor Studio' }],
+  INSTRUCTOR: [{ to: '/studio', label: 'Course Studio' }],
   ADMIN: [
     { to: '/studio', label: 'Course Studio' },
     { to: '/admin', label: 'Admin' },
