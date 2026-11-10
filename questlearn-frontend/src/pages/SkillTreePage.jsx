@@ -355,9 +355,9 @@ export default function SkillTreePage() {
                                 {detail.viva.bossName}
                               </h4>
                               <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                                Answer out loud. Groq transcribes your response and the AI examiner
-                                grades it against {detail.viva.passThreshold}% for +{detail.xpReward}{' '}
-                                XP.
+                                Answer out loud, or type it if you have no microphone. The AI
+                                examiner grades it against {detail.viva.passThreshold}% for +
+                                {detail.xpReward} XP.
                               </p>
                             </div>
                           </div>

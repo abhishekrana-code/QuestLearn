@@ -91,8 +91,11 @@ AI_HOURLY_LIMIT=30                   # AI calls per account per rolling hour
 
 Cost notes:
 
-- One viva attempt = one transcription + one chat completion. At the time of
-  writing that is well under a cent per attempt on Groq's pricing.
+- One spoken viva attempt = one transcription + one chat completion. At the time of
+  writing that is well under a cent per attempt on Groq's pricing. A typed answer
+  (`POST /api/v1/modules/{id}/viva` with `{"answer": "..."}`) skips the
+  transcription and costs less, which is why the typing fallback is worth telling
+  students about on lab machines with no microphones.
 - `AI_HOURLY_LIMIT` is the ceiling on how much one student can spend in an hour;
   lower it for large cohorts and keep the key out of the frontend entirely.
 - `spring.servlet.multipart.max-file-size` is 25 MB, matching Groq's whisper

@@ -29,15 +29,21 @@ import java.util.List;
 /**
  * Voice viva ("boss battle") grading.
  *
- * <p>The recording is transcribed by Groq whisper, the transcript is judged by the
- * reasoning model, and the verdict is persisted exactly like a quiz attempt: best
- * score is kept, the first clear awards the node's XP once, and clearing unlocks
- * the child nodes. Audio is streamed to Groq and never stored on disk.</p>
+ * <p>A student answers either by speaking (the recording is transcribed by Groq
+ * whisper) or by typing the answer directly, which matters in a lab without
+ * microphones or when the browser has no permission. Both paths then converge on
+ * the same examiner call and the same persistence: best score is kept, the first
+ * clear awards the node's XP once, and clearing unlocks the child nodes. Audio is
+ * streamed to Groq and never stored on disk.</p>
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class VivaService {
+
+    /** Answers shorter than this cannot be graded meaningfully. */
+    private static final int MIN_TRANSCRIPT_CHARS = 15;
+    private static final int MAX_TRANSCRIPT_CHARS = 4000;
 
     private final ModuleRepository moduleRepository;
     private final UserRepository userRepository;
@@ -57,6 +63,63 @@ public class VivaService {
                                        AppUserPrincipal principal,
                                        MultipartFile audio) {
 
+        Attempt attempt = openAttempt(moduleId, principal);
+        Module module = attempt.module();
+
+        if (audio == null || audio.isEmpty()) {
+            throw ApiException.badRequest("Record an answer before submitting the viva.");
+        }
+        if (audio.getSize() > maxAudioBytes) {
+            throw new ApiException(HttpStatus.PAYLOAD_TOO_LARGE,
+                    "That recording exceeds the " + (maxAudioBytes / (1024 * 1024))
+                            + " MB transcription limit. Keep the answer under 80 seconds.");
+        }
+
+        // Spend one quota slot per attempt, before the paid calls go out.
+        aiQuotaService.consume(attempt.user().getId());
+
+        byte[] recording;
+        try {
+            recording = audio.getBytes();
+        } catch (IOException ex) {
+            throw ApiException.badRequest("The uploaded recording could not be read.");
+        }
+
+        String transcript = groqAiService.transcribe(
+                recording, audio.getOriginalFilename(), audio.getContentType());
+        if (transcript.trim().length() < MIN_TRANSCRIPT_CHARS) {
+            throw ApiException.badRequest(
+                    "The examiner could only hear \"" + transcript
+                            + "\". Answer in a full sentence and try again, or type your answer instead.");
+        }
+
+        return judge(attempt, transcript, VivaInput.SPOKEN);
+    }
+
+    /** The written fallback: the same examination without a microphone. */
+    @Transactional
+    public VivaGradeResponse gradeWrittenAnswer(Long moduleId,
+                                                AppUserPrincipal principal,
+                                                String answer) {
+
+        Attempt attempt = openAttempt(moduleId, principal);
+
+        String transcript = answer == null ? "" : answer.strip();
+        if (transcript.length() < MIN_TRANSCRIPT_CHARS) {
+            throw ApiException.badRequest(
+                    "Write at least a sentence or two - the examiner grades what you actually explain.");
+        }
+        if (transcript.length() > MAX_TRANSCRIPT_CHARS) {
+            throw ApiException.badRequest(
+                    "Keep your written answer under " + MAX_TRANSCRIPT_CHARS + " characters.");
+        }
+
+        aiQuotaService.consume(attempt.user().getId());
+        return judge(attempt, transcript, VivaInput.WRITTEN);
+    }
+
+    /** Shared checks: the caller may view the course, the node is not locked. */
+    private Attempt openAttempt(Long moduleId, AppUserPrincipal principal) {
         Module module = moduleRepository.findById(moduleId)
                 .orElseThrow(() -> ApiException.notFound("Module not found"));
         Course course = module.getCourse();
@@ -79,37 +142,22 @@ public class VivaService {
             throw ApiException.forbidden("This node is locked. Clear its prerequisite first");
         }
 
-        if (audio == null || audio.isEmpty()) {
-            throw ApiException.badRequest("Record an answer before submitting the viva.");
-        }
-        if (audio.getSize() > maxAudioBytes) {
-            throw new ApiException(HttpStatus.PAYLOAD_TOO_LARGE,
-                    "That recording exceeds the " + (maxAudioBytes / (1024 * 1024))
-                            + " MB transcription limit. Keep the answer under 80 seconds.");
-        }
+        return new Attempt(module, course, user, progress);
+    }
 
-        // Spend one quota slot per attempt, before the paid calls go out.
-        aiQuotaService.consume(user.getId());
-
+    /**
+     * Grades an already-resolved transcript, persists the attempt and awards XP
+     * for a first clear. Both the spoken and the written path end here.
+     */
+    private VivaGradeResponse judge(Attempt attempt, String transcript, VivaInput input) {
+        Module module = attempt.module();
+        User user = attempt.user();
+        UserModuleProgress progress = attempt.progress();
         VivaConfig config = VivaConfig.forModule(module);
-        byte[] recording;
-        try {
-            recording = audio.getBytes();
-        } catch (IOException ex) {
-            throw ApiException.badRequest("The uploaded recording could not be read.");
-        }
-
-        String transcript = groqAiService.transcribe(
-                recording, audio.getOriginalFilename(), audio.getContentType());
-        if (transcript.trim().length() < 15) {
-            throw ApiException.badRequest(
-                    "The examiner could only hear \"" + transcript
-                            + "\". Answer in a full sentence and try again.");
-        }
 
         JsonNode verdictJson = groqAiService.generateJson(
                 VivaGrader.EXAMINER_SYSTEM_PROMPT,
-                vivaGrader.buildPrompt(course.getTitle(), module.getTitle(), config, transcript));
+                vivaGrader.buildPrompt(attempt.course().getTitle(), module.getTitle(), config, transcript));
         VivaGrader.VivaVerdict verdict = vivaGrader.parse(verdictJson, config.passThreshold());
 
         boolean retake = progress.getStatus() == ProgressStatus.COMPLETED;
@@ -125,16 +173,16 @@ public class VivaService {
         progressRepository.save(progress);
 
         if (!verdict.passed()) {
-            log.info("Viva failed for {} on node {} at {}% (needs {}%)",
-                    user.getEmail(), moduleId, verdict.score(), config.passThreshold());
-            return response(module, verdict, transcript, config, progress, user,
+            log.info("Viva {} failed for {} on node {} at {}% (needs {}%)",
+                    input, user.getEmail(), module.getId(), verdict.score(), config.passThreshold());
+            return response(module, verdict, transcript, config, progress, user, input,
                     0, List.of(), false, false,
                     "The Warden holds: " + verdict.score() + "% (you need "
                             + config.passThreshold() + "%). Read the gaps and answer again.");
         }
 
         if (retake) {
-            return response(module, verdict, transcript, config, progress, user,
+            return response(module, verdict, transcript, config, progress, user, input,
                     0, List.of(), false, false,
                     "Boss re-cleared at " + verdict.score() + "%. Best score is now "
                             + progress.getScore() + "% - no extra XP for replaying a cleared node.");
@@ -151,15 +199,15 @@ public class VivaService {
         List<Long> unlocked = progressService.unlockChildren(user, module);
         boolean leveledUp = newLevel > previousLevel;
 
-        log.info("Viva cleared by {} on node {} at {}% - +{} XP",
-                user.getEmail(), moduleId, verdict.score(), xpGained);
+        log.info("Viva {} cleared by {} on node {} at {}% - +{} XP",
+                input, user.getEmail(), module.getId(), verdict.score(), xpGained);
 
         String message = leveledUp
                 ? "Boss defeated at " + verdict.score() + "%! Level " + newLevel
                         + " reached - new skill branches unlocked."
                 : "Boss defeated at " + verdict.score() + "%! +" + xpGained + " XP";
 
-        return response(module, verdict, transcript, config, progress, user,
+        return response(module, verdict, transcript, config, progress, user, input,
                 xpGained, unlocked, streakIncremented, leveledUp, message);
     }
 
@@ -169,6 +217,7 @@ public class VivaService {
                                        VivaConfig config,
                                        UserModuleProgress progress,
                                        User user,
+                                       VivaInput input,
                                        int xpGained,
                                        List<Long> unlockedModuleIds,
                                        boolean streakIncremented,
@@ -176,6 +225,7 @@ public class VivaService {
                                        String message) {
         return new VivaGradeResponse(
                 module.getId(),
+                input.name(),
                 transcript,
                 verdict.score(),
                 config.passThreshold(),
@@ -196,5 +246,14 @@ public class VivaService {
                 unlockedModuleIds,
                 message
         );
+    }
+
+    /** How the answer reached the examiner. */
+    public enum VivaInput {
+        SPOKEN,
+        WRITTEN
+    }
+
+    private record Attempt(Module module, Course course, User user, UserModuleProgress progress) {
     }
 }

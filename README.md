@@ -19,11 +19,11 @@ Built with a focus on fluid animations, clean modular architecture, and low-memo
   matching quizzes stored as PostgreSQL `JSONB`, scored **on the server** so XP cannot be faked.
 - **Role-based access control (RBAC)** — strictly JWT-secured boundaries between **Student**,
   **Instructor** and **Admin** dashboards, enforced with `@PreAuthorize` on the controller layer.
-- **Voice viva boss battles** — every node can be cleared by *speaking* an answer instead of taking
-  the quiz. The recording is transcribed by Groq `whisper-large-v3-turbo`, graded by
-  `openai/gpt-oss-120b` against the node's own topics, and the examiner replies with a score,
-  strengths, gaps, actionable feedback and a follow-up question. The verdict is spoken back with the
-  browser speech synthesiser. Audio is streamed for grading and never stored.
+- **Viva boss battles** — every node can be cleared by *answering the examiner* instead of taking the
+  quiz. Speak it and the recording is transcribed by Groq `whisper-large-v3-turbo`, or type it when
+  there is no microphone; either way `openai/gpt-oss-120b` grades it against the node's own topics
+  and replies with a score, strengths, gaps, actionable feedback and a follow-up question. The verdict
+  is spoken back with the browser speech synthesiser. Audio is streamed for grading and never stored.
 - **AI quest authoring** — an instructor describes a topic and gets a whole draft quest: linked
   nodes, lesson sections, takeaways, quizzes and a boss viva each, ready to review and publish.
   Generated content is validated server-side before it is saved.
@@ -176,6 +176,7 @@ All routes are under `/api/v1`. Protected routes need `Authorization: Bearer <to
 | `GET` | `/modules/{id}` | authenticated | Lesson content + sanitized quiz |
 | `POST` | `/modules/{id}/complete` | Student, Admin | Score quiz, award XP, unlock children |
 | `POST` | `/modules/{id}/viva` | Student, Admin | Multipart `audio` → transcript, verdict, XP, unlock children |
+| `POST` | `/modules/{id}/viva` | Student, Admin | JSON `{"answer": "..."}` → typed answer, same grading (no-microphone fallback) |
 | `GET` | `/leaderboard` | Student, Admin | Top 10 students by XP |
 
 ### AI (Groq)
