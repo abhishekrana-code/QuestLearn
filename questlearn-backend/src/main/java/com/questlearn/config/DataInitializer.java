@@ -35,10 +35,11 @@ import java.util.List;
  *
  * <p>Never runs under the {@code prod} profile: the demo accounts share one known
  * password, so a fresh production database must get its first admin from
- * {@link BootstrapAdminRunner} instead.</p>
+ * {@link BootstrapAdminRunner} instead. It is also skipped under {@code it}, so the
+ * integration suite owns every row it asserts on.</p>
  */
 @Component
-@Profile("!prod")
+@Profile("!prod & !it")
 @RequiredArgsConstructor
 public class DataInitializer implements ApplicationRunner {
 
