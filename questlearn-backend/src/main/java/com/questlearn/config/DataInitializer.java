@@ -19,6 +19,7 @@ import com.questlearn.service.GamificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,8 +32,13 @@ import java.util.List;
 /**
  * Demo seeder so the project is immediately playable during an evaluation.
  * Runs only when the database is empty.
+ *
+ * <p>Never runs under the {@code prod} profile: the demo accounts share one known
+ * password, so a fresh production database must get its first admin from
+ * {@link BootstrapAdminRunner} instead.</p>
  */
 @Component
+@Profile("!prod")
 @RequiredArgsConstructor
 public class DataInitializer implements ApplicationRunner {
 
