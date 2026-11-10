@@ -37,6 +37,19 @@ jobs:
       - name: Unit and PostgreSQL integration tests
         run: mvn -B verify
         working-directory: questlearn-backend
+      # `mvn verify` stays green when the integration class is skipped, which is
+      # exactly what it would do if the database were missing. Fail loudly instead,
+      # so a green run always means the PostgreSQL suite really executed.
+      - name: Prove the PostgreSQL suite executed
+        run: |
+          report=questlearn-backend/target/surefire-reports/TEST-com.questlearn.QuestLearnApiIntegrationTest.xml
+          test -f "$report"
+          grep -q 'tests="10"' "$report"
+          if grep -q 'skipped="[1-9]' "$report"; then
+            echo "Integration tests were skipped - the database was not reachable."
+            exit 1
+          fi
+          echo "PostgreSQL integration suite ran: 10 tests, 0 skipped."
 
   frontend:
     runs-on: ubuntu-latest
