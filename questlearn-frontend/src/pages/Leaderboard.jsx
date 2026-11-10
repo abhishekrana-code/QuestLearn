@@ -4,10 +4,12 @@ import { Crown, Flame, Medal, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import api, { apiError } from '../services/api.js';
 
+/* Only the current user's row gets accent colour; the podium is carried by
+   the rank badge, so a board of ten does not read as ten highlights. */
 const MEDAL_STYLES = {
-  1: 'from-gold/30 to-gold/5 text-gold border-gold/50',
-  2: 'from-slate-300/25 to-slate-300/5 text-slate-200 border-slate-300/40',
-  3: 'from-amber-600/30 to-amber-600/5 text-amber-400 border-amber-600/40',
+  1: 'bg-gold/[0.14] text-gold-text ring-1 ring-inset ring-gold/30',
+  2: 'bg-muted text-fg-muted ring-1 ring-inset ring-line-strong',
+  3: 'bg-warning/[0.14] text-warning ring-1 ring-inset ring-warning/25',
 };
 
 export default function Leaderboard() {
@@ -34,7 +36,7 @@ export default function Leaderboard() {
 
   if (loading) {
     return (
-      <div className="grid min-h-[70vh] place-items-center text-sm text-slate-400">
+      <div className="grid min-h-[70vh] place-items-center text-sm text-fg-muted">
         Counting the XP…
       </div>
     );
@@ -42,12 +44,12 @@ export default function Leaderboard() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <header className="mb-6 text-center">
-        <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-gold/10 text-gold shadow-glow">
-          <Trophy size={24} />
+      <header className="mb-7 text-center">
+        <span className="mx-auto grid h-12 w-12 place-items-center rounded-xl border border-gold/25 bg-gold/[0.12] text-gold">
+          <Trophy size={21} />
         </span>
-        <h1 className="mt-3 font-display text-3xl font-bold text-slate-50">Hall of adventurers</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="page-title mt-3">Hall of adventurers</h1>
+        <p className="page-subtitle mx-auto mt-1.5 max-w-md">
           Ranked by total XP earned across every completed node.
         </p>
       </header>
@@ -60,7 +62,7 @@ export default function Leaderboard() {
 
       <ol className="space-y-2.5">
         {entries.length === 0 && !error && (
-          <li className="panel p-8 text-center text-sm text-slate-400">
+          <li className="panel p-8 text-center text-sm text-fg-muted">
             No students on the board yet — clear a node to claim the first slot.
           </li>
         )}
@@ -73,34 +75,36 @@ export default function Leaderboard() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.04 }}
-              className={`flex items-center gap-4 rounded-2xl border px-4 py-3 ${
+              className={`flex items-center gap-4 rounded-xl border px-4 py-3 transition-colors duration-150 ${
                 entry.currentUser
-                  ? 'border-gold/50 bg-gold/10'
-                  : medal
-                    ? `border bg-gradient-to-r ${medal}`
-                    : 'border-white/10 bg-ink-800/60'
+                  ? 'border-gold/40 bg-gold/[0.07]'
+                  : 'border-line bg-card/70 hover:border-line-strong'
               }`}
             >
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ink-900/60 font-display text-sm font-bold">
-                {entry.rank <= 3 ? <Medal size={17} /> : entry.rank}
+              <span
+                className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg text-sm font-bold ${
+                  medal ?? 'bg-muted text-fg-muted'
+                }`}
+              >
+                {entry.rank <= 3 ? <Medal size={16} /> : entry.rank}
               </span>
 
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-slate-100">
+                <p className="truncate text-sm font-semibold text-foreground">
                   {entry.name}
-                  {entry.currentUser && <span className="ml-1.5 text-gold">(you)</span>}
+                  {entry.currentUser && <span className="ml-1.5 text-gold-text">(you)</span>}
                 </p>
-                <p className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-400">
-                  <Crown size={11} className="text-gold/80" /> Level {entry.currentLevel}
+                <p className="mt-0.5 flex items-center gap-2 text-[11px] text-fg-muted">
+                  <Crown size={11} className="text-gold-text" /> Level {entry.currentLevel}
                   <span className="inline-flex items-center gap-1">
-                    <Flame size={11} className="text-orange-400" /> {entry.streakDays}d
+                    <Flame size={11} className="text-warning" /> {entry.streakDays}d
                   </span>
                 </p>
               </div>
 
-              <p className="shrink-0 font-display text-lg font-bold text-gold">
+              <p className="shrink-0 text-lg font-semibold tabular-nums text-foreground">
                 {entry.totalXp.toLocaleString()}
-                <span className="ml-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                <span className="ml-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-fg-subtle">
                   xp
                 </span>
               </p>
@@ -109,7 +113,7 @@ export default function Leaderboard() {
         })}
       </ol>
 
-      <p className="mt-6 text-center text-[11px] text-slate-500">
+      <p className="mt-6 text-center text-[11px] text-fg-subtle">
         Your current rank is based on {user.role === 'STUDENT' ? 'student' : 'account'} XP.
       </p>
     </div>

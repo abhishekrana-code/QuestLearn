@@ -100,10 +100,10 @@ export default function AdminPanel() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <header className="mb-6">
-        <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-gold/80">Admin</p>
-        <h1 className="mt-1 font-display text-3xl font-bold text-slate-50">War room</h1>
-        <p className="mt-1 text-sm text-slate-400">
+      <header className="mb-7">
+        <p className="eyebrow">Admin</p>
+        <h1 className="page-title mt-2">War room</h1>
+        <p className="page-subtitle mt-1.5 max-w-2xl">
           Moderate accounts and control which quests are live for students.
         </p>
       </header>

@@ -302,15 +302,12 @@ export default function InstructorStudio() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <header className="mb-6">
-        <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-gold/80">
-          Instructor studio
-        </p>
-        <h1 className="mt-1 font-display text-3xl font-bold text-slate-50">
-          Build the quest map
-        </h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Create a course, link nodes as a tree, then attach a JSONB micro-assessment to each node.
+      <header className="mb-7">
+        <p className="eyebrow">Instructor studio</p>
+        <h1 className="page-title mt-2">Build the quest map</h1>
+        <p className="page-subtitle mt-1.5 max-w-2xl">
+          Create a course, link nodes as a tree, then attach a lesson, a video and a quiz to each
+          node.
         </p>
       </header>
 

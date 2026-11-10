@@ -180,44 +180,42 @@ export default function SkillTreePage() {
       <header className="mb-6">
         <Link
           to={isPreview ? '/studio' : '/dashboard'}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-gold"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-fg-muted transition-colors hover:text-gold-text"
         >
           <ArrowLeft size={14} /> {isPreview ? 'Back to studio' : 'Dashboard'}
         </Link>
 
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div className="flex items-start gap-4">
-            <span className="grid h-14 w-14 place-items-center rounded-2xl border border-white/10 bg-white/5 text-2xl">
+            <span className="grid h-14 w-14 place-items-center rounded-xl border border-line bg-muted text-2xl">
               {tree.emoji || '🗺️'}
             </span>
-            <div>
-              <h1 className="font-display text-2xl font-bold text-slate-50 sm:text-3xl">
-                {tree.courseTitle}
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm text-slate-400">{tree.courseDescription}</p>
+            <div className="min-w-0">
+              <h1 className="page-title">{tree.courseTitle}</h1>
+              <p className="page-subtitle mt-1.5 max-w-2xl">{tree.courseDescription}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             {!isPreview && (
               <div className="text-right">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">
                   Nodes cleared
                 </p>
-                <p className="font-display text-xl font-bold text-slate-50">
+                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
                   {tree.completedModules}
-                  <span className="text-sm text-slate-500"> / {tree.totalModules}</span>
+                  <span className="text-sm text-fg-subtle"> / {tree.totalModules}</span>
                 </p>
               </div>
             )}
-            <span className="chip border-gold/30 text-gold">
+            <span className="chip border-gold/30 bg-gold/[0.10] text-gold-text">
               <Sparkles size={12} /> {tree.totalXp} XP
             </span>
           </div>
         </div>
 
         {!isPreview && (
-          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-gradient-to-r from-gold to-rune transition-all duration-700"
               style={{ width: `${percent}%` }}
