@@ -291,7 +291,7 @@ export default function SkillTreePage() {
                     <span className={`chip ${STATUS_STYLE[detail.status]}`}>{detail.status}</span>
                     <span className="chip border-gold/25 text-gold">+{detail.xpReward} XP</span>
                     {detail.status === 'COMPLETED' && (
-                      <span className="chip border-emerald-400/30 text-emerald-300">
+                      <span className="chip border-success/30 text-success">
                         {detail.score}% scored
                       </span>
                     )}

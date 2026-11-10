@@ -512,8 +512,8 @@ export default function InstructorStudio() {
                       <span
                         className={`chip px-1.5 py-0.5 text-[9px] ${
                           course.published
-                            ? 'border-emerald-400/30 text-emerald-300'
-                            : 'border-amber-400/30 text-amber-300'
+                            ? 'border-success/30 text-success'
+                            : 'border-warning/30 text-warning'
                         }`}
                       >
                         {course.published ? 'live' : 'draft'}
@@ -545,8 +545,8 @@ export default function InstructorStudio() {
                     <span
                       className={`chip ${
                         selectedCourse.published
-                          ? 'border-emerald-400/30 text-emerald-300'
-                          : 'border-amber-400/30 text-amber-300'
+                          ? 'border-success/30 text-success'
+                          : 'border-warning/30 text-warning'
                       }`}
                     >
                       {selectedCourse.published ? 'published' : 'draft'}

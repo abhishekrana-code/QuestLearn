@@ -348,12 +348,6 @@
     color: hsl(var(--rune-text));
   }
 
-  .light .text-emerald-200,
-  .light .text-emerald-300,
-  .light .text-emerald-400 {
-    color: hsl(158 68% 28%);
-  }
-
   .light .text-amber-300,
   .light .text-amber-400 {
     color: hsl(28 82% 34%);
