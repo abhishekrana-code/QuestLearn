@@ -59,7 +59,8 @@ export default function Register() {
         </span>
         <h1 className="mt-3 font-display text-2xl font-bold text-slate-50">Start a new quest</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Student sign-up is open. Instructor accounts need an invite code from your admin.
+          Students need the institution code from their teacher. Instructor accounts need an
+          invite code from an admin.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -135,24 +136,27 @@ export default function Register() {
             </div>
           </div>
 
-          {form.role === 'INSTRUCTOR' && (
-            <div>
-              <label className="label" htmlFor="inviteCode">
-                Instructor invite code
-              </label>
-              <input
-                id="inviteCode"
-                required
-                className="field"
-                placeholder="Ask your admin for this code"
-                value={form.inviteCode}
-                onChange={(event) => setForm({ ...form, inviteCode: event.target.value })}
-              />
-              <p className="mt-1 text-[11px] text-slate-500">
-                Instructor sign-up is disabled unless the deployment sets an invite code.
-              </p>
-            </div>
-          )}
+          <div>
+            <label className="label" htmlFor="inviteCode">
+              {form.role === 'INSTRUCTOR' ? 'Instructor invite code' : 'Institution code'}
+            </label>
+            <input
+              id="inviteCode"
+              className="field"
+              placeholder={
+                form.role === 'INSTRUCTOR'
+                  ? 'Ask your admin for this code'
+                  : 'Ask your teacher for this code'
+              }
+              value={form.inviteCode}
+              onChange={(event) => setForm({ ...form, inviteCode: event.target.value })}
+            />
+            <p className="mt-1 text-[11px] text-slate-500">
+              {form.role === 'INSTRUCTOR'
+                ? 'Instructor sign-up is disabled unless the deployment sets an invite code.'
+                : 'Left blank on a local install. A class deployment asks for the code your teacher gave you.'}
+            </p>
+          </div>
 
           {error && (
             <p className="rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
