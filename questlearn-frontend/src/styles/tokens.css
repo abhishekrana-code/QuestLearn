@@ -115,7 +115,9 @@
 
   --success: 152 60% 30%;
   --danger: 0 68% 44%;
-  --warning: 30 85% 38%;
+  /* Darkened to match --gold-text: warm text-weight accents have to carry
+     ~5:1 on paper, not just look warm. */
+  --warning: 30 90% 32%;
 
   --scrim: 222 40% 16%;
   --scrim-alpha: 0.42;

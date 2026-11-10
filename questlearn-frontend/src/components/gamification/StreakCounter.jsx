@@ -11,12 +11,12 @@ export default function StreakCounter({ compact = false }) {
       <div
         className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${
           active
-            ? 'border-orange-400/40 bg-orange-500/10 text-orange-200'
+            ? 'border-warning/40 bg-warning/10 text-warning'
             : 'border-white/10 bg-white/5 text-slate-400'
         }`}
         title={`${streakDays} day learning streak`}
       >
-        <Flame size={14} className={active ? 'text-orange-400' : ''} />
+        <Flame size={14} className={active ? 'text-warning' : ''} />
         {streakDays}d
       </div>
     );
@@ -28,7 +28,7 @@ export default function StreakCounter({ compact = false }) {
         animate={active ? { scale: [1, 1.08, 1] } : {}}
         transition={{ repeat: Infinity, duration: 2.4, ease: 'easeInOut' }}
         className={`grid h-12 w-12 place-items-center rounded-2xl ${
-          active ? 'bg-orange-500/15 text-orange-300' : 'bg-white/5 text-slate-500'
+          active ? 'bg-warning/15 text-warning' : 'bg-muted text-fg-subtle'
         }`}
       >
         <Flame size={24} />

@@ -27,7 +27,7 @@ export default function LevelUpModal({ level, xpGained, unlocked = 0, onClose })
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-[60] grid place-items-center bg-ink-900/80 p-4 backdrop-blur-sm"
+        className="scrim fixed inset-0 z-[60] grid place-items-center p-4"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}

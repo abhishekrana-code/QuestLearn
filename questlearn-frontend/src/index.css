@@ -138,8 +138,14 @@
       box-shadow var(--dur) var(--ease-out);
   }
 
+  /* Disabled is a *state*, not a faded colour: drop to the muted surface so
+     the label stays readable in both themes instead of turning muddy. */
   .btn:disabled {
-    @apply cursor-not-allowed opacity-50;
+    @apply cursor-not-allowed;
+    color: hsl(var(--subtle-foreground));
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    box-shadow: none;
   }
 
   .btn:active:not(:disabled) {
