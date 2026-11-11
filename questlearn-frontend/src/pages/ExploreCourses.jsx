@@ -49,7 +49,7 @@ export default function ExploreCourses() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [query, setQuery] = useState('');
+  const query = searchParams.get('q') ?? '';
   const [openTree, setOpenTree] = useState(null);
   const [trees, setTrees] = useState({});
 
@@ -150,6 +150,13 @@ export default function ExploreCourses() {
 
   const filtersActive = Boolean(query.trim()) || teacherId !== 'all' || subject !== 'all';
 
+  const setQuery = (value) => {
+    const next = new URLSearchParams(searchParams);
+    if (!value) next.delete('q');
+    else next.set('q', value);
+    setSearchParams(next, { replace: true });
+  };
+
   const setFilter = (key, value) => {
     const next = new URLSearchParams(searchParams);
     if (!value || value === 'all') next.delete(key);
@@ -158,10 +165,10 @@ export default function ExploreCourses() {
   };
 
   const clearFilters = () => {
-    setQuery('');
     const next = new URLSearchParams(searchParams);
     next.delete('teacher');
     next.delete('subject');
+    next.delete('q');
     setSearchParams(next, { replace: true });
   };
 
