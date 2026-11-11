@@ -282,11 +282,11 @@ export default function StudentPerformance() {
                   Lowest quiz scores across every subject
                 </p>
               </div>
-              <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+              <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {weakestTopics.map((node) => (
                   <li
                     key={node.id}
-                    className="flex items-center gap-2 rounded-xl border border-line bg-card/50 p-2.5"
+                    className="flex min-w-0 items-center gap-2 rounded-xl border border-line bg-card/50 p-2.5"
                   >
                     <span className={`chip shrink-0 ${scoreChip(node.score)}`}>{node.score}%</span>
                     <div className="min-w-0 flex-1">
