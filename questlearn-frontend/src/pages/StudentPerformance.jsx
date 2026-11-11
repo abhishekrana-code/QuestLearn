@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowUpRight,
+  ChevronDown,
   Flame,
   Gauge,
   GraduationCap,
   Sparkles,
   Star,
+  Target,
 } from 'lucide-react';
 import { useGamification } from '../context/GamificationContext.jsx';
 import api, { apiError } from '../services/api.js';
@@ -20,6 +22,18 @@ function scoreChip(score) {
   if (score >= 60) return 'border-gold/30 text-gold-text';
   return 'border-warning/30 text-warning';
 }
+
+const UNSEEN_RANK = 101;
+
+/** Attempted quizzes rank by score; untried and locked nodes sort after them. */
+const topicRank = (node) =>
+  node.quizType && (node.score > 0 || node.status === 'COMPLETED') ? node.score : UNSEEN_RANK;
+
+const STATUS_DOT = {
+  COMPLETED: 'bg-success',
+  UNLOCKED: 'bg-gold',
+  LOCKED: 'bg-slate-400',
+};
 
 function StatCard({ icon: Icon, label, value, hint, accent = 'text-gold-text' }) {
   return (
@@ -65,6 +79,7 @@ export default function StudentPerformance() {
   const { totalXp, currentLevel, streakDays } = useGamification();
   const [courses, setCourses] = useState([]);
   const [trees, setTrees] = useState({});
+  const [openTopic, setOpenTopic] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -148,12 +163,24 @@ export default function StudentPerformance() {
         );
         const quizzed = nodes.filter((node) => node.quizType).length;
 
+        const topics = subject.courses
+          .flatMap((course) =>
+            (trees[course.id] ?? []).map((node) => ({
+              ...node,
+              courseId: course.id,
+              courseTitle: course.title,
+              subjectName: subject.name,
+            })),
+          )
+          .sort((a, b) => topicRank(a) - topicRank(b) || a.title.localeCompare(b.title));
+
         return {
           ...subject,
           totalNodes,
           cleared,
           percent: percentOf(cleared, totalNodes),
           quizzed,
+          topics,
           avgScore: scored.length
             ? Math.round(scored.reduce((sum, node) => sum + node.score, 0) / scored.length)
             : null,
@@ -161,6 +188,16 @@ export default function StudentPerformance() {
       })
       .sort((a, b) => b.percent - a.percent || a.name.localeCompare(b.name));
   }, [courses, trees]);
+
+  const weakestTopics = useMemo(
+    () =>
+      subjects
+        .flatMap((subject) => subject.topics)
+        .filter((node) => node.quizType && (node.score > 0 || node.status === 'COMPLETED'))
+        .sort((a, b) => a.score - b.score || a.title.localeCompare(b.title))
+        .slice(0, 6),
+    [subjects],
+  );
 
   const courseScore = (course) => {
     const scored = (trees[course.id] ?? []).filter(
@@ -235,6 +272,44 @@ export default function StudentPerformance() {
             </div>
           </div>
 
+          {weakestTopics.length > 0 && (
+            <section className="panel mt-4 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Target size={15} className="text-warning" /> Focus next
+                </h2>
+                <p className="text-[11px] text-fg-subtle">
+                  Lowest quiz scores across every subject
+                </p>
+              </div>
+              <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                {weakestTopics.map((node) => (
+                  <li
+                    key={node.id}
+                    className="flex items-center gap-2 rounded-xl border border-line bg-card/50 p-2.5"
+                  >
+                    <span className={`chip shrink-0 ${scoreChip(node.score)}`}>{node.score}%</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-foreground">
+                        {node.title}
+                      </p>
+                      <p className="truncate text-[10px] text-fg-subtle">
+                        {node.courseTitle} · {node.subjectName}
+                      </p>
+                    </div>
+                    <Link
+                      to={`/courses/${node.courseId}`}
+                      aria-label={`Open ${node.courseTitle}`}
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line text-fg-muted transition-colors hover:border-gold/40 hover:text-gold-text"
+                    >
+                      <ArrowUpRight size={13} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <div className="mt-6 space-y-4">
             {subjects.map((subject) => (
               <section key={subject.name} className="panel-raised p-4 sm:p-5">
@@ -303,6 +378,63 @@ export default function StudentPerformance() {
                     );
                   })}
                 </ul>
+
+                {subject.topics.length > 0 && (
+                  <div className="mt-3 border-t border-line pt-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenTopic(openTopic === subject.name ? null : subject.name)
+                      }
+                      aria-expanded={openTopic === subject.name}
+                      className="btn-ghost text-[11px]"
+                    >
+                      <ChevronDown
+                        size={13}
+                        className={`transition-transform duration-150 ${
+                          openTopic === subject.name ? 'rotate-180' : ''
+                        }`}
+                      />
+                      {openTopic === subject.name
+                        ? 'Hide topics'
+                        : `Show ${subject.topics.length} topics`}
+                    </button>
+
+                    {openTopic === subject.name && (
+                      <ul className="mt-2 space-y-1.5">
+                        {subject.topics.map((node) => {
+                          const attempted =
+                            node.quizType && (node.score > 0 || node.status === 'COMPLETED');
+                          return (
+                            <li
+                              key={node.id}
+                              title={node.status.toLowerCase()}
+                              className="flex items-center gap-2 rounded-lg border border-line bg-card/40 px-2.5 py-1.5 text-[11px]"
+                            >
+                              <span
+                                aria-hidden="true"
+                                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                                  STATUS_DOT[node.status] ?? STATUS_DOT.LOCKED
+                                }`}
+                              />
+                              <span className="min-w-0 flex-1 truncate text-foreground">
+                                {node.title}
+                              </span>
+                              <span className="shrink-0 text-[10px] text-fg-subtle">
+                                {node.xpReward} XP
+                              </span>
+                              <span
+                                className={`chip shrink-0 ${scoreChip(attempted ? node.score : null)}`}
+                              >
+                                {attempted ? `${node.score}%` : 'not tried'}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </section>
             ))}
           </div>
