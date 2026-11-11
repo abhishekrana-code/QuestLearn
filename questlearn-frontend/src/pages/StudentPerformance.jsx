@@ -534,12 +534,15 @@ export default function StudentPerformance() {
                                         ))}
                                       </ol>
                                       <p className="mt-1 text-[10px] text-fg-subtle">
-                                        {delta > 0
-                                          ? `Improved ${delta} points from first to latest.`
-                                          : delta < 0
-                                            ? `${Math.abs(delta)} points down from first to latest.`
-                                            : 'Oldest first.'}
-                                        {node.attempts > items.length &&
+                                        {items.length === 0
+                                          ? 'No individual tries were recorded for this node yet.'
+                                          : delta > 0
+                                            ? `Improved ${delta} points from first to latest.`
+                                            : delta < 0
+                                              ? `${Math.abs(delta)} points down from first to latest.`
+                                              : 'Oldest first.'}
+                                        {items.length > 0 &&
+                                          node.attempts > items.length &&
                                           ` Showing the last ${items.length} of ${node.attempts}.`}
                                       </p>
                                     </>
