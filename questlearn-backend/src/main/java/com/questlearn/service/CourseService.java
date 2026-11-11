@@ -15,6 +15,7 @@ import com.questlearn.model.Quiz;
 import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.repository.CourseRepository;
+import com.questlearn.repository.ModuleAttemptRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.QuizRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
@@ -26,11 +27,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -41,7 +44,9 @@ public class CourseService {
     private final QuizRepository quizRepository;
     private final UserRepository userRepository;
     private final UserModuleProgressRepository progressRepository;
+    private final ModuleAttemptRepository attemptRepository;
     private final QuizService quizService;
+    private final MediaStorageService mediaStorageService;
 
     @Transactional(readOnly = true)
     public List<CourseDto> listCourses(AppUserPrincipal principal) {
@@ -186,8 +191,77 @@ public class CourseService {
     public CourseDto setPublished(Long courseId, boolean published, AppUserPrincipal principal) {
         Course course = loadCourse(courseId);
         assertCanManage(course, principal);
+        if (published && course.getArchivedAt() != null) {
+            throw ApiException.badRequest("Restore the course before publishing it");
+        }
         course.setPublished(published);
         return toCourseDto(courseRepository.save(course), principal);
+    }
+
+    /**
+     * Archives a finished term, or restores it as a draft.
+     *
+     * <p>Archiving unpublishes the course, so every student-facing query that
+     * filters on published stops showing it without a second rule to remember.
+     * Restoring deliberately leaves it a draft: nobody should reappear in a live
+     * course by accident.</p>
+     */
+    @Transactional
+    public CourseDto setArchived(Long courseId, boolean archived, AppUserPrincipal principal) {
+        Course course = loadCourse(courseId);
+        assertCanManage(course, principal);
+
+        if (archived) {
+            course.setArchivedAt(Instant.now());
+            course.setPublished(false);
+        } else {
+            course.setArchivedAt(null);
+        }
+
+        return toCourseDto(courseRepository.save(course), principal);
+    }
+
+    /**
+     * Deletes a draft nobody has worked through.
+     *
+     * <p>Progress and attempts are the learner's history, so a course that has any
+     * is refused rather than silently deleting somebody's scores. A published
+     * course must be unpublished first, which makes the destructive step explicit.</p>
+     */
+    @Transactional
+    public void deleteCourse(Long courseId, AppUserPrincipal principal) {
+        Course course = loadCourse(courseId);
+        assertCanManage(course, principal);
+
+        if (course.isPublished()) {
+            throw ApiException.badRequest("Unpublish the course before deleting it");
+        }
+        if (progressRepository.countByModuleCourseId(courseId) > 0
+                || attemptRepository.countByModuleCourseId(courseId) > 0) {
+            throw ApiException.badRequest("Students have progress here - archive it instead of deleting");
+        }
+
+        List<Module> modules = moduleRepository.findByCourseIdOrderByOrderIndexAsc(courseId);
+        List<String> videos = modules.stream()
+                .map(Module::getContent)
+                .filter(Objects::nonNull)
+                .map(content -> content.path("videoUrl"))
+                .filter(JsonNode::isTextual)
+                .map(JsonNode::asText)
+                .filter(url -> !url.isBlank())
+                .toList();
+
+        // Clear prerequisites first: a parent and its child deleted together would
+        // fight over the self-referencing foreign key.
+        for (Module module : modules) {
+            module.setParentModule(null);
+        }
+        moduleRepository.saveAll(modules);
+
+        courseRepository.delete(course);
+        courseRepository.flush();
+
+        videos.forEach(mediaStorageService::deleteStored);
     }
 
     @Transactional
@@ -336,7 +410,8 @@ public class CourseService {
                 course.getInstructor() == null ? "QuestLearn" : course.getInstructor().getName(),
                 moduleCount,
                 completed,
-                course.getCreatedAt()
+                course.getCreatedAt(),
+                course.getArchivedAt()
         );
     }
 

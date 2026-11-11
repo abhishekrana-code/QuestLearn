@@ -13,6 +13,7 @@ public record CourseDto(
         String instructorName,
         long moduleCount,
         long completedModules,
-        Instant createdAt
+        Instant createdAt,
+        Instant archivedAt
 ) {
 }

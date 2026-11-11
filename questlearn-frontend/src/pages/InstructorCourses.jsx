@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
+  Archive,
   Copy,
   Eye,
   FolderOpen,
@@ -9,18 +10,40 @@ import {
   Loader2,
   PencilLine,
   Plus,
+  RotateCcw,
   Search,
+  Trash2,
 } from 'lucide-react';
+import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
 import CourseDetailsDialog from '../components/studio/CourseDetailsDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import api, { apiError } from '../services/api.js';
+
+/** A labelled icon button, so a card can carry several actions without shouting. */
+function IconAction({ label, onClick, disabled = false, busy = false, danger = false, children }) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled || busy}
+      className={`grid h-8 w-8 place-items-center rounded-lg border border-line bg-muted/40 text-fg-muted transition-colors duration-150 hover:border-line-strong hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 ${
+        danger ? 'hover:border-danger/40 hover:text-danger' : ''
+      }`}
+    >
+      {busy ? <Loader2 size={14} className="animate-spin" /> : children}
+    </button>
+  );
+}
 
 /**
  * The instructor's course library.
  *
  * <p>A teacher may run several subjects, or split a semester across courses, so
  * the courses they already made live here instead of at the bottom of step 1.
- * Authoring stays in the studio: a card opens it on the course it belongs to.</p>
+ * Finished terms can be archived, which hides them from students but keeps their
+ * history; a draft nobody has touched can be deleted outright.</p>
  */
 export default function InstructorCourses() {
   const { user } = useAuth();
@@ -28,9 +51,13 @@ export default function InstructorCourses() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState('');
+  const [view, setView] = useState('active');
   const [editing, setEditing] = useState(null);
-  const [duplicatingId, setDuplicatingId] = useState(null);
+  const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,12 +78,14 @@ export default function InstructorCourses() {
   }, []);
 
   const canManage = (course) => user.role === 'ADMIN' || course.instructorId === user.id;
+  const isArchived = (course) => Boolean(course.archivedAt);
 
   // Published courses by other teachers are visible but not editable, so they
   // sort below a teacher's own courses instead of cluttering the top.
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return courses
+      .filter((course) => (view === 'archived' ? isArchived(course) : !isArchived(course)))
       .filter((course) => {
         if (!needle) return true;
         return [course.title, course.category, course.description]
@@ -66,13 +95,14 @@ export default function InstructorCourses() {
       .sort((a, b) => {
         const owned = Number(canManage(b)) - Number(canManage(a));
         if (owned !== 0) return owned;
-        return (new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0)) || b.id - a.id;
+        return new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0) || b.id - a.id;
       });
     // canManage only reads the signed-in user, which is part of `user`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courses, query, user]);
+  }, [courses, query, user, view]);
 
-  const mine = courses.filter(canManage);
+  const activeCount = courses.filter((course) => !isArchived(course)).length;
+  const archivedCount = courses.filter(isArchived).length;
 
   const handleSaved = (saved) => {
     setCourses((previous) => previous.map((course) => (course.id === saved.id ? saved : course)));
@@ -80,7 +110,7 @@ export default function InstructorCourses() {
   };
 
   const duplicate = async (course) => {
-    setDuplicatingId(course.id);
+    setBusyId(course.id);
     setNotice(null);
     try {
       const { data } = await api.post(`/courses/${course.id}/duplicate`);
@@ -92,12 +122,46 @@ export default function InstructorCourses() {
         } - rename it when you are ready.`,
       });
     } catch (copyError) {
-      setNotice({
-        type: 'error',
-        text: apiError(copyError, 'Could not duplicate this course.'),
-      });
+      setNotice({ type: 'error', text: apiError(copyError, 'Could not duplicate this course.') });
     } finally {
-      setDuplicatingId(null);
+      setBusyId(null);
+    }
+  };
+
+  const setArchived = async (course, archived) => {
+    setBusyId(course.id);
+    setNotice(null);
+    try {
+      const { data } = await api.patch(`/courses/${course.id}/archive`, null, {
+        params: { archived },
+      });
+      setCourses((previous) => previous.map((item) => (item.id === data.id ? data : item)));
+      setNotice({
+        type: 'success',
+        text: archived
+          ? `"${data.title}" archived. Students no longer see it, and nothing was deleted.`
+          : `"${data.title}" restored as a draft - publish it when it is ready.`,
+      });
+    } catch (archiveError) {
+      setNotice({ type: 'error', text: apiError(archiveError, 'Could not change the archive state.') });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    setDeletingBusy(true);
+    setDeleteError(null);
+    try {
+      await api.delete(`/courses/${deleting.id}`);
+      setCourses((previous) => previous.filter((course) => course.id !== deleting.id));
+      setNotice({ type: 'success', text: `"${deleting.title}" deleted.` });
+      setDeleting(null);
+    } catch (deleteFailure) {
+      setDeleteError(apiError(deleteFailure, 'Could not delete this course.'));
+    } finally {
+      setDeletingBusy(false);
     }
   };
 
@@ -144,10 +208,27 @@ export default function InstructorCourses() {
       )}
 
       <div className="panel mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <p className="text-xs text-fg-subtle">
-          <span className="font-semibold text-foreground">{mine.length}</span>{' '}
-          {mine.length === 1 ? 'course you can edit' : 'courses you can edit'}
-        </p>
+        <div className="flex items-center gap-1" role="tablist" aria-label="Course state">
+          {[
+            { id: 'active', label: 'Active', count: activeCount },
+            { id: 'archived', label: 'Archived', count: archivedCount },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={view === tab.id}
+              onClick={() => setView(tab.id)}
+              className={`rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                view === tab.id
+                  ? 'bg-gold/[0.12] text-gold-text ring-1 ring-inset ring-gold/20'
+                  : 'text-fg-muted hover:bg-muted hover:text-foreground'
+              }`}
+            >
+              {tab.label} <span className="tabular-nums opacity-70">{tab.count}</span>
+            </button>
+          ))}
+        </div>
         <label className="relative w-full sm:w-64">
           <Search
             size={14}
@@ -171,28 +252,35 @@ export default function InstructorCourses() {
         <div className="panel grid min-h-[240px] place-items-center p-8 text-center">
           <div>
             <p className="text-sm font-medium text-foreground">
-              {query ? 'No course matches that search' : 'No courses yet'}
+              {query
+                ? 'No course matches that search'
+                : view === 'archived'
+                  ? 'Nothing archived'
+                  : 'No courses yet'}
             </p>
             <p className="mt-1 text-xs text-fg-subtle">
               {query
                 ? 'Try a different word, or clear the search.'
-                : 'Create your first course, then build its node tree in the studio.'}
+                : view === 'archived'
+                  ? 'Finished terms you archive will be kept here, with their history intact.'
+                  : 'Create your first course, then build its node tree in the studio.'}
             </p>
             {query ? (
               <button type="button" onClick={() => setQuery('')} className="btn-ghost mt-4 text-xs">
                 Clear search
               </button>
-            ) : (
+            ) : view === 'active' ? (
               <Link to="/studio" className="btn-primary mt-4 text-xs">
                 <Plus size={14} /> Create a course
               </Link>
-            )}
+            ) : null}
           </div>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {visible.map((course) => {
             const owned = canManage(course);
+            const archived = isArchived(course);
             return (
               <article key={course.id} className="panel flex flex-col p-4">
                 <div className="flex items-start gap-2.5">
@@ -210,12 +298,14 @@ export default function InstructorCourses() {
                   </div>
                   <span
                     className={`chip shrink-0 ${
-                      course.published
-                        ? 'border-success/30 text-success'
-                        : 'border-warning/30 text-warning'
+                      archived
+                        ? 'border-line text-fg-muted'
+                        : course.published
+                          ? 'border-success/30 text-success'
+                          : 'border-warning/30 text-warning'
                     }`}
                   >
-                    {course.published ? 'live' : 'draft'}
+                    {archived ? 'archived' : course.published ? 'live' : 'draft'}
                   </span>
                 </div>
 
@@ -223,36 +313,14 @@ export default function InstructorCourses() {
                   {course.description || 'No description yet.'}
                 </p>
 
-                <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-line pt-3">
+                <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-line pt-3">
                   {owned ? (
-                    <>
-                      <Link
-                        to={`/studio?course=${course.id}&step=nodes`}
-                        className="btn-ghost text-[11px]"
-                      >
-                        <FolderOpen size={13} /> Open studio
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => setEditing(course)}
-                        className="btn-ghost text-[11px]"
-                      >
-                        <PencilLine size={13} /> Edit details
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => duplicate(course)}
-                        disabled={duplicatingId === course.id}
-                        className="btn-ghost text-[11px]"
-                      >
-                        {duplicatingId === course.id ? (
-                          <Loader2 size={13} className="animate-spin" />
-                        ) : (
-                          <Copy size={13} />
-                        )}
-                        {duplicatingId === course.id ? 'Duplicating…' : 'Duplicate'}
-                      </button>
-                    </>
+                    <Link
+                      to={`/studio?course=${course.id}&step=nodes`}
+                      className="btn-ghost text-[11px]"
+                    >
+                      <FolderOpen size={13} /> Open studio
+                    </Link>
                   ) : (
                     <span className="chip border-line text-fg-subtle">
                       <Layers size={12} /> read only
@@ -260,15 +328,62 @@ export default function InstructorCourses() {
                   )}
                   <Link
                     to={`/courses/${course.id}`}
-                    className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-gold-text hover:underline"
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-gold-text hover:underline"
                   >
                     <Eye size={13} /> Preview
                   </Link>
+
+                  {owned && (
+                    <div className="ml-auto flex items-center gap-1">
+                      <IconAction label="Edit details" onClick={() => setEditing(course)}>
+                        <PencilLine size={14} />
+                      </IconAction>
+                      <IconAction
+                        label="Duplicate"
+                        busy={busyId === course.id}
+                        onClick={() => duplicate(course)}
+                      >
+                        <Copy size={14} />
+                      </IconAction>
+                      <IconAction
+                        label={archived ? 'Restore to active' : 'Archive'}
+                        busy={busyId === course.id}
+                        onClick={() => setArchived(course, !archived)}
+                      >
+                        {archived ? <RotateCcw size={14} /> : <Archive size={14} />}
+                      </IconAction>
+                      <IconAction
+                        label={course.published ? 'Unpublish it first' : 'Delete'}
+                        danger
+                        disabled={course.published}
+                        onClick={() => {
+                          setDeleteError(null);
+                          setDeleting(course);
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </IconAction>
+                    </div>
+                  )}
                 </div>
               </article>
             );
           })}
         </div>
+      )}
+
+      {deleting && (
+        <ConfirmDialog
+          title={`Delete "${deleting.title}"?`}
+          message="This removes the course with its nodes, quizzes and lesson text, and cannot be undone. Courses students have already worked through cannot be deleted - archive those instead to keep their progress."
+          confirmLabel="Delete permanently"
+          busy={deletingBusy}
+          error={deleteError}
+          onConfirm={confirmDelete}
+          onClose={() => {
+            if (!deletingBusy) setDeleting(null);
+          }}
+        />
       )}
 
       {editing && (

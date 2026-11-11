@@ -11,6 +11,7 @@ import com.questlearn.model.Module;
 import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.repository.CourseRepository;
+import com.questlearn.repository.ModuleAttemptRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.QuizRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
@@ -52,7 +53,9 @@ class CourseServiceUpdateModuleTest {
                 mock(QuizRepository.class),
                 mock(UserRepository.class),
                 mock(UserModuleProgressRepository.class),
-                mock(QuizService.class));
+                mock(ModuleAttemptRepository.class),
+                mock(QuizService.class),
+                mock(MediaStorageService.class));
 
         User instructor = User.builder().id(7L).email("owner@questlearn.dev").role(Role.INSTRUCTOR).build();
         Course course = Course.builder().id(1L).instructor(instructor).build();

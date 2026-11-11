@@ -18,4 +18,6 @@ public interface UserModuleProgressRepository extends JpaRepository<UserModulePr
     long countByUserIdAndStatus(Long userId, ProgressStatus status);
 
     long countByUserIdAndModuleCourseIdAndStatus(Long userId, Long courseId, ProgressStatus status);
+
+    long countByModuleCourseId(Long courseId);
 }

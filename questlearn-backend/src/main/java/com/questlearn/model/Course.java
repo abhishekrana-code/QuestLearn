@@ -50,6 +50,10 @@ public class Course {
     @Column(nullable = false)
     private boolean published;
 
+    /** Set when a finished term is archived: hidden from students, history kept. */
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "instructor_id")
     private User instructor;

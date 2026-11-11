@@ -11,4 +11,6 @@ public interface ModuleAttemptRepository extends JpaRepository<ModuleAttempt, Lo
     List<ModuleAttempt> findTop10ByUserIdAndModuleIdOrderByCreatedAtDesc(Long userId, Long moduleId);
 
     List<ModuleAttempt> findByUserIdAndModuleIdOrderByCreatedAtAsc(Long userId, Long moduleId);
+
+    long countByModuleCourseId(Long courseId);
 }

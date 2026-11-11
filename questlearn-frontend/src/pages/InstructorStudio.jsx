@@ -446,12 +446,18 @@ export default function InstructorStudio() {
             </button>
             <span
               className={`chip ${
-                selectedCourse.published
-                  ? 'border-success/30 text-success'
-                  : 'border-warning/30 text-warning'
+                selectedCourse.archivedAt
+                  ? 'border-line text-fg-muted'
+                  : selectedCourse.published
+                    ? 'border-success/30 text-success'
+                    : 'border-warning/30 text-warning'
               }`}
             >
-              {selectedCourse.published ? 'live' : 'draft'}
+              {selectedCourse.archivedAt
+                ? 'archived'
+                : selectedCourse.published
+                  ? 'live'
+                  : 'draft'}
             </span>
           </div>
         </div>
@@ -1099,25 +1105,29 @@ export default function InstructorStudio() {
                   <Link to={`/courses/${selectedCourse.id}`} className="btn-ghost text-xs">
                     <Eye size={14} /> Preview as a student
                   </Link>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => togglePublish(selectedCourse)}
-                    className={
-                      selectedCourse.published
-                        ? 'btn-danger text-xs'
-                        : 'btn-primary text-xs'
-                    }
-                  >
-                    {selectedCourse.published ? <EyeOff size={14} /> : <Eye size={14} />}
-                    {selectedCourse.published ? 'Unpublish' : 'Publish to students'}
-                  </button>
+                  {!selectedCourse.archivedAt && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => togglePublish(selectedCourse)}
+                      className={
+                        selectedCourse.published
+                          ? 'btn-danger text-xs'
+                          : 'btn-primary text-xs'
+                      }
+                    >
+                      {selectedCourse.published ? <EyeOff size={14} /> : <Eye size={14} />}
+                      {selectedCourse.published ? 'Unpublish' : 'Publish to students'}
+                    </button>
+                  )}
                 </div>
 
                 <p className="mt-3 text-[11px] leading-relaxed text-fg-subtle">
-                  {selectedCourse.published
-                    ? 'This course is live. Unpublishing hides it from students without deleting any work.'
-                    : 'Students cannot see a draft. Publish when the tree, quizzes and videos are ready.'}
+                  {selectedCourse.archivedAt
+                    ? 'This course is archived. Restore it from the course library before publishing it to students again.'
+                    : selectedCourse.published
+                      ? 'This course is live. Unpublishing hides it from students without deleting any work.'
+                      : 'Students cannot see a draft. Publish when the tree, quizzes and videos are ready.'}
                 </p>
               </div>
             </>

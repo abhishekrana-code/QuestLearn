@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -67,6 +68,24 @@ public class CourseController {
     public CourseDto duplicateCourse(@PathVariable Long courseId,
                                      @AuthenticationPrincipal AppUserPrincipal principal) {
         return courseService.duplicateCourse(courseId, principal);
+    }
+
+    @PatchMapping("/courses/{courseId}/archive")
+    @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
+    @Operation(summary = "Archive a course (hide from students, keep its history) or restore it as a draft")
+    public CourseDto setArchived(@PathVariable Long courseId,
+                                 @RequestParam boolean archived,
+                                 @AuthenticationPrincipal AppUserPrincipal principal) {
+        return courseService.setArchived(courseId, archived, principal);
+    }
+
+    @DeleteMapping("/courses/{courseId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
+    @Operation(summary = "Delete a draft course that no student has worked through")
+    public void deleteCourse(@PathVariable Long courseId,
+                             @AuthenticationPrincipal AppUserPrincipal principal) {
+        courseService.deleteCourse(courseId, principal);
     }
 
     @PutMapping("/courses/{courseId}")
