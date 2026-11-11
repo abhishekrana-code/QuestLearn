@@ -1,9 +1,31 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// Where the dev server forwards /api to. Override when the backend is not on 8080,
-// e.g. VITE_API_TARGET=http://localhost:8090 npm run dev
-const apiTarget = process.env.VITE_API_TARGET || 'http://localhost:8080';
+function detectBackendPort() {
+  const envCandidates = [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), '../questlearn-backend/.env'),
+    path.resolve(process.cwd(), '../.env'),
+  ];
+  for (const candidate of envCandidates) {
+    if (fs.existsSync(candidate)) {
+      try {
+        const content = fs.readFileSync(candidate, 'utf8');
+        const match = content.match(/^SERVER_PORT\s*=\s*(\d+)/m);
+        if (match) return match[1];
+      } catch {
+        /* ignore parse errors */
+      }
+    }
+  }
+  return '8080';
+}
+
+// Where the dev server forwards /api to. Defaults to detected backend SERVER_PORT
+// or overrides with VITE_API_TARGET if explicitly provided.
+const apiTarget = process.env.VITE_API_TARGET || `http://localhost:${detectBackendPort()}`;
 
 export default defineConfig({
   plugins: [react()],
@@ -17,6 +39,10 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
   },
   build: {
     rollupOptions: {

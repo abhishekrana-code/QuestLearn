@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import FormattedText from '../common/FormattedText.jsx';
 
 export default function MCQCard({ questions, answers, onSelect, disabled }) {
   return (
@@ -9,7 +10,7 @@ export default function MCQCard({ questions, answers, onSelect, disabled }) {
             <span className="mr-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-arcane-text">
               Q{questionIndex + 1}
             </span>
-            {question.prompt}
+            <FormattedText text={question.prompt} />
           </p>
 
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -38,7 +39,9 @@ export default function MCQCard({ questions, answers, onSelect, disabled }) {
                   >
                     {String.fromCharCode(65 + optionIndex)}
                   </span>
-                  <span className="leading-relaxed">{option}</span>
+                  <span className="leading-relaxed">
+                    <FormattedText text={option} />
+                  </span>
                 </motion.button>
               );
             })}

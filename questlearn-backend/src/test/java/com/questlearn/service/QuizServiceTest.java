@@ -147,4 +147,22 @@ class QuizServiceTest {
     void sanitizeOfMissingQuizIsNull() {
         assertNull(quizService.sanitize(null));
     }
+
+    @Test
+    void extractsExplanationsForMultipleChoiceAndSinglePayloads() throws Exception {
+        Quiz mcq = quiz(QuizType.MULTIPLE_CHOICE, """
+                {"questions":[
+                  {"id":"q1","prompt":"P1","options":["a","b"],"explanation":"First explanation"},
+                  {"id":"q2","prompt":"P2","options":["c","d"],"explanation":"Second explanation"},
+                  {"id":"q3","prompt":"P3","options":["e","f"]}
+                ]}""");
+        List<String> mcqExps = quizService.explanations(mcq);
+        assertEquals(List.of("First explanation", "Second explanation"), mcqExps);
+
+        Quiz codeOrder = quiz(QuizType.CODE_ORDER, """
+                {"prompt":"Order","lines":["a","b"],"explanation":"Lifecycle explanation"}""");
+        assertEquals(List.of("Lifecycle explanation"), quizService.explanations(codeOrder));
+
+        assertEquals(List.of(), quizService.explanations(null));
+    }
 }

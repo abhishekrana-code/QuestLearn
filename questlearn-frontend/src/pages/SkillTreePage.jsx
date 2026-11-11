@@ -16,13 +16,14 @@ import {
   History,
   RotateCcw,
 } from 'lucide-react';
+import FormattedText from '../components/common/FormattedText.jsx';
 import QuizPlayer from '../components/quiz/QuizPlayer.jsx';
 import SkillTreeCanvas from '../components/skilltree/SkillTreeCanvas.jsx';
 import VoiceVivaDialog from '../components/viva/VoiceVivaDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useGamification } from '../context/GamificationContext.jsx';
 import api, { apiError } from '../services/api.js';
-import { isPlayableVideo } from '../services/media.js';
+import { isPlayableVideo, getYouTubeEmbedUrl, getVimeoEmbedUrl } from '../services/media.js';
 
 const STATUS_STYLE = {
   COMPLETED: 'border-gold/50 bg-gold/10 text-gold-text',
@@ -260,6 +261,46 @@ export default function SkillTreePage() {
           </div>
         )}
 
+        {(tree.nodes ?? []).length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
+              Jump to node:
+            </span>
+            {tree.nodes.map((node) => {
+              const isSelected = node.id === selectedId;
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  onClick={() =>
+                    node.status === 'LOCKED' ? handleLockedClick(node) : openNode(node)
+                  }
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors duration-150 ${
+                    isSelected
+                      ? 'border-gold bg-gold/15 font-semibold text-gold-text ring-1 ring-gold/40'
+                      : node.status === 'COMPLETED'
+                        ? 'border-success/30 bg-success/[0.08] text-success hover:border-success/60'
+                        : node.status === 'UNLOCKED'
+                          ? 'border-rune/40 bg-rune/[0.08] text-rune hover:border-rune/70'
+                          : 'border-line bg-muted/40 text-fg-subtle hover:border-line-strong'
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      node.status === 'COMPLETED'
+                        ? 'bg-success'
+                        : node.status === 'UNLOCKED'
+                          ? 'bg-rune'
+                          : 'bg-slate-500'
+                    }`}
+                  />
+                  <span className="max-w-[140px] truncate sm:max-w-[200px]">{node.title}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {isPreview && (
           <p className="mt-4 rounded-xl border border-arcane/30 bg-arcane/10 px-3.5 py-2 text-xs text-arcane-soft">
             Instructor preview — you can play the quizzes, but XP and progress are only recorded for
@@ -335,9 +376,11 @@ export default function SkillTreePage() {
                   </div>
 
                   <h3 className="mt-3 font-display text-xl font-bold text-slate-50">
-                    {detail.title}
+                    <FormattedText text={detail.title} />
                   </h3>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-400">{detail.summary}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-400">
+                    <FormattedText text={detail.summary} />
+                  </p>
 
                   {detail.status === 'LOCKED' ? (
                     <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-4 text-center">
@@ -349,44 +392,66 @@ export default function SkillTreePage() {
                     </div>
                   ) : (
                     <>
-                      {detail.content?.videoUrl && (
-                        <figure className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black/40">
-                          {isPlayableVideo(detail.content.videoUrl) ? (
-                            <video
-                              key={detail.content.videoUrl}
-                              src={detail.content.videoUrl}
-                              controls
-                              preload="metadata"
-                              className="w-full"
-                            />
-                          ) : (
-                            <a
-                              href={detail.content.videoUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center justify-between gap-2 px-3 py-3 text-sm font-medium text-arcane-soft hover:underline"
-                            >
-                              <span className="flex items-center gap-2">
-                                <Film size={15} /> Watch the lesson video
-                              </span>
-                              <ExternalLink size={13} />
-                            </a>
-                          )}
-                          {detail.content.videoLabel && (
-                            <figcaption className="truncate px-3 py-2 text-[11px] text-slate-400">
-                              {detail.content.videoLabel}
-                            </figcaption>
-                          )}
-                        </figure>
-                      )}
+                      {detail.content?.videoUrl && (() => {
+                        const ytEmbed = getYouTubeEmbedUrl(detail.content.videoUrl);
+                        const vimeoEmbed = getVimeoEmbedUrl(detail.content.videoUrl);
+                        const isDirect = isPlayableVideo(detail.content.videoUrl);
+
+                        return (
+                          <figure className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                            {isDirect ? (
+                              <video
+                                key={detail.content.videoUrl}
+                                src={detail.content.videoUrl}
+                                controls
+                                preload="metadata"
+                                className="w-full"
+                              />
+                            ) : ytEmbed ? (
+                              <iframe
+                                src={ytEmbed}
+                                title={detail.content.videoLabel || 'Lesson video'}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                allowFullScreen
+                                className="aspect-video w-full border-0"
+                              />
+                            ) : vimeoEmbed ? (
+                              <iframe
+                                src={vimeoEmbed}
+                                title={detail.content.videoLabel || 'Lesson video'}
+                                allow="autoplay; fullscreen; picture-in-picture"
+                                allowFullScreen
+                                className="aspect-video w-full border-0"
+                              />
+                            ) : (
+                              <a
+                                href={detail.content.videoUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center justify-between gap-2 px-3 py-3 text-sm font-medium text-arcane-soft hover:underline"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <Film size={15} /> Watch the lesson video
+                                </span>
+                                <ExternalLink size={13} />
+                              </a>
+                            )}
+                            {detail.content.videoLabel && (
+                              <figcaption className="truncate px-3 py-2 text-[11px] text-slate-400">
+                                {detail.content.videoLabel}
+                              </figcaption>
+                            )}
+                          </figure>
+                        );
+                      })()}
 
                       {(detail.content?.sections ?? []).map((section, index) => (
                         <div key={`${index}-${section.heading}`} className="mt-4">
                           <h4 className="text-[11px] font-bold uppercase tracking-widest text-arcane-soft">
-                            {section.heading}
+                            <FormattedText text={section.heading} />
                           </h4>
                           <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-300">
-                            {section.body}
+                            <FormattedText text={section.body} />
                           </p>
                         </div>
                       ))}
@@ -400,7 +465,9 @@ export default function SkillTreePage() {
                                 className="flex items-start gap-2 text-xs text-slate-300"
                               >
                                 <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-gold" />
-                                {takeaway}
+                                <span>
+                                  <FormattedText text={takeaway} />
+                                </span>
                               </li>
                             ))}
                           </ul>

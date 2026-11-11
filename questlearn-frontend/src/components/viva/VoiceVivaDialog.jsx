@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { submitViva, submitWrittenViva } from '../../services/ai.js';
 import { apiError } from '../../services/api.js';
+import FormattedText from '../common/FormattedText.jsx';
 
 const MAX_RECORDING_MS = 80_000;
 const MIN_WRITTEN_CHARS = 15;
@@ -185,7 +186,9 @@ function VerdictBody({ result, onRetry, onClose }) {
             {(result.strengths ?? []).map((item) => (
               <li key={item} className="flex items-start gap-1.5 text-[11px] text-fg-muted">
                 <Check size={11} className="mt-0.5 shrink-0 text-rune-text" />
-                {item}
+                <span>
+                  <FormattedText text={item} />
+                </span>
               </li>
             ))}
             {(result.strengths ?? []).length === 0 && (
@@ -199,7 +202,9 @@ function VerdictBody({ result, onRetry, onClose }) {
             {(result.gaps ?? []).map((item) => (
               <li key={item} className="flex items-start gap-1.5 text-[11px] text-fg-muted">
                 <AlertTriangle size={11} className="mt-0.5 shrink-0 text-danger" />
-                {item}
+                <span>
+                  <FormattedText text={item} />
+                </span>
               </li>
             ))}
             {(result.gaps ?? []).length === 0 && (
@@ -213,13 +218,15 @@ function VerdictBody({ result, onRetry, onClose }) {
         <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-gold-text">
           Examiner feedback
         </p>
-        <p className="mt-1.5 text-xs leading-relaxed text-fg-muted">{result.feedback}</p>
+        <p className="mt-1.5 text-xs leading-relaxed text-fg-muted">
+          <FormattedText text={result.feedback} />
+        </p>
         {result.followUpQuestion ? (
           <p className="mt-2 border-t border-gold/15 pt-2 text-xs leading-relaxed text-foreground">
             <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-gold-text">
               Follow-up ·{' '}
             </span>
-            {result.followUpQuestion}
+            <FormattedText text={result.followUpQuestion} />
           </p>
         ) : null}
       </div>
@@ -610,12 +617,14 @@ export default function VoiceVivaDialog({ module, viva, standing, onClose, onGra
                   <Volume2 size={10} /> replay
                 </button>
               </div>
-              <p className="mt-1.5 text-xs leading-relaxed text-foreground">{openingQuestion}</p>
+              <p className="mt-1.5 text-xs leading-relaxed text-foreground">
+                <FormattedText text={openingQuestion} />
+              </p>
               {(viva?.topics ?? []).length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {viva.topics.map((topic) => (
                     <span key={topic} className="chip border-line px-1.5 py-0.5 text-[10px] text-fg-muted">
-                      {topic}
+                      <FormattedText text={topic} />
                     </span>
                   ))}
                 </div>

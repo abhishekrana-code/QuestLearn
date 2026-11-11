@@ -213,6 +213,7 @@ public class ProgressService {
         Quiz quiz = module.getQuiz();
         int score = 100;
         int passingScore = 0;
+        List<String> explanations = quizService.explanations(quiz);
 
         if (quiz != null) {
             passingScore = quiz.getPassingScore();
@@ -250,7 +251,8 @@ public class ProgressService {
                     List.of(),
                     user.getStreakDays(),
                     false,
-                    failMessage
+                    failMessage,
+                    explanations
             );
         }
 
@@ -268,7 +270,8 @@ public class ProgressService {
                     user.getStreakDays(),
                     false,
                     "Retake cleared at " + score + "%. Best score is now " + progress.getScore()
-                            + "% - no extra XP for replaying a cleared node."
+                            + "% - no extra XP for replaying a cleared node.",
+                    explanations
             );
         }
 
@@ -303,7 +306,8 @@ public class ProgressService {
                 unlockedModuleIds,
                 user.getStreakDays(),
                 streakIncremented,
-                message
+                message,
+                explanations
         );
     }
 

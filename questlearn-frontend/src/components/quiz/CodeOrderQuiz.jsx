@@ -1,5 +1,6 @@
 import { Reorder, useDragControls } from 'framer-motion';
 import { GripVertical } from 'lucide-react';
+import FormattedText from '../common/FormattedText.jsx';
 
 function OrderItem({ index, line, disabled, lines }) {
   const controls = useDragControls();
@@ -30,7 +31,9 @@ function OrderItem({ index, line, disabled, lines }) {
 export default function CodeOrderQuiz({ prompt, lines, order, setOrder, disabled }) {
   return (
     <div>
-      <p className="text-sm font-medium leading-relaxed text-foreground">{prompt}</p>
+      <p className="text-sm font-medium leading-relaxed text-foreground">
+        <FormattedText text={prompt} />
+      </p>
       <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-fg-subtle">
         Drag the handle, or use the arrows, to place each line in the right order.
       </p>

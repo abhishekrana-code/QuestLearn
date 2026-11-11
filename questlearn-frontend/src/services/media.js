@@ -7,6 +7,24 @@ export function isPlayableVideo(url) {
   return typeof url === 'string' && DIRECT_VIDEO.test(url);
 }
 
+/** Extracts a privacy-enhanced YouTube embed URL if the URL is a YouTube link. */
+export function getYouTubeEmbedUrl(url) {
+  if (typeof url !== 'string') return null;
+  const match = url.match(
+    /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i,
+  );
+  return match ? `https://www.youtube-nocookie.com/embed/${match[1]}` : null;
+}
+
+/** Extracts a Vimeo player embed URL if the URL is a Vimeo link. */
+export function getVimeoEmbedUrl(url) {
+  if (typeof url !== 'string') return null;
+  const match = url.match(
+    /vimeo\.com\/(?:channels\/(?:\w+\/)?|groups\/[^\/]*\/videos\/|album\/(?:\d+\/)?video\/|video\/|)(\d+)/i,
+  );
+  return match ? `https://player.vimeo.com/video/${match[1]}` : null;
+}
+
 /**
  * Uploads a video file for a node. Not JSON, so the axios instance's default
  * Content-Type is cleared to let the browser add the multipart boundary.

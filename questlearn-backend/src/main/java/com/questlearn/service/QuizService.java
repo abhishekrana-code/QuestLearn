@@ -217,6 +217,35 @@ public class QuizService {
         return percentage(correct, pairs.size());
     }
 
+    /**
+     * Extracts pedagogical explanations from the canonical quiz payload so they
+     * can be shown to the learner after their attempt is evaluated.
+     */
+    public List<String> explanations(Quiz quiz) {
+        if (quiz == null || quiz.getPayload() == null) {
+            return List.of();
+        }
+        List<String> list = new ArrayList<>();
+        JsonNode payload = quiz.getPayload();
+        if (quiz.getType() == QuizType.MULTIPLE_CHOICE) {
+            JsonNode questions = payload.path("questions");
+            if (questions.isArray()) {
+                for (JsonNode q : questions) {
+                    String exp = q.path("explanation").asText("").trim();
+                    if (!exp.isEmpty()) {
+                        list.add(exp);
+                    }
+                }
+            }
+        } else {
+            String exp = payload.path("explanation").asText("").trim();
+            if (!exp.isEmpty()) {
+                list.add(exp);
+            }
+        }
+        return list;
+    }
+
     private int percentage(int correct, int total) {
         if (total <= 0) {
             return 100;

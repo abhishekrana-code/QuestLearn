@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CheckCircle2, Send, XCircle } from 'lucide-react';
 import { apiError } from '../../services/api.js';
+import FormattedText from '../common/FormattedText.jsx';
 import CodeOrderQuiz from './CodeOrderQuiz.jsx';
 import DragDropQuiz from './DragDropQuiz.jsx';
 import MCQCard from './MCQCard.jsx';
@@ -151,11 +152,30 @@ export default function QuizPlayer({ quiz, onSubmit, disabled = false, retake = 
             ) : (
               <XCircle size={18} className="mt-0.5 shrink-0" />
             )}
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="font-semibold tabular-nums">
                 Score {result.score}% · {result.passed ? 'Node cleared' : 'Not cleared yet'}
               </p>
-              <p className="mt-0.5 text-xs opacity-90">{result.message}</p>
+              <p className="mt-0.5 text-xs opacity-90">
+                <FormattedText text={result.message} />
+              </p>
+              {result.explanations?.length > 0 && (
+                <div className="mt-3 rounded-lg border border-line/60 bg-muted/40 p-3 text-xs">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gold-text">
+                    Explanations & Key Insights
+                  </p>
+                  <ul className="mt-2 space-y-1.5">
+                    {result.explanations.map((exp, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-fg-muted">
+                        <span className="mt-0.5 text-gold">•</span>
+                        <span>
+                          <FormattedText text={exp} />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </motion.div>
         )}

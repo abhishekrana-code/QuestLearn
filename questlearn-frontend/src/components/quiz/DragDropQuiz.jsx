@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { GripVertical, RotateCcw, X } from 'lucide-react';
+import FormattedText from '../common/FormattedText.jsx';
 
 export default function DragDropQuiz({ prompt, items, targets, matches, setMatches, disabled }) {
   const [selected, setSelected] = useState(null);
@@ -26,7 +27,9 @@ export default function DragDropQuiz({ prompt, items, targets, matches, setMatch
 
   return (
     <div>
-      <p className="text-sm font-medium leading-relaxed text-foreground">{prompt}</p>
+      <p className="text-sm font-medium leading-relaxed text-foreground">
+        <FormattedText text={prompt} />
+      </p>
       <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-fg-subtle">
         Drag a tile onto a slot, or tap a tile then tap a slot.
       </p>
@@ -55,7 +58,7 @@ export default function DragDropQuiz({ prompt, items, targets, matches, setMatch
               } ${disabled ? 'cursor-not-allowed' : 'cursor-grab active:cursor-grabbing'}`}
             >
               <GripVertical size={13} className="opacity-60" />
-              {item}
+              <FormattedText text={item} />
             </button>
           );
         })}
@@ -85,13 +88,15 @@ export default function DragDropQuiz({ prompt, items, targets, matches, setMatch
               } ${selected && !disabled ? 'cursor-pointer hover:border-gold/50' : ''}`}
             >
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-foreground">{target}</p>
+                <p className="text-xs font-semibold text-foreground">
+                  <FormattedText text={target} />
+                </p>
                 <p
                   className={`mt-0.5 truncate text-[11px] ${
                     placedItem ? 'text-rune-text' : 'text-fg-subtle'
                   }`}
                 >
-                  {placedItem ?? 'Drop a matching tile here'}
+                  {placedItem ? <FormattedText text={placedItem} /> : 'Drop a matching tile here'}
                 </p>
               </div>
 
