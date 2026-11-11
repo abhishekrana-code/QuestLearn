@@ -14,6 +14,7 @@ const Leaderboard = lazy(() => import('./pages/Leaderboard.jsx'));
 const InstructorStudio = lazy(() => import('./pages/InstructorStudio.jsx'));
 const InstructorCourses = lazy(() => import('./pages/InstructorCourses.jsx'));
 const ExploreCourses = lazy(() => import('./pages/ExploreCourses.jsx'));
+const StudentPerformance = lazy(() => import('./pages/StudentPerformance.jsx'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel.jsx'));
 
 function RouteFallback() {
@@ -78,6 +79,14 @@ export default function App() {
               element={
                 <ProtectedRoute roles={['STUDENT', 'INSTRUCTOR', 'ADMIN']}>
                   <SkillTreePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/performance"
+              element={
+                <ProtectedRoute roles={['STUDENT']}>
+                  <StudentPerformance />
                 </ProtectedRoute>
               }
             />
