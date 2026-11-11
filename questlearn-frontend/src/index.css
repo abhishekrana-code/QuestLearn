@@ -165,13 +165,13 @@
 
   .btn-arcane {
     @apply btn;
-    background: hsl(var(--arcane));
+    background: hsl(var(--btn-arcane-fill));
     color: hsl(0 0% 100%);
     box-shadow: 0 10px 24px -16px hsl(var(--arcane) / 0.9);
   }
 
   .btn-arcane:hover:not(:disabled) {
-    filter: brightness(1.08);
+    filter: brightness(1.05);
   }
 
   .btn-ghost {
