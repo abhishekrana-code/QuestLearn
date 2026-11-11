@@ -331,7 +331,7 @@ export default function InstructorStudio() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-[330px_1fr]">
-        <aside className="space-y-5">
+        <aside className="min-w-0 space-y-5">
           <div className="panel p-5">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Wand2 size={15} className="text-arcane-text" /> AI quest builder
@@ -529,7 +529,7 @@ export default function InstructorStudio() {
           </div>
         </aside>
 
-        <section className="space-y-5">
+        <section className="min-w-0 space-y-5">
           {!selectedCourse ? (
             <div className="panel grid min-h-[240px] place-items-center p-8 text-sm text-slate-400">
               Select or create a course to start mapping nodes.
