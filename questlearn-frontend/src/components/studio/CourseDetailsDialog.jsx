@@ -58,7 +58,7 @@ export default function CourseDetailsDialog({ course, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto p-3 sm:items-center sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-6">
       <button
         type="button"
         aria-label="Close the course editor"
