@@ -2,8 +2,10 @@ package com.questlearn.config;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.questlearn.model.AttemptSource;
 import com.questlearn.model.Course;
 import com.questlearn.model.Module;
+import com.questlearn.model.ModuleAttempt;
 import com.questlearn.model.ProgressStatus;
 import com.questlearn.model.Quiz;
 import com.questlearn.model.QuizType;
@@ -11,6 +13,7 @@ import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.model.UserModuleProgress;
 import com.questlearn.repository.CourseRepository;
+import com.questlearn.repository.ModuleAttemptRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.QuizRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
@@ -24,6 +27,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -50,16 +54,20 @@ public class DataInitializer implements ApplicationRunner {
     private final ModuleRepository moduleRepository;
     private final QuizRepository quizRepository;
     private final UserModuleProgressRepository progressRepository;
+    private final ModuleAttemptRepository attemptRepository;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) throws Exception {
-        if (userRepository.count() > 0) {
-            return;
+        if (userRepository.count() == 0) {
+            seedDemoData();
         }
+        backfillDemoAttempts();
+    }
 
+    private void seedDemoData() throws Exception {
         User admin = seedUser("Aria the Architect", "admin@questlearn.dev", Role.ADMIN, 0, 0, null);
         User instructor = seedUser("Professor Kade", "instructor@questlearn.dev", Role.INSTRUCTOR, 0, 0, null);
         User student = seedUser("Leo the Learner", "student@questlearn.dev", Role.STUDENT, 220, 4,
@@ -271,6 +279,60 @@ public class DataInitializer implements ApplicationRunner {
         // touch admin/instructor so they are not reported as unused by the compiler
         List<User> staff = new ArrayList<>(List.of(admin, instructor));
         staff.size();
+    }
+
+    /**
+     * Gives the demo student a short try history on every completed node.
+     *
+     * <p>Progress written before the attempts table existed carries a try count but
+     * no rows, so the per-attempt view had nothing to show. Each node is checked
+     * first, and one with real history is left untouched - this only fills a gap,
+     * it never rewrites a learner's attempts.</p>
+     */
+    private void backfillDemoAttempts() {
+        userRepository.findByEmailIgnoreCase("student@questlearn.dev").ifPresent(student -> {
+            for (UserModuleProgress progress : progressRepository.findByUserId(student.getId())) {
+                if (progress.getStatus() != ProgressStatus.COMPLETED) {
+                    continue;
+                }
+
+                Module module = progress.getModule();
+                if (!attemptRepository
+                        .findByUserIdAndModuleIdOrderByCreatedAtAsc(student.getId(), module.getId())
+                        .isEmpty()) {
+                    continue;
+                }
+
+                int passing = module.getQuiz() == null ? 60 : module.getQuiz().getPassingScore();
+                int finalScore = progress.getScore();
+                // A believable climb: a rough first try, a near miss, then the score
+                // the progress row already records as the best.
+                int[] series = {
+                        Math.max(5, finalScore - 45),
+                        Math.max(15, finalScore - 20),
+                        finalScore,
+                };
+                Instant finished = progress.getCompletedAt() == null
+                        ? Instant.now()
+                        : progress.getCompletedAt();
+
+                for (int index = 0; index < series.length; index += 1) {
+                    attemptRepository.save(ModuleAttempt.builder()
+                            .user(student)
+                            .module(module)
+                            .score(series[index])
+                            .passed(series[index] >= passing)
+                            .source(AttemptSource.QUIZ)
+                            .createdAt(finished.minus(Duration.ofDays(
+                                    2L * (series.length - 1 - index))))
+                            .build());
+                }
+
+                progress.setAttempts(series.length);
+                progress.setCompletedAt(finished);
+                progressRepository.save(progress);
+            }
+        });
     }
 
     private User seedUser(String name, String email, Role role, int totalXp, int streak, LocalDate lastActivity) {
