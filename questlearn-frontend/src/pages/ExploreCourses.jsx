@@ -9,6 +9,7 @@ import {
   Search,
   Sparkles,
   Users,
+  X,
 } from 'lucide-react';
 import api, { apiError } from '../services/api.js';
 
@@ -48,6 +49,8 @@ export default function ExploreCourses() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState('');
+  const [teacherId, setTeacherId] = useState('all');
+  const [subject, setSubject] = useState('all');
   const [openTree, setOpenTree] = useState(null);
   const [trees, setTrees] = useState({});
 
@@ -69,37 +72,77 @@ export default function ExploreCourses() {
     };
   }, []);
 
-  const teachers = useMemo(() => {
+  const teacherOptions = useMemo(() => {
+    const map = new Map();
+    courses.forEach((course) => {
+      const id = course.instructorId ?? 'unknown';
+      const entry = map.get(id) ?? {
+        id,
+        name: course.instructorName || 'QuestLearn',
+        count: 0,
+      };
+      entry.count += 1;
+      map.set(id, entry);
+    });
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [courses]);
+
+  const subjectOptions = useMemo(() => {
+    const map = new Map();
+    courses.forEach((course) => {
+      const name = course.category?.trim() || 'Uncategorised';
+      map.set(name, (map.get(name) ?? 0) + 1);
+    });
+    return [...map.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, count]) => ({ name, count }));
+  }, [courses]);
+
+  const catalogue = useMemo(() => {
     const needle = query.trim().toLowerCase();
+    const matches = (course) => {
+      if (teacherId !== 'all' && String(course.instructorId ?? 'unknown') !== teacherId) {
+        return false;
+      }
+      if (subject !== 'all' && (course.category?.trim() || 'Uncategorised') !== subject) {
+        return false;
+      }
+      if (!needle) return true;
+      return [course.title, course.category, course.description, course.instructorName]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(needle));
+    };
+
     const groups = new Map();
+    let count = 0;
+    courses.filter(matches).forEach((course) => {
+      count += 1;
+      const key = course.instructorId ?? 'unknown';
+      if (!groups.has(key)) {
+        groups.set(key, { id: key, name: course.instructorName || 'QuestLearn', courses: [] });
+      }
+      groups.get(key).courses.push(course);
+    });
 
-    courses
-      .filter((course) => {
-        if (!needle) return true;
-        return [course.title, course.category, course.description, course.instructorName]
-          .filter(Boolean)
-          .some((value) => value.toLowerCase().includes(needle));
-      })
-      .forEach((course) => {
-        const key = course.instructorId ?? 'unknown';
-        if (!groups.has(key)) {
-          groups.set(key, {
-            id: key,
-            name: course.instructorName || 'QuestLearn',
-            courses: [],
-          });
-        }
-        groups.get(key).courses.push(course);
-      });
+    return {
+      count,
+      teachers: [...groups.values()]
+        .map((teacher) => ({
+          ...teacher,
+          nodeTotal: teacher.courses.reduce((sum, course) => sum + course.moduleCount, 0),
+          cleared: teacher.courses.reduce((sum, course) => sum + course.completedModules, 0),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    };
+  }, [courses, query, teacherId, subject]);
 
-    return [...groups.values()]
-      .map((teacher) => ({
-        ...teacher,
-        nodeTotal: teacher.courses.reduce((sum, course) => sum + course.moduleCount, 0),
-        cleared: teacher.courses.reduce((sum, course) => sum + course.completedModules, 0),
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [courses, query]);
+  const filtersActive = Boolean(query.trim()) || teacherId !== 'all' || subject !== 'all';
+
+  const clearFilters = () => {
+    setQuery('');
+    setTeacherId('all');
+    setSubject('all');
+  };
 
   const toggleTree = async (course) => {
     if (openTree === course.id) {
@@ -146,56 +189,99 @@ export default function ExploreCourses() {
         </div>
       )}
 
-      <div className="panel mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <p className="flex items-center gap-2 text-xs text-fg-subtle">
-          <Users size={14} className="text-gold-text" />
-          <span>
-            <span className="font-semibold text-foreground">{teachers.length}</span>{' '}
-            {teachers.length === 1 ? 'teacher' : 'teachers'} ·{' '}
-            <span className="font-semibold text-foreground">{courses.length}</span>{' '}
-            {courses.length === 1 ? 'course' : 'courses'}
-          </span>
-        </p>
-        <label className="relative w-full sm:w-64">
-          <Search
-            size={14}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-subtle"
-          />
-          <input
-            className="field pl-9"
-            placeholder="Search teacher, course or topic"
-            aria-label="Search courses and teachers"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
+      <div className="panel mb-4 space-y-2.5 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="flex items-center gap-2 text-xs text-fg-subtle">
+            <Users size={14} className="text-gold-text" />
+            <span>
+              <span className="font-semibold text-foreground">{catalogue.teachers.length}</span>{' '}
+              {catalogue.teachers.length === 1 ? 'teacher' : 'teachers'} ·{' '}
+              <span className="font-semibold text-foreground">{catalogue.count}</span>{' '}
+              {catalogue.count === 1 ? 'course' : 'courses'}
+              {filtersActive && <span className="text-fg-muted"> shown</span>}
+            </span>
+          </p>
+          {filtersActive && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-gold-text hover:underline"
+            >
+              <X size={12} /> Clear filters
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <select
+            className="field sm:w-48"
+            aria-label="Filter by teacher"
+            value={teacherId}
+            onChange={(event) => setTeacherId(event.target.value)}
+          >
+            <option value="all">All teachers</option>
+            {teacherOptions.map((teacher) => (
+              <option key={teacher.id} value={String(teacher.id)}>
+                {teacher.name} ({teacher.count})
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="field sm:w-44"
+            aria-label="Filter by subject"
+            value={subject}
+            onChange={(event) => setSubject(event.target.value)}
+          >
+            <option value="all">All subjects</option>
+            {subjectOptions.map((option) => (
+              <option key={option.name} value={option.name}>
+                {option.name} ({option.count})
+              </option>
+            ))}
+          </select>
+
+          <label className="relative w-full sm:flex-1">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-subtle"
+            />
+            <input
+              className="field pl-9"
+              placeholder="Search teacher, course or topic"
+              aria-label="Search courses and teachers"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+        </div>
       </div>
 
       {loading ? (
         <div className="panel grid min-h-[240px] place-items-center text-sm text-slate-400">
           Gathering the catalogue…
         </div>
-      ) : teachers.length === 0 ? (
+      ) : catalogue.teachers.length === 0 ? (
         <div className="panel grid min-h-[240px] place-items-center p-8 text-center">
           <div>
             <p className="text-sm font-medium text-foreground">
-              {query ? 'Nothing matches that search' : 'No published courses yet'}
+              {filtersActive ? 'No course matches those filters' : 'No published courses yet'}
             </p>
             <p className="mt-1 text-xs text-fg-subtle">
-              {query
-                ? 'Try a teacher name, a subject, or part of a course title.'
+              {filtersActive
+                ? 'Try another teacher or subject, or clear the filters.'
                 : 'When a teacher publishes a quest it will appear here.'}
             </p>
-            {query && (
-              <button type="button" onClick={() => setQuery('')} className="btn-ghost mt-4 text-xs">
-                Clear search
+            {filtersActive && (
+              <button type="button" onClick={clearFilters} className="btn-ghost mt-4 text-xs">
+                Clear filters
               </button>
             )}
           </div>
         </div>
       ) : (
         <div className="space-y-6">
-          {teachers.map((teacher) => (
+          {catalogue.teachers.map((teacher) => (
             <section key={teacher.id} aria-labelledby={`teacher-${teacher.id}`}>
               <div className="mb-2.5 flex flex-wrap items-center gap-2.5">
                 <span className="grid h-9 w-9 place-items-center rounded-xl border border-gold/25 bg-gold/[0.1] text-[11px] font-bold text-gold-text">
