@@ -25,6 +25,23 @@ function StatusIcon({ status }) {
   return <Sparkles size={11} />;
 }
 
+/** One active filter, removable in place without hunting through the selects. */
+function FilterChip({ label, onRemove }) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-gold/30 bg-gold/[0.08] py-1 pl-2.5 pr-1 text-[11px] font-medium text-gold-text">
+      <span className="truncate">{label}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove filter: ${label}`}
+        className="grid h-5 w-5 shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-gold/20"
+      >
+        <X size={11} />
+      </button>
+    </span>
+  );
+}
+
 function initials(name = '') {
   return name
     .split(' ')
@@ -109,6 +126,10 @@ export default function ExploreCourses() {
     subjectParam && subjectOptions.some((option) => option.name === subjectParam)
       ? subjectParam
       : 'all';
+
+  const activeTeacherName = teacherOptions.find(
+    (teacher) => String(teacher.id) === teacherId,
+  )?.name;
 
   const catalogue = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -284,6 +305,32 @@ export default function ExploreCourses() {
           </label>
         </div>
       </div>
+
+      {!loading && filtersActive && (
+        <div className="mb-4 flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
+            Filters
+          </span>
+          {query.trim() && (
+            <FilterChip
+              label={`Search: "${query.trim()}"`}
+              onRemove={() => setQuery('')}
+            />
+          )}
+          {teacherId !== 'all' && activeTeacherName && (
+            <FilterChip
+              label={`Teacher: ${activeTeacherName}`}
+              onRemove={() => setFilter('teacher', 'all')}
+            />
+          )}
+          {subject !== 'all' && (
+            <FilterChip
+              label={`Subject: ${subject}`}
+              onRemove={() => setFilter('subject', 'all')}
+            />
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="panel grid min-h-[240px] place-items-center text-sm text-slate-400">
