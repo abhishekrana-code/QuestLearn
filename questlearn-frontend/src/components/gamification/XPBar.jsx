@@ -33,8 +33,8 @@ export default function XPBar({ compact = false }) {
   }
 
   return (
-    <div className="panel-raised p-4">
-      <div className="mb-3 flex items-center justify-between">
+    <div className="panel-raised flex h-full flex-col justify-center gap-3 p-4">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sparkles size={16} className="text-gold" />
           <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">

@@ -74,13 +74,13 @@ export default function StudentDashboard() {
         </div>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-1">
           <StreakCounter />
-          <div className="panel-raised flex items-center gap-4 p-4">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-rune/15 text-rune-text">
-              <Zap size={22} />
+          <div className="panel-raised flex h-full items-center gap-3 p-3.5 sm:gap-4 sm:p-4">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-rune/15 text-rune-text sm:h-12 sm:w-12 sm:rounded-2xl">
+              <Zap size={20} />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="stat-value">{clearedNodes}</p>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
+              <p className="text-[10px] font-semibold uppercase leading-tight tracking-wider text-fg-muted sm:text-[11px]">
                 Nodes cleared
               </p>
             </div>

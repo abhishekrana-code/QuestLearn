@@ -23,11 +23,11 @@ export default function StreakCounter({ compact = false }) {
   }
 
   return (
-    <div className="panel-raised flex items-center gap-4 p-4">
+    <div className="panel-raised flex h-full items-center gap-3 p-3.5 sm:gap-4 sm:p-4">
       <motion.div
         animate={active ? { scale: [1, 1.08, 1] } : {}}
         transition={{ repeat: Infinity, duration: 2.4, ease: 'easeInOut' }}
-        className={`grid h-12 w-12 place-items-center rounded-2xl ${
+        className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl sm:h-12 sm:w-12 sm:rounded-2xl ${
           active ? 'bg-warning/15 text-warning' : 'bg-muted text-fg-subtle'
         }`}
       >
@@ -35,7 +35,7 @@ export default function StreakCounter({ compact = false }) {
       </motion.div>
       <div>
         <p className="stat-value">{streakDays}</p>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+        <p className="text-[10px] font-semibold uppercase leading-tight tracking-wider text-slate-400 sm:text-[11px]">
           Day streak
         </p>
       </div>

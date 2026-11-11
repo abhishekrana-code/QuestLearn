@@ -106,7 +106,7 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="label mb-0">Lesson content</span>
         <div className="flex items-center gap-2">
@@ -180,8 +180,8 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
               </button>
             </div>
             <textarea
-              rows={3}
-              className="field mt-2 resize-y text-[13px] leading-relaxed"
+              rows={2}
+              className="field mt-1.5 resize-y text-[13px] leading-relaxed"
               placeholder="What the student should read here. Leave a blank line between paragraphs."
               maxLength={4000}
               disabled={disabled}
