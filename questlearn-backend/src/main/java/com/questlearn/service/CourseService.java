@@ -383,6 +383,11 @@ public class CourseService {
                 && course.getInstructor().getId().equals(principal.id())) {
             return;
         }
+        // An archived term is also unpublished, but telling a student it is "not
+        // published yet" implies it is coming back. It is not, to them.
+        if (course.getArchivedAt() != null) {
+            throw ApiException.forbidden("This course is no longer available");
+        }
         throw ApiException.forbidden("This course is not published yet");
     }
 
