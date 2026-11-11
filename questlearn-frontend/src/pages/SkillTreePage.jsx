@@ -29,6 +29,16 @@ const STATUS_STYLE = {
   LOCKED: 'border-line bg-muted text-fg-muted',
 };
 
+/** Net change across a node's tries, read from the newest-first API list. */
+const historySummary = (history) => {
+  if (!history || history.length < 2) return null;
+  const firstTry = history[history.length - 1].score;
+  const delta = history[0].score - firstTry;
+  if (delta > 0) return `Up ${delta} points since the first try.`;
+  if (delta < 0) return `Down ${Math.abs(delta)} points since the first try.`;
+  return 'Same score as the first try so far.';
+};
+
 const ATTEMPT_LABEL = {
   VIVA_SPOKEN: 'Spoken viva',
   VIVA_WRITTEN: 'Typed viva',
@@ -464,11 +474,14 @@ export default function SkillTreePage() {
                             </span>
                           </div>
                           <ol className="mt-2 space-y-1">
-                            {detail.history.map((attempt, index) => (
+                            {[...detail.history].reverse().map((attempt, index) => (
                               <li
                                 key={`${attempt.at}-${index}`}
                                 className="flex items-center gap-2 rounded-lg px-1 py-1 text-[11px] odd:bg-white/[0.02]"
                               >
+                                <span className="w-4 shrink-0 text-right font-mono text-[9px] text-fg-subtle">
+                                  {index + 1}
+                                </span>
                                 <span
                                   className={`w-10 shrink-0 rounded-md py-0.5 text-center font-mono text-[10px] font-bold ${
                                     attempt.passed
@@ -487,6 +500,11 @@ export default function SkillTreePage() {
                               </li>
                             ))}
                           </ol>
+                          {historySummary(detail.history) && (
+                            <p className="mt-2 text-[10px] text-fg-subtle">
+                              {historySummary(detail.history)}
+                            </p>
+                          )}
                         </div>
                       )}
                     </>
