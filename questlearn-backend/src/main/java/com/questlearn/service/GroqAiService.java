@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.questlearn.exception.GroqAiException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.InvalidMediaTypeException;
@@ -48,20 +49,38 @@ public class GroqAiService {
     private final ObjectMapper objectMapper;
     private final String apiKey;
     private final String reasoningModel;
+    private final String fallbackModel;
     private final String transcriptionModel;
 
+    @Autowired
     public GroqAiService(
             @Value("${questlearn.ai.groq-api-key:}") String apiKey,
             @Value("${questlearn.ai.base-url:https://api.groq.com/openai/v1}") String baseUrl,
             @Value("${questlearn.ai.reasoning-model:openai/gpt-oss-120b}") String reasoningModel,
+            @Value("${questlearn.ai.fallback-model:openai/gpt-oss-20b}") String fallbackModel,
             @Value("${questlearn.ai.transcription-model:whisper-large-v3-turbo}") String transcriptionModel,
             ObjectMapper objectMapper) {
 
-        this.apiKey = apiKey;
-        this.objectMapper = objectMapper;
-        this.reasoningModel = reasoningModel;
-        this.transcriptionModel = transcriptionModel;
+        this(buildClient(apiKey, baseUrl), objectMapper, apiKey,
+                reasoningModel, fallbackModel, transcriptionModel);
+    }
 
+    /** Visible for tests that swap the HTTP layer for a mock server. */
+    GroqAiService(RestClient restClient,
+                  ObjectMapper objectMapper,
+                  String apiKey,
+                  String reasoningModel,
+                  String fallbackModel,
+                  String transcriptionModel) {
+        this.restClient = restClient;
+        this.objectMapper = objectMapper;
+        this.apiKey = apiKey;
+        this.reasoningModel = reasoningModel;
+        this.fallbackModel = fallbackModel;
+        this.transcriptionModel = transcriptionModel;
+    }
+
+    private static RestClient buildClient(String apiKey, String baseUrl) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(CONNECT_TIMEOUT_MS);
         requestFactory.setReadTimeout(READ_TIMEOUT_MS);
@@ -73,7 +92,7 @@ public class GroqAiService {
         if (StringUtils.hasText(apiKey)) {
             builder.defaultHeader("Authorization", "Bearer " + apiKey.trim());
         }
-        this.restClient = builder.build();
+        return builder.build();
     }
 
     public boolean isConfigured() {
@@ -82,6 +101,10 @@ public class GroqAiService {
 
     public String reasoningModel() {
         return reasoningModel;
+    }
+
+    public String fallbackModel() {
+        return fallbackModel;
     }
 
     public String transcriptionModel() {
@@ -96,8 +119,38 @@ public class GroqAiService {
     public JsonNode generateJson(String systemPrompt, String userPrompt) {
         requireApiKey();
 
+        try {
+            return parseJsonContent(
+                    completeJson(reasoningModel, systemPrompt, userPrompt), "chat completion");
+        } catch (RestClientResponseException ex) {
+            if (!isRateLimited(ex)) {
+                throw upstreamFailure("chat completion", ex);
+            }
+            // The reasoning model has its own rate-limit bucket, so one retry with the
+            // smaller model usually succeeds instead of failing the student's viva.
+            log.warn("Groq rate-limited {}; retrying once with {}", reasoningModel, fallbackModel);
+            try {
+                return parseJsonContent(
+                        completeJson(fallbackModel, systemPrompt, userPrompt), "chat completion");
+            } catch (RestClientResponseException retryEx) {
+                if (isRateLimited(retryEx)) {
+                    throw GroqAiException.busy(
+                            "The AI examiner is busy right now. Try again in a minute, or use the quiz.",
+                            retryEx);
+                }
+                throw upstreamFailure("chat completion", retryEx);
+            } catch (RestClientException retryEx) {
+                throw upstreamFailure("chat completion", retryEx);
+            }
+        } catch (RestClientException ex) {
+            throw upstreamFailure("chat completion", ex);
+        }
+    }
+
+    /** One chat completion for a specific model, forced to answer with a JSON object. */
+    private JsonNode completeJson(String model, String systemPrompt, String userPrompt) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", reasoningModel);
+        body.put("model", model);
         body.put("messages", List.of(
                 Map.of("role", "system", "content", systemPrompt),
                 Map.of("role", "user", "content", userPrompt)
@@ -106,21 +159,17 @@ public class GroqAiService {
         body.put("temperature", 0.2);
         body.put("max_tokens", MAX_COMPLETION_TOKENS);
 
-        try {
-            JsonNode response = restClient.post()
-                    .uri("/chat/completions")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .accept(MediaType.APPLICATION_JSON)
-                    .body(body)
-                    .retrieve()
-                    .body(JsonNode.class);
+        return restClient.post()
+                .uri("/chat/completions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .body(JsonNode.class);
+    }
 
-            return parseJsonContent(response, "chat completion");
-        } catch (RestClientResponseException ex) {
-            throw upstreamFailure("chat completion", ex);
-        } catch (RestClientException ex) {
-            throw upstreamFailure("chat completion", ex);
-        }
+    private static boolean isRateLimited(RestClientResponseException ex) {
+        return ex.getStatusCode().value() == 429;
     }
 
     /**
@@ -166,6 +215,15 @@ public class GroqAiService {
             }
             return transcript;
         } catch (RestClientResponseException ex) {
+            // Whisper has no cheaper fallback model, so a 429 is reported as temporary
+            // rather than pretending the recording was bad.
+            if (isRateLimited(ex)) {
+                log.warn("Groq rate-limited transcription");
+                throw GroqAiException.busy(
+                        "The voice examiner is busy right now. Type your answer instead, "
+                                + "or try again in a minute.",
+                        ex);
+            }
             throw upstreamFailure("transcription", ex);
         } catch (RestClientException ex) {
             throw upstreamFailure("transcription", ex);

@@ -2,24 +2,31 @@ package com.questlearn.controller;
 
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.VivaGradeResponse;
+import com.questlearn.dto.VivaTranscriptRequest;
 import com.questlearn.service.VivaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+/**
+ * Boss battle viva. Two shapes of the same attempt:
+ * multipart {@code audio} for a spoken answer, JSON {@code answer} for a typed one.
+ */
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
-@Tag(name = "Voice viva", description = "Spoken boss battle graded by Groq whisper + reasoning model")
+@Tag(name = "Viva", description = "Boss battle graded by Groq whisper + reasoning model")
 public class VivaController {
 
     private final VivaService vivaService;
@@ -31,5 +38,14 @@ public class VivaController {
                                        @RequestPart("audio") MultipartFile audio,
                                        @AuthenticationPrincipal AppUserPrincipal principal) {
         return vivaService.gradeViva(moduleId, principal, audio);
+    }
+
+    @PostMapping(path = "/modules/{moduleId}/viva", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('STUDENT','ADMIN')")
+    @Operation(summary = "Grade a typed answer (fallback when no microphone is available)")
+    public VivaGradeResponse gradeWrittenAnswer(@PathVariable Long moduleId,
+                                                @Valid @RequestBody VivaTranscriptRequest request,
+                                                @AuthenticationPrincipal AppUserPrincipal principal) {
+        return vivaService.gradeWrittenAnswer(moduleId, principal, request.answer());
     }
 }

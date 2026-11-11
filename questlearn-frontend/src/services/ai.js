@@ -24,6 +24,15 @@ export async function submitViva(moduleId, { audio, filename, durationMs }) {
   return data;
 }
 
+/**
+ * Submits a typed viva answer. Used when the student has no working microphone;
+ * grading, XP and unlocks are identical to the spoken path.
+ */
+export async function submitWrittenViva(moduleId, answer) {
+  const { data } = await api.post(`/modules/${moduleId}/viva`, { answer }, { timeout: 120_000 });
+  return data;
+}
+
 /** Drafts a whole quest (nodes + quizzes) from a topic prompt. */
 export async function generateCourse({ topic, audience, category, nodeCount }) {
   const { data } = await api.post(

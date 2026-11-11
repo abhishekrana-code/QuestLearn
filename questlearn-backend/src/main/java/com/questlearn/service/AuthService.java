@@ -28,17 +28,23 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final LoginAttemptService loginAttemptService;
     private final String instructorInviteCode;
+    private final String studentInviteCode;
+    private final boolean requireStudentCode;
 
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
                        JwtUtil jwtUtil,
                        LoginAttemptService loginAttemptService,
-                       @Value("${questlearn.registration.instructor-invite-code:}") String instructorInviteCode) {
+                       @Value("${questlearn.registration.instructor-invite-code:}") String instructorInviteCode,
+                       @Value("${questlearn.registration.student-invite-code:}") String studentInviteCode,
+                       @Value("${questlearn.registration.require-student-code:false}") boolean requireStudentCode) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.loginAttemptService = loginAttemptService;
         this.instructorInviteCode = instructorInviteCode;
+        this.studentInviteCode = studentInviteCode;
+        this.requireStudentCode = requireStudentCode;
     }
 
     @Transactional
@@ -48,6 +54,9 @@ public class AuthService {
         }
         if (request.role() == Role.INSTRUCTOR) {
             assertInstructorInviteCode(request.inviteCode());
+        }
+        if (request.role() == Role.STUDENT) {
+            assertStudentInviteCode(request.inviteCode());
         }
 
         String email = request.email().trim().toLowerCase();
@@ -111,6 +120,35 @@ public class AuthService {
                 .orElseThrow(() -> ApiException.unauthorized("Account no longer exists"));
     }
 
+    /**
+     * Institution code gate for student sign-up. A deployment that requires the code
+     * but has not configured one fails closed: an unset secret must never mean "everyone
+     * may register". The two codes are independent, so a student code can never be used
+     * to create an instructor.
+     */
+    private void assertStudentInviteCode(String supplied) {
+        String configured = normaliseCode(studentInviteCode);
+        if (configured.isEmpty()) {
+            if (requireStudentCode) {
+                throw ApiException.forbidden("Student sign-up is closed on this deployment.");
+            }
+            return;
+        }
+        if (!constantTimeEquals(configured, normaliseCode(supplied))) {
+            throw ApiException.forbidden("Enter the institution code your teacher gave you.");
+        }
+    }
+
+    /** Trims and case-folds so " AbC-123 " matches "abc-123". */
+    private String normaliseCode(String code) {
+        return code == null ? "" : code.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private boolean constantTimeEquals(String configured, String candidate) {
+        return MessageDigest.isEqual(configured.getBytes(StandardCharsets.UTF_8),
+                candidate.getBytes(StandardCharsets.UTF_8));
+    }
+
     private void assertInstructorInviteCode(String supplied) {
         String configured = instructorInviteCode == null ? "" : instructorInviteCode.trim();
         if (configured.isEmpty()) {
@@ -118,8 +156,7 @@ public class AuthService {
                     "Instructor sign-up is disabled on this deployment. Ask an admin for an account.");
         }
         String candidate = supplied == null ? "" : supplied.trim();
-        if (!MessageDigest.isEqual(configured.getBytes(StandardCharsets.UTF_8),
-                candidate.getBytes(StandardCharsets.UTF_8))) {
+        if (!constantTimeEquals(configured, candidate)) {
             throw ApiException.forbidden("Instructor sign-up needs a valid invite code");
         }
     }

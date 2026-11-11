@@ -4,6 +4,7 @@ import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.CourseDto;
 import com.questlearn.dto.CourseRequest;
 import com.questlearn.dto.ModuleRequest;
+import com.questlearn.dto.ModuleUpdateRequest;
 import com.questlearn.dto.QuizRequest;
 import com.questlearn.model.Module;
 import com.questlearn.model.Quiz;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -82,6 +84,21 @@ public class CourseController {
                 "positionX", module.getPositionX(),
                 "positionY", module.getPositionY(),
                 "orderIndex", module.getOrderIndex()
+        );
+    }
+
+    @PutMapping("/modules/{moduleId}")
+    @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
+    @Operation(summary = "Edit a node's title, summary, lesson and XP reward")
+    public Map<String, Object> updateModule(@PathVariable Long moduleId,
+                                            @Valid @RequestBody ModuleUpdateRequest request,
+                                            @AuthenticationPrincipal AppUserPrincipal principal) {
+        Module module = courseService.updateModule(moduleId, request, principal);
+        return Map.of(
+                "id", module.getId(),
+                "title", module.getTitle(),
+                "summary", module.getSummary() == null ? "" : module.getSummary(),
+                "xpReward", module.getXpReward()
         );
     }
 

@@ -1,0 +1,132 @@
+/*
+ * QuestLearn design tokens.
+ *
+ * Two complete themes, one set of names. Everything in the app - surfaces,
+ * borders, text, accents, shadows - resolves through these, so switching the
+ * class on <html> re-themes the whole product without touching markup.
+ *
+ * Colours are HSL channel triplets ("H S% L%") so Tailwind can compose them
+ * with opacity: hsl(var(--gold) / 0.15).
+ *
+ * The dark theme keeps QuestLearn's identity: deep navy ink, gold as the
+ * primary action, arcane violet and rune cyan as accents. The light theme is
+ * the same identity on paper - the gold stays bright where it is a *fill*
+ * (buttons look identical in both themes) while text-weight gold darkens so it
+ * stays readable on white.
+ */
+
+:root,
+.dark {
+  color-scheme: dark;
+
+  /* Surfaces, darkest to lightest */
+  --ink-900: 222 45% 6%;
+  --ink-800: 222 38% 9%;
+  --ink-700: 222 34% 12%;
+  --ink-600: 220 30% 16%;
+
+  --background: 222 45% 6%;
+  --foreground: 220 26% 96%;
+  --card: 222 38% 9%;
+  --card-foreground: 220 26% 96%;
+  --surface-raised: 222 34% 12%;
+  --muted: 220 24% 14%;
+  --muted-foreground: 218 15% 64%;
+  --subtle-foreground: 218 12% 48%;
+
+  --border: 220 22% 18%;
+  --border-strong: 220 20% 28%;
+  --input: 220 24% 14%;
+  --ring: 45 87% 66%;
+
+  /* Accents: fills stay bright, the *-text tokens are for type */
+  --primary: 45 87% 66%;
+  --primary-foreground: 224 45% 8%;
+  --gold: 45 87% 66%;
+  --gold-soft: 45 92% 78%;
+  --gold-text: 45 87% 72%;
+  --arcane: 258 90% 66%;
+  --arcane-soft: 258 92% 82%;
+  --arcane-text: 258 92% 82%;
+  --rune: 188 86% 53%;
+  --rune-text: 188 80% 62%;
+
+  --success: 152 55% 48%;
+  --danger: 0 72% 62%;
+  --warning: 35 92% 62%;
+
+  /* Composition */
+  --scrim: 224 60% 3%;
+  --scrim-alpha: 0.78;
+  --shadow-color: 224 60% 3%;
+  --shadow-1: 0 1px 2px hsl(var(--shadow-color) / 0.35),
+    0 10px 26px -16px hsl(var(--shadow-color) / 0.75);
+  --shadow-2: 0 1px 2px hsl(var(--shadow-color) / 0.4),
+    0 22px 56px -28px hsl(var(--shadow-color) / 0.9);
+  --hairline: inset 0 1px 0 hsl(0 0% 100% / 0.045);
+  --ambient-1: 258 80% 60%;
+  --ambient-1-alpha: 0.16;
+  --ambient-2: 188 86% 53%;
+  --ambient-2-alpha: 0.1;
+
+  --radius: 0.875rem;
+  --radius-sm: 0.5rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 140ms;
+  --dur: 200ms;
+}
+
+.light {
+  color-scheme: light;
+
+  --ink-900: 220 30% 98%;
+  --ink-800: 0 0% 100%;
+  --ink-700: 220 24% 96%;
+  --ink-600: 220 20% 93%;
+
+  --background: 220 30% 98%;
+  --foreground: 224 40% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 224 40% 11%;
+  --surface-raised: 0 0% 100%;
+  --muted: 220 22% 95%;
+  --muted-foreground: 220 12% 38%;
+  --subtle-foreground: 220 10% 46%;
+
+  --border: 220 16% 88%;
+  --border-strong: 220 14% 76%;
+  --input: 0 0% 100%;
+  --ring: 36 76% 42%;
+
+  --primary: 42 84% 56%;
+  --primary-foreground: 224 45% 10%;
+  --gold: 42 84% 56%;
+  --gold-soft: 42 88% 68%;
+  --gold-text: 34 74% 31%;
+  --arcane: 258 76% 58%;
+  --arcane-soft: 258 72% 66%;
+  --arcane-text: 258 62% 42%;
+  --rune: 191 88% 36%;
+  --rune-text: 192 86% 27%;
+
+  --success: 152 60% 30%;
+  --danger: 0 68% 44%;
+  --warning: 30 85% 38%;
+
+  --scrim: 222 40% 16%;
+  --scrim-alpha: 0.42;
+  --shadow-color: 220 43% 60%;
+  --shadow-1: 0 1px 2px hsl(var(--shadow-color) / 0.16),
+    0 8px 24px -18px hsl(var(--shadow-color) / 0.5);
+  --shadow-2: 0 1px 2px hsl(var(--shadow-color) / 0.18),
+    0 20px 48px -28px hsl(var(--shadow-color) / 0.55);
+  --hairline: inset 0 1px 0 hsl(0 0% 100% / 0.9);
+  --ambient-1: 258 70% 60%;
+  --ambient-1-alpha: 0.07;
+  --ambient-2: 191 80% 45%;
+  --ambient-2-alpha: 0.05;
+}

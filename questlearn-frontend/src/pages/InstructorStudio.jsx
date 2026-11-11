@@ -5,14 +5,19 @@ import {
   EyeOff,
   FilePlus2,
   ListTree,
+  PencilLine,
   Plus,
   Save,
   Sparkles,
   Wand2,
 } from 'lucide-react';
+import LessonEditor from '../components/studio/LessonEditor.jsx';
+import NodeEditorDialog from '../components/studio/NodeEditorDialog.jsx';
+import VideoUploader from '../components/studio/VideoUploader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { generateCourse as requestGeneratedCourse, getAiStatus } from '../services/ai.js';
 import api, { apiError } from '../services/api.js';
+import { EMPTY_LESSON, lessonPayload } from '../services/lesson.js';
 
 const QUIZ_TEMPLATES = {
   MULTIPLE_CHOICE: JSON.stringify(
@@ -71,8 +76,9 @@ export default function InstructorStudio() {
     parentModuleId: '',
     positionX: 0,
     positionY: 0,
-    content: '',
+    content: EMPTY_LESSON,
   });
+  const [editingNode, setEditingNode] = useState(null);
   const [quizForm, setQuizForm] = useState({
     moduleId: '',
     type: 'MULTIPLE_CHOICE',
@@ -188,6 +194,31 @@ export default function InstructorStudio() {
     }
   };
 
+  /** Keeps the node list in step with an upload, link or removal. */
+  const saveVideo = useCallback((moduleId, data) => {
+    setNodes((previous) =>
+      previous.map((item) =>
+        item.id === moduleId
+          ? { ...item, videoUrl: data.videoUrl, videoLabel: data.videoLabel }
+          : item,
+      ),
+    );
+    notify('success', data.videoUrl ? 'Lesson video saved.' : 'Lesson video removed.');
+  }, []);
+
+  /** Refreshes the tree after a node edit, so the table and tree agree. */
+  const saveNodeEdits = useCallback(
+    async (saved) => {
+      setEditingNode(null);
+      if (selectedId) {
+        await loadNodes(selectedId).catch(() => {});
+        await loadCourses(selectedId).catch(() => {});
+      }
+      notify('success', `"${saved?.title ?? 'Node'}" updated.`);
+    },
+    [selectedId, loadNodes, loadCourses],
+  );
+
   const togglePublish = async (course) => {
     setBusy(true);
     try {
@@ -208,10 +239,6 @@ export default function InstructorStudio() {
     if (!selectedId) return;
     setBusy(true);
     try {
-      let content = null;
-      if (moduleForm.content.trim()) {
-        content = JSON.parse(moduleForm.content);
-      }
       await api.post(`/courses/${selectedId}/modules`, {
         title: moduleForm.title,
         summary: moduleForm.summary,
@@ -219,7 +246,7 @@ export default function InstructorStudio() {
         parentModuleId: moduleForm.parentModuleId ? Number(moduleForm.parentModuleId) : null,
         positionX: Number(moduleForm.positionX),
         positionY: Number(moduleForm.positionY),
-        content,
+        content: lessonPayload(moduleForm.content),
       });
       setModuleForm({
         title: '',
@@ -228,18 +255,13 @@ export default function InstructorStudio() {
         parentModuleId: moduleForm.parentModuleId,
         positionX: Number(moduleForm.positionX) + 1,
         positionY: Number(moduleForm.positionY) + 1,
-        content: '',
+        content: EMPTY_LESSON,
       });
       await loadNodes(selectedId);
       await loadCourses(selectedId);
       notify('success', 'Skill node added to the tree.');
     } catch (error) {
-      notify(
-        'error',
-        error instanceof SyntaxError
-          ? 'Lesson content must be valid JSON.'
-          : apiError(error, 'Could not add the node.'),
-      );
+      notify('error', apiError(error, 'Could not add the node.'));
     } finally {
       setBusy(false);
     }
@@ -280,15 +302,12 @@ export default function InstructorStudio() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <header className="mb-6">
-        <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-gold/80">
-          Instructor studio
-        </p>
-        <h1 className="mt-1 font-display text-3xl font-bold text-slate-50">
-          Build the quest map
-        </h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Create a course, link nodes as a tree, then attach a JSONB micro-assessment to each node.
+      <header className="mb-7">
+        <p className="eyebrow">Instructor studio</p>
+        <h1 className="page-title mt-2">Build the quest map</h1>
+        <p className="page-subtitle mt-1.5 max-w-2xl">
+          Create a course, link nodes as a tree, then attach a lesson, a video and a quiz to each
+          node.
         </p>
       </header>
 
@@ -314,8 +333,8 @@ export default function InstructorStudio() {
       <div className="grid gap-6 lg:grid-cols-[330px_1fr]">
         <aside className="space-y-5">
           <div className="panel p-5">
-            <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-slate-100">
-              <Wand2 size={15} className="text-arcane-soft" /> AI quest builder
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Wand2 size={15} className="text-arcane-text" /> AI quest builder
             </h2>
 
             {aiStatus && !aiStatus.configured ? (
@@ -388,8 +407,8 @@ export default function InstructorStudio() {
           </div>
 
           <form onSubmit={createCourse} className="panel-raised p-5">
-            <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-slate-100">
-              <FilePlus2 size={15} className="text-gold" /> New course
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <FilePlus2 size={15} className="text-gold-text" /> New course
             </h2>
 
             <div className="mt-4 space-y-3">
@@ -463,8 +482,8 @@ export default function InstructorStudio() {
           </form>
 
           <div className="panel p-5">
-            <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-slate-100">
-              <ListTree size={15} className="text-rune" /> Your courses
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <ListTree size={15} className="text-rune-text" /> Your courses
             </h2>
 
             <div className="mt-3 space-y-2">
@@ -555,8 +574,8 @@ export default function InstructorStudio() {
               </div>
 
               <form onSubmit={addModule} className="panel-raised p-5">
-                <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-slate-100">
-                  <Plus size={15} className="text-gold" /> Add a skill node
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Plus size={15} className="text-gold-text" /> Add a skill node
                 </h3>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -661,19 +680,11 @@ export default function InstructorStudio() {
                     />
                   </div>
 
-                  <div className="sm:col-span-2">
-                    <label className="label" htmlFor="module-content">
-                      Lesson content (JSONB, optional)
-                    </label>
-                    <textarea
-                      id="module-content"
-                      rows={4}
-                      className="field resize-y font-mono text-[12px]"
-                      placeholder={`{\n  "sections": [{ "heading": "Idea", "body": "..." }],\n  "keyTakeaways": ["..."]\n}`}
+                  <div className="sm:col-span-2 rounded-lg border border-line bg-muted/30 p-3">
+                    <LessonEditor
                       value={moduleForm.content}
-                      onChange={(event) =>
-                        setModuleForm({ ...moduleForm, content: event.target.value })
-                      }
+                      onChange={(content) => setModuleForm({ ...moduleForm, content })}
+                      disabled={busy}
                     />
                   </div>
                 </div>
@@ -684,8 +695,8 @@ export default function InstructorStudio() {
               </form>
 
               <form onSubmit={attachQuiz} className="panel-raised p-5">
-                <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-slate-100">
-                  <Sparkles size={15} className="text-arcane-soft" /> Attach a JSONB quiz
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Sparkles size={15} className="text-arcane-text" /> Attach a JSONB quiz
                 </h3>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -758,7 +769,7 @@ export default function InstructorStudio() {
                     </label>
                     <button
                       type="button"
-                      className="mb-1.5 text-[11px] font-semibold text-gold hover:underline"
+                      className="mb-1.5 text-[11px] font-semibold text-gold-text hover:underline"
                       onClick={() =>
                         setQuizForm({ ...quizForm, payload: QUIZ_TEMPLATES[quizForm.type] })
                       }
@@ -770,7 +781,7 @@ export default function InstructorStudio() {
                     id="quiz-payload"
                     rows={12}
                     spellCheck={false}
-                    className="field resize-y font-mono text-[12px] leading-relaxed"
+                    className="field resize-y bg-muted/40 font-mono text-[12px] leading-relaxed"
                     value={quizForm.payload}
                     onChange={(event) =>
                       setQuizForm({ ...quizForm, payload: event.target.value })
@@ -784,34 +795,67 @@ export default function InstructorStudio() {
               </form>
 
               <div className="panel p-5">
-                <h3 className="font-display text-sm font-semibold text-slate-100">Node overview</h3>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-foreground">Lesson videos</h3>
+                  <span className="chip border-line text-fg-muted">drag · upload · link</span>
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed text-fg-subtle">
+                  Students see this at the top of the node briefing. Drop a file, upload one, or
+                  point at a video that is already hosted somewhere.
+                </p>
                 {nodes.length === 0 ? (
-                  <p className="mt-2 text-xs text-slate-500">No nodes yet.</p>
+                  <p className="mt-3 text-xs text-fg-subtle">Add a node first.</p>
+                ) : (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {nodes.map((node) => (
+                      <VideoUploader key={node.id} node={node} onSaved={saveVideo} />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="panel p-5">
+                <h3 className="text-sm font-semibold text-foreground">Node overview</h3>
+                {nodes.length === 0 ? (
+                  <p className="mt-2 text-xs text-fg-subtle">No nodes yet.</p>
                 ) : (
                   <div className="mt-3 overflow-x-auto">
                     <table className="w-full text-left text-xs">
-                      <thead className="text-[10px] uppercase tracking-wider text-slate-500">
+                      <thead className="border-b border-line text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
                         <tr>
-                          <th className="pb-2 pr-3">Node</th>
-                          <th className="pb-2 pr-3">Prerequisite</th>
-                          <th className="pb-2 pr-3">Pos</th>
-                          <th className="pb-2 pr-3">XP</th>
-                          <th className="pb-2">Quiz</th>
+                          <th className="pb-2 pr-3 font-semibold">Node</th>
+                          <th className="pb-2 pr-3 font-semibold">Prerequisite</th>
+                          <th className="pb-2 pr-3 font-semibold">Pos</th>
+                          <th className="pb-2 pr-3 font-semibold">XP</th>
+                          <th className="pb-2 pr-3 font-semibold">Quiz</th>
+                          <th className="pb-2 text-right font-semibold">Edit</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/5">
+                      <tbody className="divide-y divide-line">
                         {nodes.map((node) => (
-                          <tr key={node.id}>
-                            <td className="py-2 pr-3 font-medium text-slate-200">{node.title}</td>
-                            <td className="py-2 pr-3 text-slate-400">
+                          <tr key={node.id} className="transition-colors hover:bg-muted/40">
+                            <td className="py-2 pr-3 font-medium text-foreground">{node.title}</td>
+                            <td className="py-2 pr-3 text-fg-muted">
                               {nodes.find((candidate) => candidate.id === node.parentId)?.title ??
                                 '—'}
                             </td>
-                            <td className="py-2 pr-3 text-slate-500">
+                            <td className="py-2 pr-3 tabular-nums text-fg-subtle">
                               {node.positionX},{node.positionY}
                             </td>
-                            <td className="py-2 pr-3 text-gold">{node.xpReward}</td>
-                            <td className="py-2 text-slate-400">{node.quizType ?? 'none'}</td>
+                            <td className="py-2 pr-3 font-semibold tabular-nums text-gold-text">
+                              {node.xpReward}
+                            </td>
+                            <td className="py-2 pr-3 text-fg-muted">{node.quizType ?? 'none'}</td>
+                            <td className="py-2 text-right">
+                              <button
+                                type="button"
+                                aria-label={`Edit ${node.title}`}
+                                onClick={() => setEditingNode(node)}
+                                className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11px] font-semibold text-fg-muted transition-colors duration-150 hover:border-gold/50 hover:text-gold-text"
+                              >
+                                <PencilLine size={12} /> Edit
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -819,6 +863,14 @@ export default function InstructorStudio() {
                   </div>
                 )}
               </div>
+
+              {editingNode && (
+                <NodeEditorDialog
+                  node={editingNode}
+                  onClose={() => setEditingNode(null)}
+                  onSaved={saveNodeEdits}
+                />
+              )}
             </>
           )}
         </section>

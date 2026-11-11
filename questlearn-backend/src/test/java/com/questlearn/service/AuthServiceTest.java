@@ -31,6 +31,7 @@ import static org.mockito.Mockito.when;
 class AuthServiceTest {
 
     private static final String INVITE = "prof-kade-2026";
+    private static final String STUDENT_CODE = "class-of-2026";
 
     private final UserRepository userRepository = mock(UserRepository.class);
     private final JwtUtil jwtUtil = mock(JwtUtil.class);
@@ -43,7 +44,7 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         authService = new AuthService(userRepository, passwordEncoder, jwtUtil,
-                loginAttemptService, INVITE);
+                loginAttemptService, INVITE, "", false);
         when(jwtUtil.generateToken(any())).thenReturn("signed-token");
         when(jwtUtil.getExpirationMs()).thenReturn(86_400_000L);
         when(userRepository.save(any(User.class))).thenAnswer(call -> call.getArgument(0));
@@ -182,6 +183,71 @@ class AuthServiceTest {
                 () -> authService.changePassword(principal(3L),
                         new ChangePasswordRequest("secret123", "secret123")));
         assertEquals(HttpStatus.BAD_REQUEST, error.getStatus());
+    }
+
+    // ------------------------------------------------------- institution code
+
+    /** A deployment where the class code is configured and enforced. */
+    private AuthService gatedService(boolean requireCode) {
+        return new AuthService(userRepository, passwordEncoder, jwtUtil,
+                loginAttemptService, INVITE, STUDENT_CODE, requireCode);
+    }
+
+    @Test
+    void studentSignUpWithTheInstitutionCodeSucceeds() {
+        when(userRepository.existsByEmailIgnoreCase("mira@questlearn.dev")).thenReturn(false);
+
+        AuthResponse response = gatedService(true).register(new RegisterRequest(
+                "Mira the Mage", "mira@questlearn.dev", "secret123", Role.STUDENT, STUDENT_CODE));
+
+        assertEquals(Role.STUDENT, response.user().role());
+    }
+
+    @Test
+    void studentSignUpWithAWrongInstitutionCodeIsRejected() {
+        ApiException error = assertThrows(ApiException.class, () -> gatedService(true).register(
+                new RegisterRequest("Mira", "mira@questlearn.dev", "secret123", Role.STUDENT, "guess")));
+        assertEquals(HttpStatus.FORBIDDEN, error.getStatus());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void studentSignUpWithoutAnyCodeIsRejectedWhenTheCodeIsConfigured() {
+        ApiException error = assertThrows(ApiException.class, () -> gatedService(false).register(
+                new RegisterRequest("Mira", "mira@questlearn.dev", "secret123", Role.STUDENT, null)));
+        assertEquals(HttpStatus.FORBIDDEN, error.getStatus());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void studentSignUpFailsClosedWhenTheCodeIsRequiredButUnset() {
+        AuthService unconfigured = new AuthService(userRepository, passwordEncoder, jwtUtil,
+                loginAttemptService, INVITE, "", true);
+
+        ApiException error = assertThrows(ApiException.class, () -> unconfigured.register(
+                new RegisterRequest("Mira", "mira@questlearn.dev", "secret123", Role.STUDENT, "")));
+        assertEquals(HttpStatus.FORBIDDEN, error.getStatus());
+        assertEquals("Student sign-up is closed on this deployment.", error.getMessage());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void institutionCodeIgnoresCaseAndSurroundingWhitespace() {
+        when(userRepository.existsByEmailIgnoreCase("mira@questlearn.dev")).thenReturn(false);
+
+        AuthResponse response = gatedService(true).register(new RegisterRequest(
+                "Mira", "mira@questlearn.dev", "secret123", Role.STUDENT, "  CLASS-Of-2026 "));
+
+        assertEquals(Role.STUDENT, response.user().role());
+    }
+
+    @Test
+    void theStudentCodeCannotCreateAnInstructor() {
+        ApiException error = assertThrows(ApiException.class, () -> gatedService(true).register(
+                new RegisterRequest("Kade", "kade@questlearn.dev", "secret123", Role.INSTRUCTOR,
+                        STUDENT_CODE)));
+        assertEquals(HttpStatus.FORBIDDEN, error.getStatus());
+        verify(userRepository, never()).save(any());
     }
 
     private User existingUser(Long id, String email, Role role, String rawPassword) {

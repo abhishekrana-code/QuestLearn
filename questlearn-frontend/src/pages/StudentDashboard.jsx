@@ -42,22 +42,25 @@ export default function StudentDashboard() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-gold/80">
-            Adventurer's dashboard
-          </p>
-          <h1 className="mt-1 font-display text-3xl font-bold text-slate-50">
-            Welcome back, {user.name.split(' ')[0]}
-          </h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Level {currentLevel} · {totalXp.toLocaleString()} XP · {clearedNodes}/{totalNodes} nodes cleared
-          </p>
+      <section className="relative isolate mb-6 overflow-hidden rounded-xl border border-line bg-card/80 p-6 shadow-card sm:p-7">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-24 -top-32 -z-10 h-72 w-72 rounded-full bg-arcane/[0.10] blur-[90px]"
+        />
+        <div className="flex flex-wrap items-end justify-between gap-5">
+          <div className="min-w-0">
+            <p className="eyebrow">Adventurer's dashboard</p>
+            <h1 className="page-title mt-2">Welcome back, {user.name.split(' ')[0]}</h1>
+            <p className="page-subtitle mt-2">
+              Level {currentLevel} · {totalXp.toLocaleString()} XP · {clearedNodes}/{totalNodes}{' '}
+              nodes cleared
+            </p>
+          </div>
+          <Link to="/leaderboard" className="btn-ghost shrink-0">
+            <Trophy size={15} /> Leaderboard
+          </Link>
         </div>
-        <Link to="/leaderboard" className="btn-ghost">
-          <Trophy size={15} /> Leaderboard
-        </Link>
-      </header>
+      </section>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">

@@ -1,32 +1,64 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
+        // Surfaces. Tokens flip with the theme class on <html>.
         ink: {
-          900: '#070b16',
-          800: '#0b1120',
-          700: '#111a2e',
-          600: '#18243d',
+          900: 'hsl(var(--ink-900) / <alpha-value>)',
+          800: 'hsl(var(--ink-800) / <alpha-value>)',
+          700: 'hsl(var(--ink-700) / <alpha-value>)',
+          600: 'hsl(var(--ink-600) / <alpha-value>)',
         },
+        background: 'hsl(var(--background) / <alpha-value>)',
+        foreground: 'hsl(var(--foreground) / <alpha-value>)',
+        card: 'hsl(var(--card) / <alpha-value>)',
+        muted: 'hsl(var(--muted) / <alpha-value>)',
+        line: 'hsl(var(--border) / <alpha-value>)',
+        'line-strong': 'hsl(var(--border-strong) / <alpha-value>)',
+        'fg-muted': 'hsl(var(--muted-foreground) / <alpha-value>)',
+        'fg-subtle': 'hsl(var(--subtle-foreground) / <alpha-value>)',
+
+        // Accents. Bright tokens are for fills, *-text tokens for type.
         gold: {
-          DEFAULT: '#f4c95d',
-          soft: '#f8e3a3',
+          DEFAULT: 'hsl(var(--gold) / <alpha-value>)',
+          soft: 'hsl(var(--gold-soft) / <alpha-value>)',
+          text: 'hsl(var(--gold-text) / <alpha-value>)',
         },
         arcane: {
-          DEFAULT: '#8b5cf6',
-          soft: '#c4b5fd',
+          DEFAULT: 'hsl(var(--arcane) / <alpha-value>)',
+          soft: 'hsl(var(--arcane-soft) / <alpha-value>)',
+          text: 'hsl(var(--arcane-text) / <alpha-value>)',
         },
-        rune: '#22d3ee',
+        rune: {
+          DEFAULT: 'hsl(var(--rune) / <alpha-value>)',
+          text: 'hsl(var(--rune-text) / <alpha-value>)',
+        },
+        danger: 'hsl(var(--danger) / <alpha-value>)',
+        warning: 'hsl(var(--warning) / <alpha-value>)',
+        success: 'hsl(var(--success) / <alpha-value>)',
       },
       fontFamily: {
-        sans: ['"Segoe UI"', 'system-ui', '-apple-system', 'sans-serif'],
-        display: ['Georgia', '"Times New Roman"', 'serif'],
+        sans: ['"Segoe UI Variable Text"', '"Segoe UI"', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['"Segoe UI Variable Display"', '"Segoe UI"', 'system-ui', 'sans-serif'],
+        mono: ['"Cascadia Code"', '"JetBrains Mono"', 'Consolas', 'monospace'],
+      },
+      borderRadius: {
+        DEFAULT: 'var(--radius)',
+        sm: 'var(--radius-sm)',
+        lg: 'var(--radius-lg)',
+        xl: 'var(--radius-xl)',
       },
       boxShadow: {
-        glow: '0 0 0 1px rgba(244,201,93,0.35), 0 0 30px -8px rgba(244,201,93,0.55)',
-        arcane: '0 0 0 1px rgba(139,92,246,0.35), 0 0 30px -8px rgba(139,92,246,0.6)',
+        card: 'var(--shadow-1)',
+        raised: 'var(--shadow-2)',
+        glow: '0 0 0 1px hsl(var(--gold) / 0.3), 0 12px 32px -18px hsl(var(--gold) / 0.55)',
+        arcane: '0 0 0 1px hsl(var(--arcane) / 0.3), 0 12px 32px -18px hsl(var(--arcane) / 0.5)',
+      },
+      transitionTimingFunction: {
+        out: 'var(--ease-out)',
       },
       keyframes: {
         float: {

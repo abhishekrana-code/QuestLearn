@@ -2,6 +2,7 @@ package com.questlearn.service;
 
 import com.questlearn.dto.AnswerRequest;
 import com.questlearn.dto.AppUserPrincipal;
+import com.questlearn.dto.AttemptDto;
 import com.questlearn.dto.LeaderboardEntry;
 import com.questlearn.dto.ModuleDetailDto;
 import com.questlearn.dto.SkillNodeDto;
@@ -9,14 +10,17 @@ import com.questlearn.dto.SkillTreeDto;
 import com.questlearn.dto.VivaConfig;
 import com.questlearn.dto.XpAwardResponse;
 import com.questlearn.exception.ApiException;
+import com.questlearn.model.AttemptSource;
 import com.questlearn.model.Course;
 import com.questlearn.model.Module;
+import com.questlearn.model.ModuleAttempt;
 import com.questlearn.model.ProgressStatus;
 import com.questlearn.model.Quiz;
 import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.model.UserModuleProgress;
 import com.questlearn.repository.CourseRepository;
+import com.questlearn.repository.ModuleAttemptRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
 import com.questlearn.repository.UserRepository;
@@ -36,6 +40,7 @@ public class ProgressService {
 
     private final CourseRepository courseRepository;
     private final ModuleRepository moduleRepository;
+    private final ModuleAttemptRepository attemptRepository;
     private final UserModuleProgressRepository progressRepository;
     private final UserRepository userRepository;
     private final QuizService quizService;
@@ -100,7 +105,9 @@ public class ProgressService {
                     module.getOrderIndex(),
                     status,
                     progress == null ? 0 : progress.getScore(),
-                    module.getQuiz() == null ? null : module.getQuiz().getType()
+                    module.getQuiz() == null ? null : module.getQuiz().getType(),
+                    videoField(module, "videoUrl"),
+                    videoField(module, "videoLabel")
             ));
         }
 
@@ -126,6 +133,8 @@ public class ProgressService {
 
         ProgressStatus status = ProgressStatus.UNLOCKED;
         int score = 0;
+        int attempts = 0;
+        List<AttemptDto> history = List.of();
 
         if (principal.role() != Role.INSTRUCTOR) {
             UserModuleProgress progress = progressRepository
@@ -134,9 +143,20 @@ public class ProgressService {
             if (progress != null) {
                 status = progress.getStatus();
                 score = progress.getScore();
+                attempts = progress.getAttempts();
             } else if (module.getParentModule() != null) {
                 status = ProgressStatus.LOCKED;
             }
+
+            history = attemptRepository
+                    .findTop10ByUserIdAndModuleIdOrderByCreatedAtDesc(principal.id(), moduleId)
+                    .stream()
+                    .map(attempt -> new AttemptDto(
+                            attempt.getScore(),
+                            attempt.isPassed(),
+                            attempt.getSource(),
+                            attempt.getCreatedAt()))
+                    .toList();
         }
 
         Quiz quiz = module.getQuiz();
@@ -151,8 +171,10 @@ public class ProgressService {
                 module.getXpReward(),
                 status,
                 score,
+                attempts,
                 quizService.sanitize(quiz),
-                VivaConfig.forModule(module)
+                VivaConfig.forModule(module),
+                history
         );
     }
 
@@ -161,6 +183,11 @@ public class ProgressService {
      * awards XP, recalculates level and streak, then unlocks child nodes.
      */
     @Transactional
+    /** Reads one string out of the node's JSONB lesson content; null when absent. */
+    private static String videoField(Module module, String field) {
+        return module.getContent() == null ? null : module.getContent().path(field).asText(null);
+    }
+
     public XpAwardResponse completeModule(Long moduleId,
                                           AppUserPrincipal principal,
                                           List<AnswerRequest> answers) {
@@ -191,6 +218,17 @@ public class ProgressService {
             score = quizService.evaluate(quiz, answers);
             progress.setAttempts(progress.getAttempts() + 1);
             progress.setScore(Math.max(progress.getScore(), score));
+
+            // Keep the trail behind the summary, so the node can show how a score
+            // moved across tries. Failing attempts are history too.
+            attemptRepository.save(ModuleAttempt.builder()
+                    .user(user)
+                    .module(module)
+                    .score(score)
+                    .passed(score >= passingScore)
+                    .source(AttemptSource.QUIZ)
+                    .createdAt(Instant.now())
+                    .build());
         }
 
         if (score < passingScore) {

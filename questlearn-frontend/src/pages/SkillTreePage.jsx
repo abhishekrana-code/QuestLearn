@@ -6,11 +6,14 @@ import {
   BookOpen,
   CheckCircle2,
   Crown,
+  ExternalLink,
+  Film,
   Lock,
   Map,
   Mic,
   Sparkles,
   X,
+  History,
 } from 'lucide-react';
 import QuizPlayer from '../components/quiz/QuizPlayer.jsx';
 import SkillTreeCanvas from '../components/skilltree/SkillTreeCanvas.jsx';
@@ -18,12 +21,34 @@ import VoiceVivaDialog from '../components/viva/VoiceVivaDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useGamification } from '../context/GamificationContext.jsx';
 import api, { apiError } from '../services/api.js';
+import { isPlayableVideo } from '../services/media.js';
 
 const STATUS_STYLE = {
   COMPLETED: 'border-gold/50 bg-gold/10 text-gold',
   UNLOCKED: 'border-rune/40 bg-rune/10 text-rune',
   LOCKED: 'border-white/10 bg-white/5 text-slate-400',
 };
+
+const ATTEMPT_LABEL = {
+  VIVA_SPOKEN: 'Spoken viva',
+  VIVA_WRITTEN: 'Typed viva',
+  QUIZ: 'Quiz',
+};
+
+/** "just now", "12m ago", "3h ago", "2d ago", then the date. */
+function timeAgo(iso) {
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return '';
+  const seconds = Math.max(0, Math.round((Date.now() - then.getTime()) / 1000));
+  if (seconds < 60) return 'just now';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
 
 export default function SkillTreePage() {
   const { courseId } = useParams();
@@ -84,17 +109,21 @@ export default function SkillTreePage() {
     }
   };
 
-  /** Applies a graded viva: celebrate the XP, then refresh the tree and briefing. */
+  /**
+   * Applies a graded viva: celebrate the XP, then refresh the tree and briefing.
+   * The briefing is refreshed on failures too, so the node shows the attempt the
+   * student just made before they retry.
+   */
   const handleVivaGraded = async (result) => {
     if (result.passed) {
       award(result);
-      await loadTree();
-      try {
-        const refreshed = await api.get(`/modules/${selectedId}`);
-        setDetail(refreshed.data);
-      } catch {
-        /* the tree refresh is enough */
-      }
+    }
+    await loadTree().catch(() => {});
+    try {
+      const refreshed = await api.get(`/modules/${selectedId}`);
+      setDetail(refreshed.data);
+    } catch {
+      /* the tree refresh is enough */
     }
     setToast(result.message);
   };
@@ -151,44 +180,42 @@ export default function SkillTreePage() {
       <header className="mb-6">
         <Link
           to={isPreview ? '/studio' : '/dashboard'}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-gold"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-fg-muted transition-colors hover:text-gold-text"
         >
           <ArrowLeft size={14} /> {isPreview ? 'Back to studio' : 'Dashboard'}
         </Link>
 
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div className="flex items-start gap-4">
-            <span className="grid h-14 w-14 place-items-center rounded-2xl border border-white/10 bg-white/5 text-2xl">
+            <span className="grid h-14 w-14 place-items-center rounded-xl border border-line bg-muted text-2xl">
               {tree.emoji || '🗺️'}
             </span>
-            <div>
-              <h1 className="font-display text-2xl font-bold text-slate-50 sm:text-3xl">
-                {tree.courseTitle}
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm text-slate-400">{tree.courseDescription}</p>
+            <div className="min-w-0">
+              <h1 className="page-title">{tree.courseTitle}</h1>
+              <p className="page-subtitle mt-1.5 max-w-2xl">{tree.courseDescription}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             {!isPreview && (
               <div className="text-right">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">
                   Nodes cleared
                 </p>
-                <p className="font-display text-xl font-bold text-slate-50">
+                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
                   {tree.completedModules}
-                  <span className="text-sm text-slate-500"> / {tree.totalModules}</span>
+                  <span className="text-sm text-fg-subtle"> / {tree.totalModules}</span>
                 </p>
               </div>
             )}
-            <span className="chip border-gold/30 text-gold">
+            <span className="chip border-gold/30 bg-gold/[0.10] text-gold-text">
               <Sparkles size={12} /> {tree.totalXp} XP
             </span>
           </div>
         </div>
 
         {!isPreview && (
-          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-gradient-to-r from-gold to-rune transition-all duration-700"
               style={{ width: `${percent}%` }}
@@ -285,12 +312,43 @@ export default function SkillTreePage() {
                     </div>
                   ) : (
                     <>
-                      {(detail.content?.sections ?? []).map((section) => (
-                        <div key={section.heading} className="mt-4">
+                      {detail.content?.videoUrl && (
+                        <figure className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                          {isPlayableVideo(detail.content.videoUrl) ? (
+                            <video
+                              key={detail.content.videoUrl}
+                              src={detail.content.videoUrl}
+                              controls
+                              preload="metadata"
+                              className="w-full"
+                            />
+                          ) : (
+                            <a
+                              href={detail.content.videoUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center justify-between gap-2 px-3 py-3 text-sm font-medium text-arcane-soft hover:underline"
+                            >
+                              <span className="flex items-center gap-2">
+                                <Film size={15} /> Watch the lesson video
+                              </span>
+                              <ExternalLink size={13} />
+                            </a>
+                          )}
+                          {detail.content.videoLabel && (
+                            <figcaption className="truncate px-3 py-2 text-[11px] text-slate-400">
+                              {detail.content.videoLabel}
+                            </figcaption>
+                          )}
+                        </figure>
+                      )}
+
+                      {(detail.content?.sections ?? []).map((section, index) => (
+                        <div key={`${index}-${section.heading}`} className="mt-4">
                           <h4 className="text-[11px] font-bold uppercase tracking-widest text-arcane-soft">
                             {section.heading}
                           </h4>
-                          <p className="mt-1 text-sm leading-relaxed text-slate-300">
+                          <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-300">
                             {section.body}
                           </p>
                         </div>
@@ -299,9 +357,9 @@ export default function SkillTreePage() {
                       {Array.isArray(detail.content?.keyTakeaways) &&
                         detail.content.keyTakeaways.length > 0 && (
                           <ul className="mt-4 space-y-1.5 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                            {detail.content.keyTakeaways.map((takeaway) => (
+                            {detail.content.keyTakeaways.map((takeaway, index) => (
                               <li
-                                key={takeaway}
+                                key={`${index}-${takeaway}`}
                                 className="flex items-start gap-2 text-xs text-slate-300"
                               >
                                 <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-gold" />
@@ -355,9 +413,30 @@ export default function SkillTreePage() {
                                 {detail.viva.bossName}
                               </h4>
                               <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                                Answer out loud. Groq transcribes your response and the AI examiner
-                                grades it against {detail.viva.passThreshold}% for +{detail.xpReward}{' '}
-                                XP.
+                                Answer out loud, or type it if you have no microphone. The AI
+                                examiner grades it against {detail.viva.passThreshold}% for +
+                                {detail.xpReward} XP.
+                              </p>
+                              <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-semibold uppercase tracking-wider">
+                                {detail.status === 'COMPLETED' ? (
+                                  <span className="text-rune">
+                                    Cleared at {detail.score}%
+                                    {detail.attempts > 1 ? ` · ${detail.attempts} attempts` : ''}
+                                  </span>
+                                ) : detail.attempts > 0 ? (
+                                  <>
+                                    <span className="text-gold">Best attempt {detail.score}%</span>
+                                    <span className="text-slate-500">
+                                      · {detail.attempts}{' '}
+                                      {detail.attempts === 1 ? 'attempt' : 'attempts'} ·{' '}
+                                      {detail.viva.passThreshold}% to pass
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-slate-500">
+                                    Not attempted yet · {detail.viva.passThreshold}% to pass
+                                  </span>
+                                )}
                               </p>
                             </div>
                           </div>
@@ -368,6 +447,46 @@ export default function SkillTreePage() {
                           >
                             <Mic size={14} /> Enter the arena
                           </button>
+                        </div>
+                      )}
+
+                      {!isPreview && (detail.history?.length ?? 0) > 0 && (
+                        <div className="mt-4 rounded-2xl border border-white/10 bg-ink-900/60 p-3.5">
+                          <div className="flex items-center gap-2">
+                            <History size={13} className="text-slate-500" />
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                              Attempt history
+                            </p>
+                            <span className="ml-auto text-[9px] uppercase tracking-wider text-slate-600">
+                              {detail.attempts > detail.history.length
+                                ? `last ${detail.history.length} of ${detail.attempts}`
+                                : `${detail.history.length} total`}
+                            </span>
+                          </div>
+                          <ol className="mt-2 space-y-1">
+                            {detail.history.map((attempt, index) => (
+                              <li
+                                key={`${attempt.at}-${index}`}
+                                className="flex items-center gap-2 rounded-lg px-1 py-1 text-[11px] odd:bg-white/[0.02]"
+                              >
+                                <span
+                                  className={`w-10 shrink-0 rounded-md py-0.5 text-center font-mono text-[10px] font-bold ${
+                                    attempt.passed
+                                      ? 'bg-rune/15 text-rune'
+                                      : 'bg-rose-500/10 text-rose-300'
+                                  }`}
+                                >
+                                  {attempt.score}%
+                                </span>
+                                <span className="text-slate-400">
+                                  {ATTEMPT_LABEL[attempt.source] ?? 'Attempt'}
+                                </span>
+                                <span className="ml-auto shrink-0 text-slate-600">
+                                  {timeAgo(attempt.at)}
+                                </span>
+                              </li>
+                            ))}
+                          </ol>
                         </div>
                       )}
                     </>
@@ -384,6 +503,7 @@ export default function SkillTreePage() {
           key={detail.id}
           module={detail}
           viva={detail.viva}
+          standing={{ score: detail.score ?? 0, attempts: detail.attempts ?? 0 }}
           onClose={() => setVivaOpen(false)}
           onGraded={handleVivaGraded}
         />

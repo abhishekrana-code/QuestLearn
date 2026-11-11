@@ -4,6 +4,7 @@ import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.CourseDto;
 import com.questlearn.dto.CourseRequest;
 import com.questlearn.dto.ModuleRequest;
+import com.questlearn.dto.ModuleUpdateRequest;
 import com.questlearn.dto.QuizRequest;
 import com.questlearn.exception.ApiException;
 import com.questlearn.model.Course;
@@ -17,6 +18,9 @@ import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.QuizRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
 import com.questlearn.repository.UserRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -121,6 +125,44 @@ public class CourseService {
                 .build();
 
         return moduleRepository.save(module);
+    }
+
+    @Transactional
+    public Module updateModule(Long moduleId, ModuleUpdateRequest request, AppUserPrincipal principal) {
+        Module module = moduleRepository.findById(moduleId)
+                .orElseThrow(() -> ApiException.notFound("Module not found"));
+        assertCanManage(module.getCourse(), principal);
+
+        module.setTitle(request.title().trim());
+        String summary = request.summary() == null ? null : request.summary().trim();
+        module.setSummary(summary == null || summary.isEmpty() ? null : summary);
+        if (request.xpReward() != null) {
+            module.setXpReward(request.xpReward());
+        }
+        module.setContent(lessonKeepingMedia(module.getContent(), request.content()));
+
+        return moduleRepository.save(module);
+    }
+
+    /**
+     * The lesson editor owns the prose; the media endpoints own the video. Copy the
+     * request's lesson over and then put back the video fields still on the node, so
+     * saving a lesson can never silently delete a teacher's uploaded film.
+     */
+    private static JsonNode lessonKeepingMedia(JsonNode existing, JsonNode incoming) {
+        ObjectNode next = JsonNodeFactory.instance.objectNode();
+        if (incoming != null && incoming.isObject()) {
+            next.setAll((ObjectNode) incoming);
+        }
+        if (existing != null && existing.isObject()) {
+            for (String field : List.of("videoUrl", "videoLabel")) {
+                JsonNode value = existing.get(field);
+                if (value != null && !value.isNull() && !value.asText().isBlank()) {
+                    next.set(field, value);
+                }
+            }
+        }
+        return next.isEmpty() ? null : next;
     }
 
     @Transactional

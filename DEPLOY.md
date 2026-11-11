@@ -91,14 +91,21 @@ AI_HOURLY_LIMIT=30                   # AI calls per account per rolling hour
 
 Cost notes:
 
-- One viva attempt = one transcription + one chat completion. At the time of
-  writing that is well under a cent per attempt on Groq's pricing.
+- One spoken viva attempt = one transcription + one chat completion. At the time of
+  writing that is well under a cent per attempt on Groq's pricing. A typed answer
+  (`POST /api/v1/modules/{id}/viva` with `{"answer": "..."}`) skips the
+  transcription and costs less, which is why the typing fallback is worth telling
+  students about on lab machines with no microphones.
 - `AI_HOURLY_LIMIT` is the ceiling on how much one student can spend in an hour;
   lower it for large cohorts and keep the key out of the frontend entirely.
-- `spring.servlet.multipart.max-file-size` is 25 MB, matching Groq's whisper
-  upload limit. Recordings are streamed for grading and never written to disk.
+- The multipart ceiling (110 MB in prod) exists for instructor lesson videos.
+  Viva recordings are capped separately at 8 MB in `VivaService`, and audio is
+  streamed for grading and never written to disk.
 - Nginx must allow the larger body: the shipped `deploy/nginx.conf` sets
-  `client_max_body_size 30m`.
+  `client_max_body_size 120m`.
+- Uploaded lesson videos are files under `MEDIA_VIDEO_DIR` (default
+  `./uploads/videos`), not database rows. Back that directory up with PostgreSQL,
+  and give it disk space.
 
 The examiner derives its topics from each node's lesson content, so existing
 courses need no authoring. An instructor can override it per node by adding a
@@ -223,4 +230,4 @@ These are deliberate trade-offs, not bugs:
 - [ ] `INSTRUCTOR_INVITE_CODE` set, or instructor signup intentionally disabled
 - [ ] `GROQ_API_KEY` set and `GET /api/v1/ai/status` reports `configured: true`
 - [ ] One viva recorded from a phone, over HTTPS, and graded successfully
-- [ ] `client_max_body_size` in nginx is at least 30 MB (large viva uploads)
+- [ ] `client_max_body_size` in nginx is at least 120 MB (lesson video uploads)

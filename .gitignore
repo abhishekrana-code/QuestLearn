@@ -35,6 +35,15 @@ yarn-error.log*
 .project
 .settings/
 
+# Agent scratch / build output that must never be committed
+.freebuff/
+release/
+*.dump
+*.zip
+
 # OS
 Thumbs.db
 .DS_Store
+
+# Uploaded lesson videos (user content, never committed)
+uploads/

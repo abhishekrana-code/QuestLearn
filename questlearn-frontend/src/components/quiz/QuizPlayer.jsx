@@ -73,12 +73,12 @@ export default function QuizPlayer({ quiz, onSubmit, disabled = false }) {
 
   return (
     <div className="panel p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-arcane-soft">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-arcane-text">
             Micro-assessment
           </p>
-          <h3 className="font-display text-lg font-semibold text-slate-50">
+          <h3 className="mt-1 text-base font-semibold tracking-tight text-foreground">
             {type === 'MULTIPLE_CHOICE'
               ? 'Knowledge check'
               : type === 'CODE_ORDER'
@@ -86,7 +86,16 @@ export default function QuizPlayer({ quiz, onSubmit, disabled = false }) {
                 : 'Match the pairs'}
           </h3>
         </div>
-        <span className="chip">Pass mark {passingScore}%</span>
+        <div className="flex items-center gap-1.5">
+          {type === 'MULTIPLE_CHOICE' && questions.length > 0 && (
+            <span className="chip tabular-nums">
+              {answeredCount}/{questions.length} answered
+            </span>
+          )}
+          <span className="chip border-gold/30 bg-gold/[0.08] text-gold-text">
+            Pass mark {passingScore}%
+          </span>
+        </div>
       </div>
 
       {type === 'MULTIPLE_CHOICE' && (
@@ -120,7 +129,7 @@ export default function QuizPlayer({ quiz, onSubmit, disabled = false }) {
       )}
 
       {error && (
-        <p className="mt-4 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+        <p className="mt-4 rounded-lg border border-danger/30 bg-danger/[0.08] px-3 py-2 text-xs text-danger">
           {error}
         </p>
       )}
@@ -131,10 +140,10 @@ export default function QuizPlayer({ quiz, onSubmit, disabled = false }) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className={`mt-4 flex items-start gap-3 rounded-xl border px-3.5 py-3 text-sm ${
+            className={`mt-4 flex items-start gap-3 rounded-lg border px-3.5 py-3 text-sm ${
               result.passed
-                ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-200'
-                : 'border-amber-400/40 bg-amber-500/10 text-amber-200'
+                ? 'border-success/35 bg-success/[0.08] text-success'
+                : 'border-warning/35 bg-warning/[0.08] text-warning'
             }`}
           >
             {result.passed ? (
@@ -143,7 +152,7 @@ export default function QuizPlayer({ quiz, onSubmit, disabled = false }) {
               <XCircle size={18} className="mt-0.5 shrink-0" />
             )}
             <div>
-              <p className="font-semibold">
+              <p className="font-semibold tabular-nums">
                 Score {result.score}% · {result.passed ? 'Node cleared' : 'Not cleared yet'}
               </p>
               <p className="mt-0.5 text-xs opacity-90">{result.message}</p>
@@ -152,8 +161,8 @@ export default function QuizPlayer({ quiz, onSubmit, disabled = false }) {
         )}
       </AnimatePresence>
 
-      <div className="mt-5 flex items-center justify-between gap-3">
-        <p className="text-[11px] text-slate-500">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+        <p className="text-[11px] text-fg-subtle">
           {disabled
             ? 'This node is already completed.'
             : 'Answers are scored on the server — XP cannot be faked.'}

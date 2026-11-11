@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   AlertTriangle,
   Check,
   Crown,
   Mic,
+  PenLine,
   RotateCcw,
   Shield,
   Sparkles,
@@ -14,11 +15,35 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { submitViva } from '../../services/ai.js';
+import { submitViva, submitWrittenViva } from '../../services/ai.js';
 import { apiError } from '../../services/api.js';
 
 const MAX_RECORDING_MS = 80_000;
+const MIN_WRITTEN_CHARS = 15;
+/** Where a 70%-plus answer usually lands: three to five real sentences. */
+const TARGET_WRITTEN_CHARS = 250;
+const MAX_WRITTEN_CHARS = 4000;
 const BAR_COUNT = 24;
+
+/** Guidance shown while typing, so the length is known before submitting. */
+function writtenHint(length) {
+  if (length < MIN_WRITTEN_CHARS) {
+    return {
+      tone: 'text-fg-subtle',
+      text: `Write at least ${MIN_WRITTEN_CHARS} characters - a full sentence.`,
+    };
+  }
+  if (length < TARGET_WRITTEN_CHARS) {
+    return {
+      tone: 'text-warning',
+      text: `You are at ${length} of about ${TARGET_WRITTEN_CHARS}+ characters - add another sentence or two.`,
+    };
+  }
+  return {
+    tone: 'text-rune-text',
+    text: 'Good length. The examiner grades your reasoning, not the word count.',
+  };
+}
 
 const IDLE_LEVELS = Array.from({ length: BAR_COUNT }, (_, index) =>
   0.16 + 0.12 * Math.abs(Math.sin(index * 0.9)),
@@ -63,13 +88,15 @@ function ScoreRing({ score, passed }) {
       className="grid h-20 w-20 shrink-0 place-items-center rounded-full"
       style={{
         background: `conic-gradient(${
-          passed ? '#22d3ee' : '#fb7185'
-        } ${angle}deg, rgba(255,255,255,0.08) ${angle}deg)`,
+          passed ? 'hsl(var(--rune))' : 'hsl(var(--danger))'
+        } ${angle}deg, hsl(var(--border-strong)) ${angle}deg)`,
       }}
     >
-      <div className="grid h-[70px] w-[70px] place-items-center rounded-full bg-ink-900">
-        <span className="font-display text-lg font-bold text-slate-50">{Math.round(score)}%</span>
-        <span className="text-[9px] uppercase tracking-widest text-slate-500">viva</span>
+      <div className="grid h-[70px] w-[70px] place-content-center place-items-center rounded-full bg-card">
+        <span className="text-lg font-semibold tabular-nums text-foreground">
+          {Math.round(score)}%
+        </span>
+        <span className="text-[9px] uppercase tracking-[0.14em] text-fg-subtle">viva</span>
       </div>
     </div>
   );
@@ -84,24 +111,24 @@ function BossHpBar({ viva, score }) {
   return (
     <div>
       <div className="flex items-end justify-between">
-        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Boss HP</p>
+        <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">Boss HP</p>
         <div className="flex items-baseline gap-2">
           {score != null && (
             <motion.span
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-[10px] font-bold text-rose-300"
+              className="text-[10px] font-bold tabular-nums text-danger"
             >
               −{Math.round(score)} HP
             </motion.span>
           )}
-          <span className="text-xs font-semibold text-slate-200">
+          <span className="text-xs font-semibold tabular-nums text-foreground">
             {hp}
-            <span className="text-slate-500">/{maxHp}</span>
+            <span className="text-fg-subtle">/{maxHp}</span>
           </span>
         </div>
       </div>
-      <div className="mt-1.5 h-2.5 overflow-hidden rounded-full border border-white/10 bg-ink-900">
+      <div className="mt-1.5 h-2.5 overflow-hidden rounded-full border border-line bg-muted">
         <motion.div
           initial={{ width: '100%' }}
           animate={{ width: `${percent}%` }}
@@ -121,73 +148,75 @@ function VerdictBody({ result, onRetry, onClose }) {
   const passed = Boolean(result.passed);
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-gold/25 bg-gold/[0.06] p-4">
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-gold/25 bg-gold/[0.06] p-4">
         <ScoreRing score={result.score ?? 0} passed={passed} />
         <div className="min-w-0 flex-1">
-          <p className="text-[9px] font-bold uppercase tracking-widest text-gold/70">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-gold-text">
             Examiner verdict
           </p>
-          <h3 className="mt-1 font-display text-lg font-bold text-slate-50">
+          <h3 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
             {passed ? 'The Warden yields' : 'The Warden holds'}
           </h3>
-          <p className="mt-1 text-xs leading-relaxed text-slate-300">{result.verdict}</p>
+          <p className="mt-1 text-xs leading-relaxed text-fg-muted">{result.verdict}</p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="chip border-gold/30 text-gold">
+            <span className="chip border-gold/30 bg-gold/[0.08] text-gold-text">
               <Zap size={10} /> +{result.xpGained ?? 0} XP
             </span>
-            <span className="chip border-white/15 text-slate-300">
+            <span className="chip border-line text-fg-muted">
               pass ≥ {result.passThreshold ?? 70}%
             </span>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-ink-900/70 p-3.5">
-        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
-          Whisper transcript
+      <div className="rounded-xl border border-line bg-muted/40 p-3.5">
+        <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">
+          {result.input === 'WRITTEN' ? 'Your written answer' : 'Whisper transcript'}
         </p>
-        <p className="mt-1.5 text-xs italic leading-relaxed text-slate-300">“{result.transcript}”</p>
+        <p className="mt-1.5 text-xs italic leading-relaxed text-fg-muted">“{result.transcript}”</p>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
-        <div className="rounded-xl border border-rune/20 bg-rune/[0.05] p-3">
-          <p className="text-[9px] font-bold uppercase tracking-widest text-rune/80">Strengths</p>
+        <div className="rounded-lg border border-rune/20 bg-rune/[0.05] p-3">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-rune-text">
+            Strengths
+          </p>
           <ul className="mt-1.5 space-y-1">
             {(result.strengths ?? []).map((item) => (
-              <li key={item} className="flex items-start gap-1.5 text-[11px] text-slate-300">
-                <Check size={11} className="mt-0.5 shrink-0 text-rune" />
+              <li key={item} className="flex items-start gap-1.5 text-[11px] text-fg-muted">
+                <Check size={11} className="mt-0.5 shrink-0 text-rune-text" />
                 {item}
               </li>
             ))}
             {(result.strengths ?? []).length === 0 && (
-              <li className="text-[11px] text-slate-500">Nothing logged yet.</li>
+              <li className="text-[11px] text-fg-subtle">Nothing logged yet.</li>
             )}
           </ul>
         </div>
-        <div className="rounded-xl border border-rose-400/20 bg-rose-500/[0.06] p-3">
-          <p className="text-[9px] font-bold uppercase tracking-widest text-rose-300/80">Gaps</p>
+        <div className="rounded-lg border border-danger/20 bg-danger/[0.05] p-3">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-danger">Gaps</p>
           <ul className="mt-1.5 space-y-1">
             {(result.gaps ?? []).map((item) => (
-              <li key={item} className="flex items-start gap-1.5 text-[11px] text-slate-300">
-                <AlertTriangle size={11} className="mt-0.5 shrink-0 text-rose-300" />
+              <li key={item} className="flex items-start gap-1.5 text-[11px] text-fg-muted">
+                <AlertTriangle size={11} className="mt-0.5 shrink-0 text-danger" />
                 {item}
               </li>
             ))}
             {(result.gaps ?? []).length === 0 && (
-              <li className="text-[11px] text-slate-500">No gaps found.</li>
+              <li className="text-[11px] text-fg-subtle">No gaps found.</li>
             )}
           </ul>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-gold/15 bg-gold/[0.04] p-3.5">
-        <p className="text-[9px] font-bold uppercase tracking-widest text-gold/70">
+      <div className="rounded-xl border border-gold/15 bg-gold/[0.04] p-3.5">
+        <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-gold-text">
           Examiner feedback
         </p>
-        <p className="mt-1.5 text-xs leading-relaxed text-slate-300">{result.feedback}</p>
+        <p className="mt-1.5 text-xs leading-relaxed text-fg-muted">{result.feedback}</p>
         {result.followUpQuestion ? (
-          <p className="mt-2 border-t border-gold/15 pt-2 text-xs leading-relaxed text-slate-200">
-            <span className="text-[9px] font-bold uppercase tracking-widest text-gold/70">
+          <p className="mt-2 border-t border-gold/15 pt-2 text-xs leading-relaxed text-foreground">
+            <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-gold-text">
               Follow-up ·{' '}
             </span>
             {result.followUpQuestion}
@@ -215,13 +244,21 @@ function VerdictBody({ result, onRetry, onClose }) {
  * with the platform speech synthesiser, so the battle reads as a conversation
  * without shipping any extra audio.</p>
  */
-export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
+export default function VoiceVivaDialog({ module, viva, standing, onClose, onGraded }) {
   const [phase, setPhase] = useState('idle');
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [levels, setLevels] = useState(IDLE_LEVELS);
   const [voiceOn, setVoiceOn] = useState(true);
+  // Spoken answers are the default; typing is the fallback for a missing or
+  // blocked microphone, and both submit to the same examiner.
+  const [written, setWritten] = useState('');
+  const [micBlocked, setMicBlocked] = useState(false);
+  const [gradingFrom, setGradingFrom] = useState('voice');
+  // A 429 means the examiner is rate-limited or busy. Retrying at once usually
+  // fails again, so the panel offers the two routes that still work.
+  const [busyExaminer, setBusyExaminer] = useState(false);
 
   const streamRef = useRef(null);
   const recorderRef = useRef(null);
@@ -237,6 +274,10 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
 
   const bossName = viva?.bossName ?? 'The Warden';
   const openingQuestion = viva?.openingQuestion ?? 'Defend your understanding of this node.';
+  const passThreshold = viva?.passThreshold ?? 70;
+  const attempts = standing?.attempts ?? 0;
+  const bestScore = standing?.score ?? 0;
+  const hint = writtenHint(written.trim().length);
 
   useEffect(() => {
     onGradedRef.current = onGraded;
@@ -364,14 +405,18 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
 
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       setPhase('error');
+      setMicBlocked(true);
       setError(
-        'This browser cannot reach the microphone. Use Chrome or Edge on localhost or HTTPS.',
+        'This browser cannot reach the microphone. Use Chrome or Edge on localhost or HTTPS - or type your answer instead.',
       );
       return;
     }
     if (typeof MediaRecorder === 'undefined') {
       setPhase('error');
-      setError('MediaRecorder is unavailable here, so the viva cannot be recorded.');
+      setMicBlocked(true);
+      setError(
+        'MediaRecorder is unavailable here, so the answer cannot be recorded. You can type it instead.',
+      );
       return;
     }
 
@@ -402,6 +447,7 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
           return;
         }
 
+        setGradingFrom('voice');
         setPhase('grading');
         try {
           const graded = await submitViva(module.id, { audio: blob, durationMs });
@@ -411,6 +457,7 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
           onGradedRef.current?.(graded);
         } catch (gradeError) {
           setError(apiError(gradeError, 'The Warden could not grade that answer.'));
+          setBusyExaminer(gradeError?.response?.status === 429);
           setPhase('error');
         }
       };
@@ -429,13 +476,37 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
     } catch (micError) {
       stopAudioGraph();
       setPhase('error');
+      setMicBlocked(true);
       setError(
         micError?.name === 'NotAllowedError'
-          ? 'Microphone permission was denied. Allow it in the browser and try again.'
-          : 'No microphone was found. Connect one and try again.',
+          ? 'Microphone permission was denied. Allow it in the browser and try again - or type your answer instead.'
+          : 'No microphone was found. Connect one and try again - or type your answer instead.',
       );
     }
   }, [module.id, startMeter, stopAudioGraph]);
+
+  const submitTypedAnswer = useCallback(async () => {
+    const answer = written.trim();
+    if (answer.length < MIN_WRITTEN_CHARS) return;
+
+    setError(null);
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setGradingFrom('typed');
+    setPhase('grading');
+
+    try {
+      const graded = await submitWrittenViva(module.id, answer);
+      setResult(graded);
+      setPhase('verdict');
+      onGradedRef.current?.(graded);
+    } catch (gradeError) {
+      setError(apiError(gradeError, 'The Warden could not grade that answer.'));
+      setBusyExaminer(gradeError?.response?.status === 429);
+      setPhase('error');
+    }
+  }, [module.id, written]);
 
   const stopRecording = useCallback(() => {
     if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
@@ -447,6 +518,7 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
     }
     setResult(null);
     setError(null);
+    setBusyExaminer(false);
     setElapsedMs(0);
     setPhase('idle');
   }, []);
@@ -459,7 +531,7 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
         type="button"
         aria-label="Leave the arena"
         onClick={onClose}
-        className="absolute inset-0 cursor-default bg-ink-900/85 backdrop-blur-sm"
+        className="absolute inset-0 cursor-default scrim"
       />
       <motion.div
         role="dialog"
@@ -468,17 +540,17 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
         initial={{ opacity: 0, y: 26, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        className="panel-raised relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden shadow-glow"
+        className="panel-raised relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden shadow-raised"
       >
-        <div className="flex items-start gap-3 border-b border-white/10 px-4 py-3.5 sm:px-5">
-          <span className="mt-0.5 grid h-8 w-8 place-items-center rounded-xl border border-gold/30 bg-gold/15 text-gold">
+        <div className="flex items-start gap-3 border-b border-line px-4 py-3.5 sm:px-5">
+          <span className="mt-0.5 grid h-8 w-8 place-items-center rounded-lg border border-gold/30 bg-gold/[0.12] text-gold-text">
             <Crown size={16} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[9px] font-bold uppercase tracking-[0.26em] text-gold/70">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-gold-text">
               Boss battle · voice viva
             </p>
-            <h2 id="viva-title" className="truncate font-display text-sm font-bold text-slate-50">
+            <h2 id="viva-title" className="truncate text-sm font-semibold text-foreground">
               {bossName}
             </h2>
           </div>
@@ -494,7 +566,7 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
                 });
               }}
               aria-label={voiceOn ? 'Mute examiner voice' : 'Unmute examiner voice'}
-              className="rounded-lg border border-white/10 bg-white/[0.04] p-1.5 text-slate-300 transition hover:border-gold/40 hover:text-gold"
+              className="rounded-lg border border-line bg-muted/60 p-1.5 text-fg-muted transition-colors duration-150 hover:border-gold/50 hover:text-gold-text"
             >
               {voiceOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
             </button>
@@ -502,7 +574,7 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="rounded-lg border border-white/10 bg-white/[0.04] p-1.5 text-slate-400 transition hover:border-white/20 hover:text-white"
+              className="rounded-lg border border-line bg-muted/60 p-1.5 text-fg-muted transition-colors duration-150 hover:border-line-strong hover:text-foreground"
             >
               <X size={14} />
             </button>
@@ -510,12 +582,12 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3.5 sm:px-5">
-          <div className="rounded-2xl border border-white/10 bg-ink-900/60 p-4">
+          <div className="rounded-xl border border-line bg-muted/40 p-4">
             <div className="flex flex-wrap items-center gap-4">
               <motion.div
                 animate={recording ? { scale: [1, 1.04, 1] } : { scale: 1 }}
                 transition={recording ? { duration: 2.4, repeat: Infinity } : { duration: 0.3 }}
-                className="relative grid h-14 w-14 place-items-center rounded-full border border-gold/40 bg-gradient-to-br from-gold/25 to-arcane/10 text-gold"
+                className="relative grid h-14 w-14 place-items-center rounded-full border border-gold/40 bg-gradient-to-br from-gold/25 to-arcane/10 text-gold-text"
               >
                 <Crown size={24} />
               </motion.div>
@@ -524,25 +596,25 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-white/10 bg-ink-900/80 p-3">
+            <div className="mt-4 rounded-lg border border-line bg-card/70 p-3">
               <div className="flex items-center gap-2">
-                <Sparkles size={12} className="text-gold/80" />
-                <p className="text-[9px] font-bold uppercase tracking-widest text-gold/70">
+                <Sparkles size={12} className="text-gold-text" />
+                <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-gold-text">
                   Examiner asks
                 </p>
                 <button
                   type="button"
                   onClick={() => speak(openingQuestion)}
-                  className="ml-auto inline-flex items-center gap-1 rounded-md border border-white/10 px-1.5 py-0.5 text-[9px] text-slate-400 transition hover:border-gold/40 hover:text-gold"
+                  className="ml-auto inline-flex items-center gap-1 rounded-md border border-line px-1.5 py-0.5 text-[9px] text-fg-subtle transition-colors duration-150 hover:border-gold/50 hover:text-gold-text"
                 >
                   <Volume2 size={10} /> replay
                 </button>
               </div>
-              <p className="mt-1.5 text-xs leading-relaxed text-slate-200">{openingQuestion}</p>
+              <p className="mt-1.5 text-xs leading-relaxed text-foreground">{openingQuestion}</p>
               {(viva?.topics ?? []).length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {viva.topics.map((topic) => (
-                    <span key={topic} className="chip border-white/10 px-1.5 py-0.5 text-[10px] text-slate-400">
+                    <span key={topic} className="chip border-line px-1.5 py-0.5 text-[10px] text-fg-muted">
                       {topic}
                     </span>
                   ))}
@@ -552,30 +624,128 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
           </div>
 
           <div className="mt-3">
-            <AnimatePresence mode="wait" initial={false}>
+            {/*
+              The phases are swapped without AnimatePresence on purpose: a modal
+              that must wait for an exit animation to finish can wedge itself shut
+              when animations are throttled (background tab, reduced motion, a
+              dropped frame), leaving "Answer again" looking dead. Each panel keeps
+              its enter motion and the previous one simply unmounts.
+            */}
+            <div>
               {phase === 'idle' && (
                 <motion.div
                   key="idle"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  className="rounded-2xl border border-white/10 bg-ink-900/70 p-4"
+                  className="rounded-xl border border-line bg-muted/30 p-4"
                 >
                   <div className="flex items-center gap-2">
-                    <Mic size={14} className="text-gold" />
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                    <Mic size={14} className="text-gold-text" />
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">
                       Your answer
                     </p>
                   </div>
-                  <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
-                    Speak your answer out loud. The recording is transcribed by Groq whisper and
-                    graded by the AI examiner, who awards XP and damages the boss.
+                  <p className="mt-1.5 text-xs leading-relaxed text-fg-muted">
+                    {micBlocked
+                      ? 'Type your answer and the same examiner will grade it. Written answers earn the same XP and unlock the same nodes.'
+                      : 'Speak your answer out loud. The recording is transcribed by Groq whisper and graded by the AI examiner, who awards XP and damages the boss.'}
                   </p>
-                  <button type="button" onClick={startRecording} className="btn-primary mt-3 text-xs">
-                    <Mic size={15} /> Start answering
-                  </button>
-                  <p className="mt-2 text-[10px] text-slate-500">
-                    Max {Math.round(MAX_RECORDING_MS / 1000)}s · microphone permission required
+                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-wider">
+                    {attempts > 0 ? (
+                      <>
+                        <span className="text-gold-text">
+                          Best attempt {bestScore}% after {attempts}{' '}
+                          {attempts === 1 ? 'try' : 'tries'}
+                        </span>
+                        <span className="text-fg-subtle"> · {passThreshold}% clears the node</span>
+                      </>
+                    ) : (
+                      <span className="text-fg-subtle">
+                        First attempt · {passThreshold}% clears the node
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-2 text-[11px] leading-relaxed text-fg-subtle">
+                    Speaking: answer in 3-5 sentences, up to{' '}
+                    {Math.round(MAX_RECORDING_MS / 1000)}s. Typing: about 250-600 characters.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={startRecording} className="btn-primary text-xs">
+                      <Mic size={15} /> Start answering
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        setPhase('typing');
+                      }}
+                      className="btn-ghost text-xs"
+                    >
+                      <PenLine size={14} /> {micBlocked ? 'Type your answer' : 'Type instead'}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[10px] text-fg-subtle">
+                    Max {Math.round(MAX_RECORDING_MS / 1000)}s · microphone required to speak ·
+                    typing always works
+                  </p>
+                </motion.div>
+              )}
+
+              {phase === 'typing' && (
+                <motion.div
+                  key="typing"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-2xl border border-gold/25 bg-gold/[0.05] p-4"
+                >
+                  <div className="flex items-center gap-2">
+                    <PenLine size={14} className="text-gold-text" />
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">
+                      Written answer
+                    </p>
+                    <span className="ml-auto text-[10px] tabular-nums text-fg-subtle">
+                      {written.trim().length}/{MAX_WRITTEN_CHARS}
+                    </span>
+                  </div>
+                  <label htmlFor="viva-answer" className="sr-only">
+                    Your answer to the examiner
+                  </label>
+                  <p className="mt-1.5 text-[10px] text-fg-subtle">
+                    Aim for 3-5 sentences - roughly {TARGET_WRITTEN_CHARS}-600 characters.
+                    {attempts > 0 ? ` Your best so far is ${bestScore}%.` : ''}
+                  </p>
+                  <textarea
+                    id="viva-answer"
+                    value={written}
+                    onChange={(event) => setWritten(event.target.value.slice(0, MAX_WRITTEN_CHARS))}
+                    rows={6}
+                    autoFocus
+                    placeholder="Explain it the way you would out loud: what it is, how it works, and why it matters."
+                    className="field mt-2 w-full resize-y text-xs leading-relaxed"
+                  />
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={submitTypedAnswer}
+                      disabled={written.trim().length < MIN_WRITTEN_CHARS}
+                      className="btn-primary text-xs disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Crown size={14} /> Submit to the Warden
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        setPhase('idle');
+                      }}
+                      className="btn-ghost text-xs"
+                    >
+                      <RotateCcw size={14} /> Back
+                    </button>
+                  </div>
+                  <p className={`mt-2 text-[10px] ${hint.tone}`}>{hint.text}</p>
+                  <p className="mt-1 text-[10px] text-fg-subtle">
+                    Graded exactly like a spoken answer: same examiner, same XP, same unlocks.
                   </p>
                 </motion.div>
               )}
@@ -585,19 +755,18 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
                   key="recording"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  className="rounded-2xl border border-rose-400/30 bg-rose-500/[0.07] p-4"
+                  className="rounded-xl border border-danger/30 bg-danger/[0.06] p-4"
                 >
                   <div className="flex items-center gap-2">
                     <motion.span
                       animate={{ opacity: [1, 0.25, 1] }}
                       transition={{ duration: 1.4, repeat: Infinity }}
-                      className="h-2 w-2 rounded-full bg-rose-400"
+                      className="h-2 w-2 rounded-full bg-danger"
                     />
-                    <p className="text-[9px] font-bold uppercase tracking-widest text-rose-300/80">
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-danger">
                       Recording
                     </p>
-                    <span className="ml-auto font-mono text-sm tabular-nums text-rose-100">
+                    <span className="ml-auto font-mono text-sm tabular-nums text-foreground">
                       {formatDuration(elapsedMs)}
                     </span>
                   </div>
@@ -617,15 +786,18 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
                   key="grading"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  className="rounded-2xl border border-white/10 bg-ink-900/70 p-5 text-center"
+                  className="rounded-xl border border-line bg-muted/30 p-5 text-center"
                 >
                   <Waveform levels={IDLE_LEVELS} />
-                  <p className="mt-1 text-xs font-medium text-slate-200">
-                    Whisper is transcribing your answer…
+                  <p className="mt-1 text-xs font-medium text-foreground">
+                    {gradingFrom === 'typed'
+                      ? 'The Warden is reading your answer…'
+                      : 'Whisper is transcribing your answer…'}
                   </p>
-                  <p className="mt-1 text-[9px] uppercase tracking-widest text-slate-500">
-                    whisper → reasoning model → verdict
+                  <p className="mt-1 text-[9px] uppercase tracking-[0.14em] text-fg-subtle">
+                    {gradingFrom === 'typed'
+                      ? 'reasoning model → verdict'
+                      : 'whisper → reasoning model → verdict'}
                   </p>
                 </motion.div>
               )}
@@ -635,16 +807,34 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
                   key="error"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  className="rounded-2xl border border-rose-400/30 bg-rose-500/[0.07] p-4"
+                  className="rounded-xl border border-danger/30 bg-danger/[0.06] p-4"
                 >
                   <div className="flex items-start gap-2">
-                    <AlertTriangle size={14} className="mt-0.5 shrink-0 text-rose-300" />
-                    <p className="text-xs leading-relaxed text-rose-100/90">{error}</p>
+                    <AlertTriangle size={14} className="mt-0.5 shrink-0 text-danger" />
+                    <p className="text-xs leading-relaxed text-danger">{error}</p>
                   </div>
-                  <button type="button" onClick={handleRetry} className="btn-ghost mt-3 text-xs">
-                    <RotateCcw size={14} /> Try again
-                  </button>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={handleRetry} className="btn-ghost text-xs">
+                      <RotateCcw size={14} /> Try again
+                    </button>
+                    {(micBlocked || busyExaminer) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError(null);
+                          setPhase('typing');
+                        }}
+                        className="btn-primary text-xs"
+                      >
+                        <PenLine size={14} /> Type your answer instead
+                      </button>
+                    )}
+                    {busyExaminer && (
+                      <button type="button" onClick={onClose} className="btn-ghost text-xs">
+                        <X size={14} /> Take the quiz instead
+                      </button>
+                    )}
+                  </div>
                 </motion.div>
               )}
 
@@ -653,19 +843,18 @@ export default function VoiceVivaDialog({ module, viva, onClose, onGraded }) {
                   key="verdict"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
                 >
                   <VerdictBody result={result} onRetry={handleRetry} onClose={onClose} />
                 </motion.div>
               )}
-            </AnimatePresence>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 border-t border-white/[0.07] bg-ink-900/60 px-4 py-2.5 sm:px-5">
-          <Shield size={12} className="text-slate-600" />
-          <p className="text-[9px] uppercase tracking-[0.16em] text-slate-600">
-            Audio is sent for grading and never stored
+        <div className="flex items-center gap-2 border-t border-line bg-muted/40 px-4 py-2.5 sm:px-5">
+          <Shield size={12} className="text-fg-subtle" />
+          <p className="text-[9px] uppercase tracking-[0.12em] text-fg-subtle">
+            Audio is sent for grading and never stored · written answers go as text only
           </p>
         </div>
       </motion.div>

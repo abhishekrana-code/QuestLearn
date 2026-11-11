@@ -34,7 +34,7 @@ export default function SkillTreeCanvas({ nodes, onSelect, onLockedClick, active
     });
 
   return (
-    <div className="overflow-x-auto rounded-3xl border border-white/10 bg-ink-800/40">
+    <div className="overflow-x-auto rounded-xl border border-line bg-card/50">
       <div
         className="relative grid-floor"
         style={{ width, height, minWidth: '100%' }}
@@ -47,8 +47,14 @@ export default function SkillTreeCanvas({ nodes, onSelect, onLockedClick, active
         >
           <defs>
             <linearGradient id="edgeUnlocked" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f4c95d" stopOpacity="0.85" />
-              <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.65" />
+              <stop
+                offset="0%"
+                style={{ stopColor: 'hsl(var(--gold))', stopOpacity: 0.85 }}
+              />
+              <stop
+                offset="100%"
+                style={{ stopColor: 'hsl(var(--rune))', stopOpacity: 0.7 }}
+              />
             </linearGradient>
           </defs>
 
@@ -62,7 +68,9 @@ export default function SkillTreeCanvas({ nodes, onSelect, onLockedClick, active
                 key={edge.id}
                 d={curve}
                 fill="none"
-                stroke={edge.locked ? 'rgba(148,163,184,0.28)' : 'url(#edgeUnlocked)'}
+                stroke={
+                  edge.locked ? 'hsl(var(--border-strong) / 0.9)' : 'url(#edgeUnlocked)'
+                }
                 strokeWidth={edge.locked ? 2 : 3}
                 strokeDasharray={edge.locked ? '6 8' : undefined}
                 strokeLinecap="round"

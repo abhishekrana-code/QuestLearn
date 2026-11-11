@@ -54,6 +54,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/h2-console/**", "/actuator/health").permitAll()
+                // Lesson videos: a <video src> request cannot send a bearer token, and the
+                // stored names are random UUIDs, so the URL itself is the capability.
+                .requestMatchers(HttpMethod.GET, "/api/v1/media/videos/**").permitAll()
                 .anyRequest().authenticated())
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint((request, response, authException) ->

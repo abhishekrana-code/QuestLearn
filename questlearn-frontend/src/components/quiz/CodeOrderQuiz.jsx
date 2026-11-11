@@ -9,18 +9,18 @@ function OrderItem({ index, line, disabled, lines }) {
       value={index}
       dragListener={false}
       dragControls={controls}
-      className="flex items-start gap-2 rounded-xl border border-white/10 bg-ink-900/80 px-3 py-2.5"
+      className="flex items-start gap-2 rounded-lg border border-line bg-card/70 px-3 py-2.5 shadow-card"
     >
       <button
         type="button"
         onPointerDown={(event) => !disabled && controls.start(event)}
-        className="mt-0.5 cursor-grab touch-none text-slate-500 hover:text-slate-300 active:cursor-grabbing disabled:cursor-not-allowed"
+        className="mt-0.5 cursor-grab touch-none text-fg-subtle transition-colors hover:text-foreground disabled:cursor-not-allowed active:cursor-grabbing"
         aria-label="Drag to reorder"
         disabled={disabled}
       >
         <GripVertical size={16} />
       </button>
-      <code className="flex-1 whitespace-pre-wrap break-words font-mono text-[12.5px] leading-relaxed text-slate-200">
+      <code className="flex-1 whitespace-pre-wrap break-words font-mono text-[12.5px] leading-relaxed text-foreground/90">
         {lines[index]}
       </code>
     </Reorder.Item>
@@ -30,8 +30,8 @@ function OrderItem({ index, line, disabled, lines }) {
 export default function CodeOrderQuiz({ prompt, lines, order, setOrder, disabled }) {
   return (
     <div>
-      <p className="text-sm font-medium leading-relaxed text-slate-100">{prompt}</p>
-      <p className="mt-1 text-[11px] uppercase tracking-wider text-slate-500">
+      <p className="text-sm font-medium leading-relaxed text-foreground">{prompt}</p>
+      <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-fg-subtle">
         Drag the handle, or use the arrows, to place each line in the right order.
       </p>
 
