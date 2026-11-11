@@ -15,7 +15,7 @@ function shuffle(values) {
   return copy;
 }
 
-export default function QuizPlayer({ quiz, onSubmit, disabled = false }) {
+export default function QuizPlayer({ quiz, onSubmit, disabled = false, retake = false }) {
   const { type, payload, passingScore } = quiz;
   const questions = payload?.questions ?? [];
   const lines = payload?.lines ?? [];
@@ -164,8 +164,10 @@ export default function QuizPlayer({ quiz, onSubmit, disabled = false }) {
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
         <p className="text-[11px] text-fg-subtle">
           {disabled
-            ? 'This node is already completed.'
-            : 'Answers are scored on the server — XP cannot be faked.'}
+            ? 'Completed — use “Try again” in the attempt history to retake.'
+            : retake
+              ? 'A retake keeps your best score and awards no extra XP.'
+              : 'Answers are scored on the server — XP cannot be faked.'}
         </p>
         <button type="button" onClick={submit} disabled={!canSubmit} className="btn-primary">
           <Send size={15} />

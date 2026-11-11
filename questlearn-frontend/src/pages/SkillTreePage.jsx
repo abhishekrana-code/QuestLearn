@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -14,6 +14,7 @@ import {
   Sparkles,
   X,
   History,
+  RotateCcw,
 } from 'lucide-react';
 import QuizPlayer from '../components/quiz/QuizPlayer.jsx';
 import SkillTreeCanvas from '../components/skilltree/SkillTreeCanvas.jsx';
@@ -73,6 +74,9 @@ export default function SkillTreePage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [vivaOpen, setVivaOpen] = useState(false);
+  const [retaking, setRetaking] = useState(false);
+  const [retakeKey, setRetakeKey] = useState(0);
+  const quizRef = useRef(null);
 
   const isPreview = user.role === 'INSTRUCTOR';
 
@@ -107,6 +111,8 @@ export default function SkillTreePage() {
     setSelectedId(node.id);
     setDetail(null);
     setVivaOpen(false);
+    setRetaking(false);
+    setRetakeKey(0);
     setDetailLoading(true);
     try {
       const { data } = await api.get(`/modules/${node.id}`);
@@ -142,19 +148,40 @@ export default function SkillTreePage() {
     setToast('This node is sealed. Clear its prerequisite to open the path.');
   };
 
+  /**
+   * Starts a fresh attempt from the history panel: the quiz resets in place, or
+   * the arena opens for a viva node. Retakes are already allowed by the server;
+   * this just opens the door the completed state had closed.
+   */
+  const startRetry = () => {
+    // A node can carry a viva config without being a boss; the quiz is the
+    // routine retry, and the arena has its own button below.
+    if (detail?.quiz) {
+      setRetaking(true);
+      setRetakeKey((previous) => previous + 1);
+      requestAnimationFrame(() => {
+        quizRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      return;
+    }
+    if (detail?.viva) setVivaOpen(true);
+  };
+
   const completeModule = async (answers) => {
     const { data } = await api.post(`/modules/${selectedId}/complete`, { answers });
-    if (data.passed) {
+    // A retake pays no XP, so only a first clear celebrates.
+    if (data.passed && data.xpGained > 0) {
       award(data);
-      await loadTree();
-      try {
-        const refreshed = await api.get(`/modules/${selectedId}`);
-        setDetail(refreshed.data);
-      } catch {
-        /* the tree refresh is enough */
-      }
-      setToast(data.message);
     }
+    // Refresh on failures too, so a retake appears in the history straight away.
+    await loadTree().catch(() => {});
+    try {
+      const refreshed = await api.get(`/modules/${selectedId}`);
+      setDetail(refreshed.data);
+    } catch {
+      /* the tree refresh is enough */
+    }
+    setToast(data.message);
     return data;
   };
 
@@ -380,12 +407,13 @@ export default function SkillTreePage() {
                         )}
 
                       {detail.quiz ? (
-                        <div className="mt-5">
+                        <div className="mt-5" ref={quizRef}>
                           <QuizPlayer
-                            key={detail.id}
+                            key={`${detail.id}-${retakeKey}`}
                             quiz={detail.quiz}
                             onSubmit={completeModule}
-                            disabled={detail.status === 'COMPLETED'}
+                            retake={retaking}
+                            disabled={detail.status === 'COMPLETED' && !retaking}
                           />
                         </div>
                       ) : (
@@ -500,11 +528,20 @@ export default function SkillTreePage() {
                               </li>
                             ))}
                           </ol>
-                          {historySummary(detail.history) && (
-                            <p className="mt-2 text-[10px] text-fg-subtle">
-                              {historySummary(detail.history)}
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-[10px] text-fg-subtle">
+                              {historySummary(detail.history) ?? 'Your tries so far.'}
                             </p>
-                          )}
+                            {detail.status === 'COMPLETED' && (detail.quiz || detail.viva) && (
+                              <button
+                                type="button"
+                                onClick={startRetry}
+                                className="inline-flex items-center gap-1 rounded-md border border-gold/40 px-2 py-1 text-[10px] font-semibold text-gold-text transition-colors hover:bg-gold/10"
+                              >
+                                <RotateCcw size={11} /> Try again
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </>
