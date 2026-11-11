@@ -87,6 +87,8 @@ export default function StudentPerformance() {
   const [courses, setCourses] = useState([]);
   const [trees, setTrees] = useState({});
   const [openTopic, setOpenTopic] = useState(null);
+  const [openHistory, setOpenHistory] = useState(null);
+  const [histories, setHistories] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -205,6 +207,35 @@ export default function StudentPerformance() {
         .slice(0, 6),
     [subjects],
   );
+
+  /** Loaded on demand: the tree carries counts, the detail carries each score. */
+  const toggleHistory = async (node) => {
+    if (openHistory === node.id) {
+      setOpenHistory(null);
+      return;
+    }
+    setOpenHistory(node.id);
+    if (histories[node.id] && !histories[node.id].error) return;
+
+    setHistories((previous) => ({ ...previous, [node.id]: { loading: true, items: [] } }));
+    try {
+      const { data } = await api.get(`/modules/${node.id}`);
+      setHistories((previous) => ({
+        ...previous,
+        // The API answers newest first; growth reads better oldest first.
+        [node.id]: { loading: false, items: [...(data.history ?? [])].reverse() },
+      }));
+    } catch (historyError) {
+      setHistories((previous) => ({
+        ...previous,
+        [node.id]: {
+          loading: false,
+          items: [],
+          error: apiError(historyError, 'Could not load these tries.'),
+        },
+      }));
+    }
+  };
 
   const courseScore = (course) => {
     const scored = (trees[course.id] ?? []).filter(
@@ -412,12 +443,14 @@ export default function StudentPerformance() {
                         {subject.topics.map((node) => {
                           const attempted =
                             node.quizType && (node.score > 0 || node.status === 'COMPLETED');
-                          return (
-                            <li
-                              key={node.id}
-                              title={node.status.toLowerCase()}
-                              className="flex items-center gap-2 rounded-lg border border-line bg-card/40 px-2.5 py-1.5 text-[11px]"
-                            >
+                          const expanded = openHistory === node.id;
+                          const history = histories[node.id];
+                          const items = history?.items ?? [];
+                          const delta =
+                            items.length > 1 ? items[items.length - 1].score - items[0].score : 0;
+
+                          const content = (
+                            <>
                               <span
                                 aria-hidden="true"
                                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${
@@ -435,6 +468,84 @@ export default function StudentPerformance() {
                               >
                                 {attempted ? `${node.score}%` : 'not tried'}
                               </span>
+                            </>
+                          );
+
+                          return (
+                            <li
+                              key={node.id}
+                              className="rounded-lg border border-line bg-card/40 px-2.5 py-1.5 text-[11px]"
+                            >
+                              {attempted ? (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleHistory(node)}
+                                  aria-expanded={expanded}
+                                  title={`Show every try for ${node.title}`}
+                                  className="flex w-full items-center gap-2 text-left"
+                                >
+                                  {content}
+                                  <ChevronDown
+                                    size={12}
+                                    className={`shrink-0 text-fg-muted transition-transform duration-150 ${
+                                      expanded ? 'rotate-180' : ''
+                                    }`}
+                                  />
+                                </button>
+                              ) : (
+                                <div
+                                  title={node.status.toLowerCase()}
+                                  className="flex items-center gap-2"
+                                >
+                                  {content}
+                                </div>
+                              )}
+
+                              {expanded && (
+                                <div className="mt-1.5 border-t border-line pt-1.5">
+                                  {history?.loading ? (
+                                    <p className="text-[10px] text-fg-muted">
+                                      Loading these tries…
+                                    </p>
+                                  ) : history?.error ? (
+                                    <p className="text-[10px] text-danger">{history.error}</p>
+                                  ) : (
+                                    <>
+                                      <ol className="flex flex-wrap items-center gap-1.5">
+                                        {items.map((attempt, index) => (
+                                          <li
+                                            key={`${node.id}-${index}`}
+                                            className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${
+                                              attempt.passed
+                                                ? 'border-success/30 bg-success/[0.08] text-success'
+                                                : 'border-warning/30 bg-warning/[0.08] text-warning'
+                                            }`}
+                                          >
+                                            <span className="tabular-nums">
+                                              {attempt.score}%
+                                            </span>
+                                            <span className="font-normal opacity-70">
+                                              {new Date(attempt.at).toLocaleDateString(
+                                                undefined,
+                                                { day: 'numeric', month: 'short' },
+                                              )}
+                                            </span>
+                                          </li>
+                                        ))}
+                                      </ol>
+                                      <p className="mt-1 text-[10px] text-fg-subtle">
+                                        {delta > 0
+                                          ? `Improved ${delta} points from first to latest.`
+                                          : delta < 0
+                                            ? `${Math.abs(delta)} points down from first to latest.`
+                                            : 'Oldest first.'}
+                                        {node.attempts > items.length &&
+                                          ` Showing the last ${items.length} of ${node.attempts}.`}
+                                      </p>
+                                    </>
+                                  )}
+                                </div>
+                              )}
                             </li>
                           );
                         })}
