@@ -16,10 +16,10 @@ import {
   Sparkles,
   Wand2,
 } from 'lucide-react';
+import CourseDetailsDialog from '../components/studio/CourseDetailsDialog.jsx';
 import LessonEditor from '../components/studio/LessonEditor.jsx';
 import NodeEditorDialog from '../components/studio/NodeEditorDialog.jsx';
 import VideoUploader from '../components/studio/VideoUploader.jsx';
-import { useAuth } from '../context/AuthContext.jsx';
 import { generateCourse as requestGeneratedCourse, getAiStatus } from '../services/ai.js';
 import api, { apiError } from '../services/api.js';
 import { EMPTY_LESSON, lessonPayload } from '../services/lesson.js';
@@ -103,8 +103,6 @@ function StepFooter({ onBack, backLabel, onNext, nextLabel }) {
 }
 
 export default function InstructorStudio() {
-  const { user } = useAuth();
-
   const [courses, setCourses] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [nodes, setNodes] = useState([]);
@@ -124,6 +122,7 @@ export default function InstructorStudio() {
     content: EMPTY_LESSON,
   });
   const [editingNode, setEditingNode] = useState(null);
+  const [editingCourse, setEditingCourse] = useState(false);
   const [quizForm, setQuizForm] = useState({
     moduleId: '',
     type: 'MULTIPLE_CHOICE',
@@ -437,15 +436,24 @@ export default function InstructorStudio() {
               </p>
             </div>
           </div>
-          <span
-            className={`chip ${
-              selectedCourse.published
-                ? 'border-success/30 text-success'
-                : 'border-warning/30 text-warning'
-            }`}
-          >
-            {selectedCourse.published ? 'live' : 'draft'}
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setEditingCourse(true)}
+              className="btn-ghost text-[11px]"
+            >
+              <PencilLine size={13} /> Edit details
+            </button>
+            <span
+              className={`chip ${
+                selectedCourse.published
+                  ? 'border-success/30 text-success'
+                  : 'border-warning/30 text-warning'
+              }`}
+            >
+              {selectedCourse.published ? 'live' : 'draft'}
+            </span>
+          </div>
         </div>
       )}
 
@@ -671,54 +679,22 @@ export default function InstructorStudio() {
                 </div>
               </div>
 
-              <div className="panel p-5">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <ListTree size={15} className="text-rune-text" /> Your courses
-                </h2>
-
-                <div className="mt-3 space-y-2">
-                  {courses.length === 0 && (
-                    <p className="text-xs text-fg-subtle">
-                      No courses yet — create your first draft.
+              <div className="panel flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-muted text-rune-text">
+                    <ListTree size={15} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">All your courses</p>
+                    <p className="text-[11px] text-fg-subtle">
+                      {courses.length} course{courses.length === 1 ? '' : 's'} · switch course,
+                      edit details or start another
                     </p>
-                  )}
-                  {courses.map((course) => {
-                    const active = course.id === selectedId;
-                    const owned = course.instructorId === user.id || user.role === 'ADMIN';
-                    return (
-                      <button
-                        key={course.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedId(course.id);
-                          goTo('nodes');
-                        }}
-                        className={`flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
-                          active
-                            ? 'border-gold/50 bg-gold/10'
-                            : 'border-white/10 bg-white/[0.03] hover:border-white/25'
-                        }`}
-                      >
-                        <span>{course.emoji || '🗺️'}</span>
-                        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-100">
-                          {course.title}
-                        </span>
-                        <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
-                          {course.moduleCount} nodes{owned ? '' : ' · read only'}
-                        </span>
-                        <span
-                          className={`chip px-1.5 py-0.5 text-[9px] ${
-                            course.published
-                              ? 'border-success/30 text-success'
-                              : 'border-warning/30 text-warning'
-                          }`}
-                        >
-                          {course.published ? 'live' : 'draft'}
-                        </span>
-                      </button>
-                    );
-                  })}
+                  </div>
                 </div>
+                <Link to="/studio/courses" className="btn-ghost shrink-0 text-xs">
+                  Open library <ArrowRight size={14} />
+                </Link>
               </div>
             </>
           )}
@@ -1154,6 +1130,20 @@ export default function InstructorStudio() {
             nextLabel={nextStep ? `Next: ${nextStep.label}` : null}
           />
         </div>
+      )}
+
+      {editingCourse && selectedCourse && (
+        <CourseDetailsDialog
+          course={selectedCourse}
+          onClose={() => setEditingCourse(false)}
+          onSaved={(saved) => {
+            setCourses((previous) =>
+              previous.map((course) => (course.id === saved.id ? saved : course)),
+            );
+            setEditingCourse(false);
+            notify('success', `"${saved.title}" updated.`);
+          }}
+        />
       )}
 
       {editingNode && (

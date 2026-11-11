@@ -3,6 +3,7 @@ package com.questlearn.service;
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.CourseDto;
 import com.questlearn.dto.CourseRequest;
+import com.questlearn.dto.CourseUpdateRequest;
 import com.questlearn.dto.ModuleRequest;
 import com.questlearn.dto.ModuleUpdateRequest;
 import com.questlearn.dto.QuizRequest;
@@ -85,6 +86,28 @@ public class CourseService {
                 .build();
 
         return toCourseDto(courseRepository.save(course), principal);
+    }
+
+    @Transactional
+    public CourseDto updateCourse(Long courseId, CourseUpdateRequest request, AppUserPrincipal principal) {
+        Course course = loadCourse(courseId);
+        assertCanManage(course, principal);
+
+        course.setTitle(request.title().trim());
+        course.setDescription(blankToNull(request.description()));
+        course.setCategory(blankToNull(request.category()));
+        String emoji = request.emoji() == null ? "" : request.emoji().trim();
+        course.setEmoji(emoji.isEmpty() ? "🗺️" : emoji);
+
+        return toCourseDto(courseRepository.save(course), principal);
+    }
+
+    private static String blankToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     @Transactional

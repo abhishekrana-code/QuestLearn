@@ -3,6 +3,7 @@ package com.questlearn.controller;
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.CourseDto;
 import com.questlearn.dto.CourseRequest;
+import com.questlearn.dto.CourseUpdateRequest;
 import com.questlearn.dto.ModuleRequest;
 import com.questlearn.dto.ModuleUpdateRequest;
 import com.questlearn.dto.QuizRequest;
@@ -57,6 +58,15 @@ public class CourseController {
     public CourseDto createCourse(@Valid @RequestBody CourseRequest request,
                                   @AuthenticationPrincipal AppUserPrincipal principal) {
         return courseService.createCourse(request, principal);
+    }
+
+    @PutMapping("/courses/{courseId}")
+    @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
+    @Operation(summary = "Edit a course's title, description, category and emoji")
+    public CourseDto updateCourse(@PathVariable Long courseId,
+                                  @Valid @RequestBody CourseUpdateRequest request,
+                                  @AuthenticationPrincipal AppUserPrincipal principal) {
+        return courseService.updateCourse(courseId, request, principal);
     }
 
     @PatchMapping("/courses/{courseId}/publish")

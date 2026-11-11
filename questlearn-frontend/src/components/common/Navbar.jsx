@@ -10,9 +10,13 @@ const LINKS_BY_ROLE = {
     { to: '/dashboard', label: 'Dashboard' },
     { to: '/leaderboard', label: 'Leaderboard' },
   ],
-  INSTRUCTOR: [{ to: '/studio', label: 'Course Studio' }],
+  INSTRUCTOR: [
+    { to: '/studio/courses', label: 'My courses' },
+    { to: '/studio', label: 'Course Studio', end: true },
+  ],
   ADMIN: [
-    { to: '/studio', label: 'Course Studio' },
+    { to: '/studio/courses', label: 'My courses' },
+    { to: '/studio', label: 'Course Studio', end: true },
     { to: '/admin', label: 'Admin' },
     { to: '/leaderboard', label: 'Leaderboard' },
   ],
@@ -57,6 +61,7 @@ export default function Navbar() {
             <NavLink
               key={link.to}
               to={link.to}
+              end={link.end}
               className={({ isActive }) =>
                 `whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors duration-150 ${
                   isActive
