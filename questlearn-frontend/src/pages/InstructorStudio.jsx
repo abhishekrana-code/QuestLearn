@@ -8,6 +8,7 @@ import {
   EyeOff,
   FilePlus2,
   Film,
+  Link2,
   ListTree,
   PencilLine,
   Plus,
@@ -111,6 +112,7 @@ export default function InstructorStudio() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [copied, setCopied] = useState(false);
   const [courseForm, setCourseForm] = useState(EMPTY_COURSE);
   const [moduleForm, setModuleForm] = useState({
     title: '',
@@ -148,8 +150,30 @@ export default function InstructorStudio() {
     if (id === STEP_IDS[0]) params.delete('step');
     else params.set('step', id);
     setSearchParams(params, { replace: true });
+    setCopied(false);
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  /** Builds a link to this step and course, so a shared link reopens the same screen. */
+  const copyStepLink = async () => {
+    const params = new URLSearchParams();
+    if (step !== STEP_IDS[0]) params.set('step', step);
+    if (selectedId) params.set('course', selectedId);
+    const query = params.toString();
+    const url = `${window.location.origin}/studio${query ? `?${query}` : ''}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      notify('error', 'This browser blocked the clipboard - copy the address bar instead.');
+    }
+  };
+
+  useEffect(() => {
+    if (!copied) return undefined;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
 
   const loadCourses = useCallback(async (preferredId) => {
     const { data } = await api.get('/courses');
@@ -172,8 +196,13 @@ export default function InstructorStudio() {
     (async () => {
       try {
         const data = await loadCourses();
-        if (!cancelled && data[0]) {
-          await loadNodes(data[0].id);
+        const sharedParam = new URLSearchParams(window.location.search).get('course');
+        const shared = sharedParam
+          ? data.find((course) => String(course.id) === sharedParam)
+          : null;
+        if (!cancelled && shared) setSelectedId(shared.id);
+        if (!cancelled && (shared ?? data[0])) {
+          await loadNodes((shared ?? data[0]).id);
         }
       } catch (error) {
         if (!cancelled) notify('error', apiError(error, 'Could not load your courses.'));
@@ -466,7 +495,18 @@ export default function InstructorStudio() {
         </div>
       ) : (
         <div className="space-y-4">
-          <p className="text-xs text-fg-subtle">{STEPS[stepIndex].hint}</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-fg-subtle">{STEPS[stepIndex].hint}</p>
+            <button
+              type="button"
+              onClick={copyStepLink}
+              aria-label={`Copy a link to the ${STEPS[stepIndex].label} step`}
+              className="btn-ghost shrink-0 text-[11px]"
+            >
+              {copied ? <Check size={13} /> : <Link2 size={13} />}
+              {copied ? 'Link copied' : 'Copy link'}
+            </button>
+          </div>
 
           {step === 'course' && (
             <>
