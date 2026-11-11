@@ -69,7 +69,7 @@ export default function SkillNode({ node, x, y, active, onSelect, onLockedClick 
         )}
 
         {completed && (
-          <span className="absolute -top-1 -right-1 rounded-full border border-gold/50 bg-ink-900 px-1.5 py-0.5 text-[9px] font-bold text-gold">
+          <span className="absolute -top-1 -right-1 rounded-full border border-gold/50 bg-ink-900 px-1.5 py-0.5 text-[9px] font-bold text-gold-text">
             {node.score}%
           </span>
         )}
@@ -79,7 +79,7 @@ export default function SkillNode({ node, x, y, active, onSelect, onLockedClick 
         <p className={`text-xs font-semibold leading-tight ${locked ? 'text-fg-subtle' : 'text-foreground'}`}>
           {node.title}
         </p>
-        <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gold/80">
+        <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gold-text">
           +{node.xpReward} XP
         </p>
         {locked && (

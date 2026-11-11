@@ -81,7 +81,7 @@ export default function NodeEditorDialog({ node, onClose, onSaved }) {
   const canSave = Boolean(form && form.title.trim().length > 0) && !saving;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto p-3 sm:items-center sm:p-6">
       <button
         type="button"
         aria-label="Close the node editor"
@@ -95,7 +95,7 @@ export default function NodeEditorDialog({ node, onClose, onSaved }) {
         initial={{ opacity: 0, y: 26, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        className="panel-raised relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden shadow-raised"
+        className="panel-raised relative flex max-h-full w-full max-w-2xl flex-col overflow-hidden shadow-raised"
       >
         <div className="flex items-start gap-3 border-b border-line px-4 py-3.5 sm:px-5">
           <span className="mt-0.5 grid h-8 w-8 place-items-center rounded-lg border border-gold/30 bg-gold/[0.12] text-gold-text">

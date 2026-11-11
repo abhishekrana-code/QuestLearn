@@ -65,7 +65,7 @@ export default function Register() {
           </span>
           <span className="leading-none">
             <span className="block font-display text-lg font-extrabold tracking-[-0.045em] text-foreground">
-              Quest<span className="text-gold">Learn</span>
+              Quest<span className="text-gold-text">Learn</span>
             </span>
             <span className="mt-1.5 block text-[9px] font-semibold uppercase tracking-[0.19em] text-fg-subtle">
               Playable curriculum

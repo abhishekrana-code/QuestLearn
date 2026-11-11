@@ -32,6 +32,9 @@
   /* Same reason as the primary fill: --arcane stays bright for icons, the
      button fill is dark enough for a white label. */
   --btn-arcane-fill: 277 76% 56%;
+  /* Accent surface that carries white ink (selected answers, primary fills).
+     --gold stays brighter because it is also used as type on dark surfaces. */
+  --accent-fill: 246 88% 62%;
   --arcane: 277 82% 70%;
   --arcane-soft: 278 90% 82%;
   --arcane-text: 278 90% 82%;
@@ -85,6 +88,7 @@
   --btn-primary-from: 247 76% 56%;
   --btn-primary-to: 263 70% 50%;
   --btn-arcane-fill: 278 65% 56%;
+  --accent-fill: 247 76% 56%;
   --arcane: 278 65% 56%;
   --arcane-soft: 278 65% 66%;
   --arcane-text: 278 58% 42%;

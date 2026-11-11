@@ -24,7 +24,7 @@ import api, { apiError } from '../services/api.js';
 import { isPlayableVideo } from '../services/media.js';
 
 const STATUS_STYLE = {
-  COMPLETED: 'border-gold/50 bg-gold/10 text-gold',
+  COMPLETED: 'border-gold/50 bg-gold/10 text-gold-text',
   UNLOCKED: 'border-rune/40 bg-rune/10 text-rune',
   LOCKED: 'border-line bg-muted text-fg-muted',
 };
@@ -289,7 +289,7 @@ export default function SkillTreePage() {
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`chip ${STATUS_STYLE[detail.status]}`}>{detail.status}</span>
-                    <span className="chip border-gold/25 text-gold">+{detail.xpReward} XP</span>
+                    <span className="chip border-gold/25 text-gold-text">+{detail.xpReward} XP</span>
                     {detail.status === 'COMPLETED' && (
                       <span className="chip border-success/30 text-success">
                         {detail.score}% scored
@@ -406,7 +406,7 @@ export default function SkillTreePage() {
                               <Crown size={18} />
                             </span>
                             <div className="min-w-0 flex-1">
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-gold/70">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-gold-text">
                                 Boss battle · voice viva
                               </p>
                               <h4 className="font-display text-sm font-bold text-slate-50">
