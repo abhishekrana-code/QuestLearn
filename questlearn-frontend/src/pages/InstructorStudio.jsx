@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
   Eye,
   EyeOff,
   FilePlus2,
+  Film,
   ListTree,
   PencilLine,
   Plus,
@@ -59,6 +63,41 @@ const QUIZ_TEMPLATES = {
 
 const EMPTY_COURSE = { title: '', description: '', category: '', emoji: '🗺️' };
 
+/**
+ * One job per screen.
+ *
+ * <p>The studio used to stack every form on a single page, which buried the next
+ * action under four panels. Each step below owns one task and offers a single
+ * "next", so a teacher always knows where they are and what to do next.</p>
+ */
+const STEPS = [
+  { id: 'course', label: 'Course', hint: 'Pick a course or start a new one.' },
+  { id: 'nodes', label: 'Nodes', hint: 'Add the skill nodes and link them in order.' },
+  { id: 'quiz', label: 'Quiz', hint: 'Attach one micro-quiz to each node.' },
+  { id: 'media', label: 'Videos', hint: 'Optionally add a lesson video per node.' },
+  { id: 'publish', label: 'Publish', hint: 'Preview it, then make it live for students.' },
+];
+
+function StepFooter({ onBack, backLabel, onNext, nextLabel }) {
+  if (!onBack && !onNext) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 pt-1">
+      {onBack ? (
+        <button type="button" onClick={onBack} className="btn-ghost text-xs">
+          <ArrowLeft size={14} /> {backLabel}
+        </button>
+      ) : (
+        <span />
+      )}
+      {onNext ? (
+        <button type="button" onClick={onNext} className="btn-primary text-xs">
+          {nextLabel} <ArrowRight size={14} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export default function InstructorStudio() {
   const { user } = useAuth();
 
@@ -68,6 +107,7 @@ export default function InstructorStudio() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
+  const [step, setStep] = useState('course');
   const [courseForm, setCourseForm] = useState(EMPTY_COURSE);
   const [moduleForm, setModuleForm] = useState({
     title: '',
@@ -95,6 +135,11 @@ export default function InstructorStudio() {
   );
 
   const notify = (type, text) => setMessage({ type, text });
+
+  const goTo = (id) => {
+    setStep(id);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const loadCourses = useCallback(async (preferredId) => {
     const { data } = await api.get('/courses');
@@ -160,6 +205,7 @@ export default function InstructorStudio() {
       await loadCourses(data.id);
       await loadNodes(data.id);
       notify('success', `Draft "${data.title}" created. Add nodes, then publish it.`);
+      goTo('nodes');
     } catch (error) {
       notify('error', apiError(error, 'Could not create the course.'));
     } finally {
@@ -187,6 +233,7 @@ export default function InstructorStudio() {
         `Drafted "${draft.title}" with ${draft.nodeCount} node(s). Review it, then publish.` +
           (warnings.length > 0 ? ` ${warnings[0]}` : ''),
       );
+      goTo('nodes');
     } catch (error) {
       notify('error', apiError(error, 'The AI could not draft that course.'));
     } finally {
@@ -300,14 +347,20 @@ export default function InstructorStudio() {
     );
   }
 
+  const stepIndex = STEPS.findIndex((item) => item.id === step);
+  const quizzed = nodes.filter((node) => node.quizType).length;
+  const withVideo = nodes.filter((node) => node.videoUrl).length;
+  const prevStep = stepIndex > 0 ? STEPS[stepIndex - 1] : null;
+  const nextStep = stepIndex < STEPS.length - 1 ? STEPS[stepIndex + 1] : null;
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <header className="mb-7">
+      <header className="mb-6">
         <p className="eyebrow">Course studio</p>
         <h1 className="page-title mt-2">Build the quest map</h1>
         <p className="page-subtitle mt-1.5 max-w-2xl">
-          Create a course, link nodes as a tree, then attach a lesson, a video and a quiz to each
-          node.
+          Five short steps. Each one asks for a single thing, so nothing is buried and nothing is
+          skipped by accident.
         </p>
       </header>
 
@@ -330,253 +383,305 @@ export default function InstructorStudio() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[330px_1fr]">
-        <aside className="min-w-0 space-y-4">
-          <div className="panel p-5">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Wand2 size={15} className="text-arcane-text" /> AI quest builder
-            </h2>
-
-            {aiStatus && !aiStatus.configured ? (
-              <p className="mt-3 text-xs leading-relaxed text-slate-400">
-                {aiStatus.unreachable
-                  ? 'The AI status endpoint is unreachable - is the API running?'
-                  : 'Add GROQ_API_KEY to questlearn-backend/.env and restart the API to draft a whole quest from one sentence.'}
+      {selectedCourse && (
+        <div className="panel mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-muted text-base">
+              {selectedCourse.emoji || '🗺️'}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground">
+                {selectedCourse.title}
               </p>
-            ) : (
-              <form onSubmit={generateWithAi} className="mt-4 space-y-3">
-                <div>
-                  <label className="label" htmlFor="ai-topic">
-                    Topic
-                  </label>
-                  <textarea
-                    id="ai-topic"
-                    required
-                    rows={2}
-                    className="field resize-none"
-                    placeholder="Graph algorithms for beginners: BFS, DFS, shortest paths"
-                    value={aiForm.topic}
-                    onChange={(event) => setAiForm({ ...aiForm, topic: event.target.value })}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="label" htmlFor="ai-audience">
-                      Audience
-                    </label>
-                    <input
-                      id="ai-audience"
-                      className="field"
-                      placeholder="First-year CS"
-                      value={aiForm.audience}
-                      onChange={(event) => setAiForm({ ...aiForm, audience: event.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="label" htmlFor="ai-nodes">
-                      Nodes
-                    </label>
-                    <select
-                      id="ai-nodes"
-                      className="field"
-                      value={aiForm.nodeCount}
-                      onChange={(event) =>
-                        setAiForm({ ...aiForm, nodeCount: Number(event.target.value) })
-                      }
-                    >
-                      {[3, 4, 5, 6, 7, 8].map((count) => (
-                        <option key={count} value={count}>
-                          {count}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <button type="submit" disabled={generating || busy} className="btn-arcane w-full">
-                  <Sparkles size={15} />
-                  {generating ? 'Drafting your quest…' : 'Generate draft quest'}
-                </button>
-                <p className="text-[10px] leading-relaxed text-fg-subtle">
-                  Each node gets lesson sections, takeaways, a multiple-choice quiz and a voice
-                  viva. Generates as a draft you can edit.
-                </p>
-              </form>
-            )}
-          </div>
-
-          <form onSubmit={createCourse} className="panel-raised p-5">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <FilePlus2 size={15} className="text-gold-text" /> New course
-            </h2>
-
-            <div className="mt-4 space-y-3">
-              <div>
-                <label className="label" htmlFor="course-title">
-                  Title
-                </label>
-                <input
-                  id="course-title"
-                  required
-                  className="field"
-                  placeholder="Data Structures Dungeon"
-                  value={courseForm.title}
-                  onChange={(event) =>
-                    setCourseForm({ ...courseForm, title: event.target.value })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="label" htmlFor="course-description">
-                  Description
-                </label>
-                <textarea
-                  id="course-description"
-                  rows={3}
-                  className="field resize-none"
-                  placeholder="What will students conquer?"
-                  value={courseForm.description}
-                  onChange={(event) =>
-                    setCourseForm({ ...courseForm, description: event.target.value })
-                  }
-                />
-              </div>
-
-              <div className="grid grid-cols-[1fr_84px] gap-3">
-                <div>
-                  <label className="label" htmlFor="course-category">
-                    Category
-                  </label>
-                  <input
-                    id="course-category"
-                    className="field"
-                    placeholder="Computer Science"
-                    value={courseForm.category}
-                    onChange={(event) =>
-                      setCourseForm({ ...courseForm, category: event.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="label" htmlFor="course-emoji">
-                    Emoji
-                  </label>
-                  <input
-                    id="course-emoji"
-                    maxLength={4}
-                    className="field text-center"
-                    value={courseForm.emoji}
-                    onChange={(event) =>
-                      setCourseForm({ ...courseForm, emoji: event.target.value })
-                    }
-                  />
-                </div>
-              </div>
-
-              <button type="submit" disabled={busy} className="btn-arcane w-full">
-                <Plus size={15} /> Create draft
-              </button>
+              <p className="text-[11px] text-fg-subtle">
+                {nodes.length} nodes · {quizzed} with a quiz · {withVideo} with a video
+              </p>
             </div>
-          </form>
+          </div>
+          <span
+            className={`chip ${
+              selectedCourse.published
+                ? 'border-success/30 text-success'
+                : 'border-warning/30 text-warning'
+            }`}
+          >
+            {selectedCourse.published ? 'live' : 'draft'}
+          </span>
+        </div>
+      )}
 
-          <div className="panel p-5">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <ListTree size={15} className="text-rune-text" /> Your courses
-            </h2>
+      <nav aria-label="Studio steps" className="mb-5 flex gap-1.5 overflow-x-auto pb-1">
+        {STEPS.map((item, index) => {
+          const active = item.id === step;
+          const locked = !selectedCourse && item.id !== 'course';
+          return (
+            <button
+              key={item.id}
+              type="button"
+              disabled={locked}
+              aria-current={active ? 'step' : undefined}
+              onClick={() => goTo(item.id)}
+              className={`flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                active
+                  ? 'border-gold/50 bg-gold/[0.12] text-gold-text'
+                  : locked
+                    ? 'cursor-not-allowed border-line text-fg-subtle opacity-60'
+                    : 'border-line text-fg-muted hover:border-line-strong hover:text-foreground'
+              }`}
+            >
+              <span
+                className={`grid h-5 w-5 place-items-center rounded-full text-[10px] font-bold ${
+                  active ? 'bg-gold text-[hsl(var(--primary-foreground))]' : 'bg-muted text-fg-muted'
+                }`}
+              >
+                {index + 1}
+              </span>
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
 
-            <div className="mt-3 space-y-2">
-              {courses.length === 0 && (
-                <p className="text-xs text-fg-subtle">No courses yet — create your first draft.</p>
-              )}
-              {courses.map((course) => {
-                const active = course.id === selectedId;
-                const owned = course.instructorId === user.id || user.role === 'ADMIN';
-                return (
-                  <button
-                    key={course.id}
-                    type="button"
-                    onClick={() => setSelectedId(course.id)}
-                    className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
-                      active
-                        ? 'border-gold/50 bg-gold/10'
-                        : 'border-white/10 bg-white/[0.03] hover:border-white/25'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>{course.emoji || '🗺️'}</span>
-                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-100">
-                        {course.title}
-                      </span>
-                      <span
-                        className={`chip px-1.5 py-0.5 text-[9px] ${
-                          course.published
-                            ? 'border-success/30 text-success'
-                            : 'border-warning/30 text-warning'
+      {!selectedCourse && step !== 'course' ? (
+        <div className="panel grid min-h-[240px] place-items-center p-8 text-center">
+          <div>
+            <p className="text-sm font-medium text-foreground">Pick a course first</p>
+            <p className="mt-1 text-xs text-fg-subtle">
+              Everything else in the studio belongs to one course.
+            </p>
+            <button type="button" onClick={() => goTo('course')} className="btn-primary mt-4 text-xs">
+              <ArrowLeft size={14} /> Back to step 1
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-xs text-fg-subtle">{STEPS[stepIndex].hint}</p>
+
+          {step === 'course' && (
+            <>
+              <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+                <form onSubmit={createCourse} className="panel-raised p-5">
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <FilePlus2 size={15} className="text-gold-text" /> New course
+                  </h2>
+                  <p className="mt-1 text-[11px] text-fg-subtle">
+                    A draft is private until you publish it in the last step.
+                  </p>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <label className="label" htmlFor="course-title">
+                        Title
+                      </label>
+                      <input
+                        id="course-title"
+                        required
+                        className="field"
+                        placeholder="Data Structures Dungeon"
+                        value={courseForm.title}
+                        onChange={(event) =>
+                          setCourseForm({ ...courseForm, title: event.target.value })
+                        }
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="label" htmlFor="course-description">
+                        Description
+                      </label>
+                      <textarea
+                        id="course-description"
+                        rows={2}
+                        className="field resize-none"
+                        placeholder="What will students conquer?"
+                        value={courseForm.description}
+                        onChange={(event) =>
+                          setCourseForm({ ...courseForm, description: event.target.value })
+                        }
+                      />
+                    </div>
+
+                    <div>
+                      <label className="label" htmlFor="course-category">
+                        Category
+                      </label>
+                      <input
+                        id="course-category"
+                        className="field"
+                        placeholder="Computer Science"
+                        value={courseForm.category}
+                        onChange={(event) =>
+                          setCourseForm({ ...courseForm, category: event.target.value })
+                        }
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-[1fr_84px] gap-3">
+                      <div>
+                        <label className="label" htmlFor="course-emoji">
+                          Emoji
+                        </label>
+                        <input
+                          id="course-emoji"
+                          maxLength={4}
+                          className="field text-center"
+                          value={courseForm.emoji}
+                          onChange={(event) =>
+                            setCourseForm({ ...courseForm, emoji: event.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button type="submit" disabled={busy} className="btn-arcane mt-4 w-full">
+                    <Plus size={15} /> Create draft
+                  </button>
+                </form>
+
+                <div className="panel p-5">
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Wand2 size={15} className="text-arcane-text" /> AI quest builder
+                  </h2>
+
+                  {aiStatus && !aiStatus.configured ? (
+                    <p className="mt-3 text-xs leading-relaxed text-slate-400">
+                      {aiStatus.unreachable
+                        ? 'The AI status endpoint is unreachable - is the API running?'
+                        : 'Add GROQ_API_KEY to questlearn-backend/.env and restart the API to draft a whole quest from one sentence.'}
+                    </p>
+                  ) : (
+                    <form onSubmit={generateWithAi} className="mt-3 space-y-3">
+                      <div>
+                        <label className="label" htmlFor="ai-topic">
+                          Topic
+                        </label>
+                        <textarea
+                          id="ai-topic"
+                          required
+                          rows={2}
+                          className="field resize-none"
+                          placeholder="Graph algorithms for beginners: BFS, DFS"
+                          value={aiForm.topic}
+                          onChange={(event) => setAiForm({ ...aiForm, topic: event.target.value })}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="label" htmlFor="ai-audience">
+                            Audience
+                          </label>
+                          <input
+                            id="ai-audience"
+                            className="field"
+                            placeholder="First-year CS"
+                            value={aiForm.audience}
+                            onChange={(event) =>
+                              setAiForm({ ...aiForm, audience: event.target.value })
+                            }
+                          />
+                        </div>
+                        <div>
+                          <label className="label" htmlFor="ai-nodes">
+                            Nodes
+                          </label>
+                          <select
+                            id="ai-nodes"
+                            className="field"
+                            value={aiForm.nodeCount}
+                            onChange={(event) =>
+                              setAiForm({ ...aiForm, nodeCount: Number(event.target.value) })
+                            }
+                          >
+                            {[3, 4, 5, 6, 7, 8].map((count) => (
+                              <option key={count} value={count}>
+                                {count}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={generating || busy}
+                        className="btn-arcane w-full"
+                      >
+                        <Sparkles size={15} />
+                        {generating ? 'Drafting your quest…' : 'Generate draft quest'}
+                      </button>
+                      <p className="text-[10px] leading-relaxed text-fg-subtle">
+                        Writes lesson sections, takeaways, a quiz and a voice viva per node. It
+                        arrives as a draft you can edit.
+                      </p>
+                    </form>
+                  )}
+                </div>
+              </div>
+
+              <div className="panel p-5">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <ListTree size={15} className="text-rune-text" /> Your courses
+                </h2>
+
+                <div className="mt-3 space-y-2">
+                  {courses.length === 0 && (
+                    <p className="text-xs text-fg-subtle">
+                      No courses yet — create your first draft.
+                    </p>
+                  )}
+                  {courses.map((course) => {
+                    const active = course.id === selectedId;
+                    const owned = course.instructorId === user.id || user.role === 'ADMIN';
+                    return (
+                      <button
+                        key={course.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedId(course.id);
+                          goTo('nodes');
+                        }}
+                        className={`flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition ${
+                          active
+                            ? 'border-gold/50 bg-gold/10'
+                            : 'border-white/10 bg-white/[0.03] hover:border-white/25'
                         }`}
                       >
-                        {course.published ? 'live' : 'draft'}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[10px] uppercase tracking-wider text-fg-subtle">
-                      {course.moduleCount} nodes{owned ? '' : ' · read only'}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </aside>
-
-        <section className="min-w-0 space-y-4">
-          {!selectedCourse ? (
-            <div className="panel grid min-h-[240px] place-items-center p-8 text-sm text-slate-400">
-              Select or create a course to start mapping nodes.
-            </div>
-          ) : (
-            <>
-              <div className="panel-raised flex flex-wrap items-center justify-between gap-4 p-5">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-display text-xl font-bold text-slate-50">
-                      {selectedCourse.title}
-                    </h2>
-                    <span
-                      className={`chip ${
-                        selectedCourse.published
-                          ? 'border-success/30 text-success'
-                          : 'border-warning/30 text-warning'
-                      }`}
-                    >
-                      {selectedCourse.published ? 'published' : 'draft'}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {selectedCourse.moduleCount} nodes · {selectedCourse.category || 'uncategorised'}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Link to={`/courses/${selectedCourse.id}`} className="btn-ghost px-3 py-2 text-xs">
-                    <Eye size={14} /> Preview
-                  </Link>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => togglePublish(selectedCourse)}
-                    className={selectedCourse.published ? 'btn-danger px-3 py-2 text-xs' : 'btn-primary px-3 py-2 text-xs'}
-                  >
-                    {selectedCourse.published ? <EyeOff size={14} /> : <Eye size={14} />}
-                    {selectedCourse.published ? 'Unpublish' : 'Publish'}
-                  </button>
+                        <span>{course.emoji || '🗺️'}</span>
+                        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-100">
+                          {course.title}
+                        </span>
+                        <span className="text-[10px] uppercase tracking-wider text-fg-subtle">
+                          {course.moduleCount} nodes{owned ? '' : ' · read only'}
+                        </span>
+                        <span
+                          className={`chip px-1.5 py-0.5 text-[9px] ${
+                            course.published
+                              ? 'border-success/30 text-success'
+                              : 'border-warning/30 text-warning'
+                          }`}
+                        >
+                          {course.published ? 'live' : 'draft'}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+            </>
+          )}
 
+          {step === 'nodes' && selectedCourse && (
+            <>
               <form onSubmit={addModule} className="panel-raised p-5">
-                <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   <Plus size={15} className="text-gold-text" /> Add a skill node
-                </h3>
+                </h2>
+                <p className="mt-1 text-[11px] text-fg-subtle">
+                  A node is one lesson plus one quiz. Link it to a prerequisite to build the tree.
+                </p>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <div className="sm:col-span-2">
@@ -694,10 +799,72 @@ export default function InstructorStudio() {
                 </button>
               </form>
 
+              <div className="panel p-5">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <ListTree size={15} className="text-rune-text" /> Nodes in this course
+                </h2>
+                {nodes.length === 0 ? (
+                  <p className="mt-2 text-xs text-fg-subtle">
+                    No nodes yet. Add the first one above.
+                  </p>
+                ) : (
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="border-b border-line text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
+                        <tr>
+                          <th className="pb-2 pr-3 font-semibold">Node</th>
+                          <th className="pb-2 pr-3 font-semibold">Prerequisite</th>
+                          <th className="pb-2 pr-3 font-semibold">Pos</th>
+                          <th className="pb-2 pr-3 font-semibold">XP</th>
+                          <th className="pb-2 pr-3 font-semibold">Quiz</th>
+                          <th className="pb-2 text-right font-semibold">Edit</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line">
+                        {nodes.map((node) => (
+                          <tr key={node.id} className="transition-colors hover:bg-muted/40">
+                            <td className="py-2 pr-3 font-medium text-foreground">{node.title}</td>
+                            <td className="py-2 pr-3 text-fg-muted">
+                              {nodes.find((candidate) => candidate.id === node.parentId)?.title ??
+                                '—'}
+                            </td>
+                            <td className="py-2 pr-3 tabular-nums text-fg-subtle">
+                              {node.positionX},{node.positionY}
+                            </td>
+                            <td className="py-2 pr-3 font-semibold tabular-nums text-gold-text">
+                              {node.xpReward}
+                            </td>
+                            <td className="py-2 pr-3 text-fg-muted">{node.quizType ?? 'none'}</td>
+                            <td className="py-2 text-right">
+                              <button
+                                type="button"
+                                aria-label={`Edit ${node.title}`}
+                                onClick={() => setEditingNode(node)}
+                                className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11px] font-semibold text-fg-muted transition-colors duration-150 hover:border-gold/50 hover:text-gold-text"
+                              >
+                                <PencilLine size={12} /> Edit
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {step === 'quiz' && selectedCourse && (
+            <>
               <form onSubmit={attachQuiz} className="panel-raised p-5">
-                <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Sparkles size={15} className="text-arcane-text" /> Attach a JSONB quiz
-                </h3>
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Sparkles size={15} className="text-arcane-text" /> Attach a quiz
+                </h2>
+                <p className="mt-1 text-[11px] text-fg-subtle">
+                  Pick a node, choose a question type, then edit the JSON. Answers are scored on the
+                  server.
+                </p>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   <div>
@@ -789,92 +956,163 @@ export default function InstructorStudio() {
                   />
                 </div>
 
-                <button type="submit" disabled={busy || !quizForm.moduleId} className="btn-arcane mt-4">
+                <button
+                  type="submit"
+                  disabled={busy || !quizForm.moduleId}
+                  className="btn-arcane mt-4"
+                >
                   <Save size={15} /> Attach quiz
                 </button>
               </form>
 
               <div className="panel p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-foreground">Lesson videos</h3>
-                  <span className="chip border-line text-fg-muted">drag · upload · link</span>
-                </div>
-                <p className="mt-1 text-[11px] leading-relaxed text-fg-subtle">
-                  Students see this at the top of the node briefing. Drop a file, upload one, or
-                  point at a video that is already hosted somewhere.
-                </p>
+                <h3 className="text-sm font-semibold text-foreground">Quiz coverage</h3>
                 {nodes.length === 0 ? (
-                  <p className="mt-3 text-xs text-fg-subtle">Add a node first.</p>
+                  <p className="mt-2 text-xs text-fg-subtle">
+                    Add nodes first — a quiz belongs to one node.
+                  </p>
                 ) : (
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                     {nodes.map((node) => (
-                      <VideoUploader key={node.id} node={node} onSaved={saveVideo} />
+                      <li
+                        key={node.id}
+                        className="flex items-center gap-2 rounded-lg border border-line bg-card/60 px-3 py-2 text-xs"
+                      >
+                        <span
+                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${
+                            node.quizType ? 'bg-success/15 text-success' : 'bg-muted text-fg-subtle'
+                          }`}
+                        >
+                          {node.quizType ? <Check size={12} /> : '–'}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-foreground">
+                          {node.title}
+                        </span>
+                        <span className="shrink-0 text-[10px] uppercase tracking-wider text-fg-subtle">
+                          {node.quizType ? 'has a quiz' : 'no quiz'}
+                        </span>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
               </div>
-
-              <div className="panel p-5">
-                <h3 className="text-sm font-semibold text-foreground">Node overview</h3>
-                {nodes.length === 0 ? (
-                  <p className="mt-2 text-xs text-fg-subtle">No nodes yet.</p>
-                ) : (
-                  <div className="mt-3 overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className="border-b border-line text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
-                        <tr>
-                          <th className="pb-2 pr-3 font-semibold">Node</th>
-                          <th className="pb-2 pr-3 font-semibold">Prerequisite</th>
-                          <th className="pb-2 pr-3 font-semibold">Pos</th>
-                          <th className="pb-2 pr-3 font-semibold">XP</th>
-                          <th className="pb-2 pr-3 font-semibold">Quiz</th>
-                          <th className="pb-2 text-right font-semibold">Edit</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-line">
-                        {nodes.map((node) => (
-                          <tr key={node.id} className="transition-colors hover:bg-muted/40">
-                            <td className="py-2 pr-3 font-medium text-foreground">{node.title}</td>
-                            <td className="py-2 pr-3 text-fg-muted">
-                              {nodes.find((candidate) => candidate.id === node.parentId)?.title ??
-                                '—'}
-                            </td>
-                            <td className="py-2 pr-3 tabular-nums text-fg-subtle">
-                              {node.positionX},{node.positionY}
-                            </td>
-                            <td className="py-2 pr-3 font-semibold tabular-nums text-gold-text">
-                              {node.xpReward}
-                            </td>
-                            <td className="py-2 pr-3 text-fg-muted">{node.quizType ?? 'none'}</td>
-                            <td className="py-2 text-right">
-                              <button
-                                type="button"
-                                aria-label={`Edit ${node.title}`}
-                                onClick={() => setEditingNode(node)}
-                                className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-1 text-[11px] font-semibold text-fg-muted transition-colors duration-150 hover:border-gold/50 hover:text-gold-text"
-                              >
-                                <PencilLine size={12} /> Edit
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              {editingNode && (
-                <NodeEditorDialog
-                  node={editingNode}
-                  onClose={() => setEditingNode(null)}
-                  onSaved={saveNodeEdits}
-                />
-              )}
             </>
           )}
-        </section>
-      </div>
+
+          {step === 'media' && selectedCourse && (
+            <div className="panel p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Film size={15} className="text-rune-text" /> Lesson videos
+                </h2>
+                <span className="chip border-line text-fg-muted">optional</span>
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-fg-subtle">
+                Students see the video at the top of the node briefing. Drop a file, upload one, or
+                point at a video that is already hosted somewhere.
+              </p>
+              {nodes.length === 0 ? (
+                <p className="mt-3 text-xs text-fg-subtle">Add a node first.</p>
+              ) : (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {nodes.map((node) => (
+                    <VideoUploader key={node.id} node={node} onSaved={saveVideo} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 'publish' && selectedCourse && (
+            <>
+              <div className="panel-raised p-5">
+                <h2 className="font-display text-lg font-bold text-foreground">
+                  {selectedCourse.title}
+                </h2>
+                <p className="mt-1 text-xs text-fg-subtle">
+                  {selectedCourse.moduleCount} nodes · {selectedCourse.category || 'uncategorised'}
+                </p>
+
+                <ul className="mt-4 space-y-2">
+                  {[
+                    {
+                      done: nodes.length > 0,
+                      label:
+                        nodes.length > 0
+                          ? `${nodes.length} node${nodes.length === 1 ? '' : 's'} in the tree`
+                          : 'No nodes yet',
+                    },
+                    {
+                      done: nodes.length > 0 && quizzed === nodes.length,
+                      label: `${quizzed} of ${nodes.length} nodes have a quiz`,
+                    },
+                    {
+                      done: withVideo > 0,
+                      label:
+                        withVideo > 0
+                          ? `${withVideo} node${withVideo === 1 ? '' : 's'} with a lesson video`
+                          : 'No lesson videos (optional)',
+                    },
+                  ].map((item) => (
+                    <li key={item.label} className="flex items-center gap-2 text-xs">
+                      <span
+                        className={`grid h-5 w-5 shrink-0 place-items-center rounded-full ${
+                          item.done ? 'bg-success/15 text-success' : 'bg-muted text-fg-subtle'
+                        }`}
+                      >
+                        {item.done ? <Check size={12} /> : '–'}
+                      </span>
+                      <span className={item.done ? 'text-foreground' : 'text-fg-muted'}>
+                        {item.label}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Link to={`/courses/${selectedCourse.id}`} className="btn-ghost text-xs">
+                    <Eye size={14} /> Preview as a student
+                  </Link>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => togglePublish(selectedCourse)}
+                    className={
+                      selectedCourse.published
+                        ? 'btn-danger text-xs'
+                        : 'btn-primary text-xs'
+                    }
+                  >
+                    {selectedCourse.published ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {selectedCourse.published ? 'Unpublish' : 'Publish to students'}
+                  </button>
+                </div>
+
+                <p className="mt-3 text-[11px] leading-relaxed text-fg-subtle">
+                  {selectedCourse.published
+                    ? 'This course is live. Unpublishing hides it from students without deleting any work.'
+                    : 'Students cannot see a draft. Publish when the tree, quizzes and videos are ready.'}
+                </p>
+              </div>
+            </>
+          )}
+
+          <StepFooter
+            onBack={prevStep ? () => goTo(prevStep.id) : null}
+            backLabel={prevStep ? `Back to ${prevStep.label}` : null}
+            onNext={nextStep ? () => goTo(nextStep.id) : null}
+            nextLabel={nextStep ? `Next: ${nextStep.label}` : null}
+          />
+        </div>
+      )}
+
+      {editingNode && (
+        <NodeEditorDialog
+          node={editingNode}
+          onClose={() => setEditingNode(null)}
+          onSaved={saveNodeEdits}
+        />
+      )}
     </div>
   );
 }
