@@ -42,6 +42,16 @@ function FilterChip({ label, onRemove }) {
   );
 }
 
+const progressOf = (course) =>
+  course.moduleCount > 0 ? course.completedModules / course.moduleCount : 0;
+
+const byNewest = (a, b) =>
+  new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0) || b.id - a.id;
+
+/** Percentage first, so one cleared node of six beats one of twenty. */
+const byProgress = (a, b) =>
+  progressOf(b) - progressOf(a) || b.completedModules - a.completedModules || byNewest(a, b);
+
 function initials(name = '') {
   return name
     .split(' ')
@@ -131,6 +141,8 @@ export default function ExploreCourses() {
     (teacher) => String(teacher.id) === teacherId,
   )?.name;
 
+  const sort = searchParams.get('sort') === 'progress' ? 'progress' : 'newest';
+
   const catalogue = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const matches = (course) => {
@@ -162,12 +174,13 @@ export default function ExploreCourses() {
       teachers: [...groups.values()]
         .map((teacher) => ({
           ...teacher,
+          courses: [...teacher.courses].sort(sort === 'progress' ? byProgress : byNewest),
           nodeTotal: teacher.courses.reduce((sum, course) => sum + course.moduleCount, 0),
           cleared: teacher.courses.reduce((sum, course) => sum + course.completedModules, 0),
         }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     };
-  }, [courses, query, teacherId, subject]);
+  }, [courses, query, teacherId, subject, sort]);
 
   const filtersActive = Boolean(query.trim()) || teacherId !== 'all' || subject !== 'all';
 
@@ -182,6 +195,13 @@ export default function ExploreCourses() {
     const next = new URLSearchParams(searchParams);
     if (!value || value === 'all') next.delete(key);
     else next.set(key, value);
+    setSearchParams(next, { replace: true });
+  };
+
+  const setSort = (value) => {
+    const next = new URLSearchParams(searchParams);
+    if (!value || value === 'newest') next.delete('sort');
+    else next.set('sort', value);
     setSearchParams(next, { replace: true });
   };
 
@@ -288,6 +308,16 @@ export default function ExploreCourses() {
                 {option.name} ({option.count})
               </option>
             ))}
+          </select>
+
+          <select
+            className="field sm:w-40"
+            aria-label="Sort courses"
+            value={sort}
+            onChange={(event) => setSort(event.target.value)}
+          >
+            <option value="newest">Newest first</option>
+            <option value="progress">My progress</option>
           </select>
 
           <label className="relative w-full sm:flex-1">
