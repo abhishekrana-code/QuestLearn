@@ -8,6 +8,7 @@ import StreakCounter from '../gamification/StreakCounter.jsx';
 const LINKS_BY_ROLE = {
   STUDENT: [
     { to: '/dashboard', label: 'Dashboard' },
+    { to: '/explore', label: 'Explore' },
     { to: '/leaderboard', label: 'Leaderboard' },
   ],
   INSTRUCTOR: [
