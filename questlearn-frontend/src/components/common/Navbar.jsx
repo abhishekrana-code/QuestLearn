@@ -44,7 +44,7 @@ export default function Navbar() {
           </span>
           <span className="leading-none">
             <span className="block font-display text-[17px] font-extrabold tracking-[-0.045em] text-foreground">
-              Quest<span className="text-gold">Learn</span>
+              Quest<span className="text-gold-text">Learn</span>
             </span>
             <span className="mt-1 hidden text-[9px] font-semibold uppercase tracking-[0.19em] text-fg-subtle sm:block">
               Playable curriculum

@@ -42,16 +42,22 @@ export default function StudentDashboard() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <section className="relative isolate mb-6 overflow-hidden rounded-xl border border-line bg-card/80 p-6 shadow-card sm:p-7">
+      <section className="hero-aurora relative isolate mb-7 overflow-hidden rounded-[1.65rem] border border-white/10 bg-gradient-to-br from-[#171b37] via-[#171b32] to-[#102b31] p-7 shadow-2xl sm:p-9">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -right-24 -top-32 -z-10 h-72 w-72 rounded-full bg-arcane/[0.10] blur-[90px]"
+          className="pointer-events-none absolute -right-20 -top-28 -z-10 h-80 w-80 rounded-full bg-violet-500/20 blur-[90px]"
         />
         <div className="flex flex-wrap items-end justify-between gap-5">
           <div className="min-w-0">
-            <p className="eyebrow">Adventurer's dashboard</p>
-            <h1 className="page-title mt-2">Welcome back, {user.name.split(' ')[0]}</h1>
-            <p className="page-subtitle mt-2">
+            <p className="text-[11px] font-bold uppercase tracking-[.2em] text-cyan-200/80">
+              Your learning space
+            </p>
+            <h1 className="mt-3 font-display text-3xl font-extrabold tracking-[-.055em] text-white sm:text-4xl">
+              Welcome back, {user.name.split(' ')[0]} <span className="text-cyan-200">✦</span>
+            </h1>
+            {/* Fixed dark hero in both themes, so the copy keeps a light ink
+                instead of the light-theme slate remap. */}
+            <p className="mt-3 text-sm leading-7 text-[#c9cde4]">
               Level {currentLevel} · {totalXp.toLocaleString()} XP · {clearedNodes}/{totalNodes}{' '}
               nodes cleared
             </p>
@@ -92,7 +98,7 @@ export default function StudentDashboard() {
         <section>
           <div className="mb-4 flex items-center gap-2">
             <Map size={16} className="text-gold" />
-            <h2 className="font-display text-lg font-semibold text-slate-50">Your quests</h2>
+            <h2 className="font-display text-xl font-extrabold text-foreground">Continue learning</h2>
           </div>
 
           {loading ? (
@@ -118,7 +124,7 @@ export default function StudentDashboard() {
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="panel-raised p-5"
+                    className="panel-raised rounded-2xl p-5 sm:p-6"
                   >
                     <div className="flex items-start gap-4">
                       <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/5 text-2xl">

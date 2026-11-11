@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#080d19" />
+    <meta name="theme-color" content="#0b0d1a" />
     <meta name="color-scheme" content="dark light" />
     <meta
       name="description"
       content="QuestLearn - turn your curriculum into a playable skill tree."
     />
-    <title>QuestLearn · Gamified Learning</title>
+    <title>QuestLearn — Learn by doing</title>
     <script>
       // Paint the right theme before React mounts: no dark flash for a
       // light-theme user, and no light flash for the default dark.
@@ -30,7 +30,7 @@
           root.classList.add(theme);
           root.style.colorScheme = theme;
           var meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute('content', theme === 'light' ? '#f6f7fa' : '#080d19');
+          if (meta) meta.setAttribute('content', theme === 'light' ? '#f7f8fc' : '#0b0d1a');
         } catch (error) {
           /* storage blocked: keep the dark default */
         }
