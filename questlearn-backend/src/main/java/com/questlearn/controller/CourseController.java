@@ -60,6 +60,15 @@ public class CourseController {
         return courseService.createCourse(request, principal);
     }
 
+    @PostMapping("/courses/{courseId}/duplicate")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
+    @Operation(summary = "Copy a course with its node tree and quizzes as a private draft")
+    public CourseDto duplicateCourse(@PathVariable Long courseId,
+                                     @AuthenticationPrincipal AppUserPrincipal principal) {
+        return courseService.duplicateCourse(courseId, principal);
+    }
+
     @PutMapping("/courses/{courseId}")
     @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
     @Operation(summary = "Edit a course's title, description, category and emoji")

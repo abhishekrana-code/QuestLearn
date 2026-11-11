@@ -88,6 +88,78 @@ public class CourseService {
         return toCourseDto(courseRepository.save(course), principal);
     }
 
+    /**
+     * Copies a course, its whole tree and every quiz into a private draft.
+     *
+     * <p>Teachers run the same subject term after term, so rebuilding the tree from
+     * scratch is wasted work. The copy is deliberately unpublished and owned by
+     * whoever asked for it, which keeps an admin's duplicate out of the original
+     * instructor's list.</p>
+     */
+    @Transactional
+    public CourseDto duplicateCourse(Long courseId, AppUserPrincipal principal) {
+        Course source = loadCourse(courseId);
+        assertCanManage(source, principal);
+
+        User owner = userRepository.findById(principal.id())
+                .orElseThrow(() -> ApiException.unauthorized("Account no longer exists"));
+
+        Course copy = courseRepository.save(Course.builder()
+                .title(copyTitle(source.getTitle()))
+                .description(source.getDescription())
+                .category(source.getCategory())
+                .emoji(source.getEmoji())
+                .published(false)
+                .instructor(owner)
+                .build());
+
+        List<Module> originals = moduleRepository.findByCourseIdOrderByOrderIndexAsc(courseId);
+        Map<Long, Module> copies = new LinkedHashMap<>();
+
+        for (Module original : originals) {
+            copies.put(original.getId(), moduleRepository.save(Module.builder()
+                    .title(original.getTitle())
+                    .summary(original.getSummary())
+                    .content(original.getContent() == null ? null : original.getContent().deepCopy())
+                    .xpReward(original.getXpReward())
+                    .positionX(original.getPositionX())
+                    .positionY(original.getPositionY())
+                    .orderIndex(original.getOrderIndex())
+                    .course(copy)
+                    .build()));
+        }
+
+        // Parents are linked in a second pass: a prerequisite can be copied after the
+        // node that depends on it.
+        for (Module original : originals) {
+            if (original.getParentModule() != null) {
+                copies.get(original.getId())
+                        .setParentModule(copies.get(original.getParentModule().getId()));
+            }
+        }
+        moduleRepository.saveAll(copies.values());
+
+        for (Module original : originals) {
+            quizRepository.findByModuleId(original.getId()).ifPresent(quiz -> quizRepository.save(Quiz.builder()
+                    .module(copies.get(original.getId()))
+                    .type(quiz.getType())
+                    .passingScore(quiz.getPassingScore())
+                    .payload(quiz.getPayload().deepCopy())
+                    .build()));
+        }
+
+        return toCourseDto(copy, principal);
+    }
+
+    /** Keeps the "(copy)" marker inside the 160-character title column. */
+    private static String copyTitle(String title) {
+        String suffix = " (copy)";
+        if (title.length() + suffix.length() <= 160) {
+            return title + suffix;
+        }
+        return title.substring(0, 160 - suffix.length()).trim() + suffix;
+    }
+
     @Transactional
     public CourseDto updateCourse(Long courseId, CourseUpdateRequest request, AppUserPrincipal principal) {
         Course course = loadCourse(courseId);

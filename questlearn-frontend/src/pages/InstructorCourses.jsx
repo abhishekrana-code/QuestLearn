@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
+  Copy,
   Eye,
   FolderOpen,
   Layers,
+  Loader2,
   PencilLine,
   Plus,
   Search,
@@ -27,6 +29,8 @@ export default function InstructorCourses() {
   const [error, setError] = useState(null);
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState(null);
+  const [duplicatingId, setDuplicatingId] = useState(null);
+  const [notice, setNotice] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +79,28 @@ export default function InstructorCourses() {
     setEditing(null);
   };
 
+  const duplicate = async (course) => {
+    setDuplicatingId(course.id);
+    setNotice(null);
+    try {
+      const { data } = await api.post(`/courses/${course.id}/duplicate`);
+      setCourses((previous) => [...previous, data]);
+      setNotice({
+        type: 'success',
+        text: `"${data.title}" created as a private draft with ${data.moduleCount} node${
+          data.moduleCount === 1 ? '' : 's'
+        } - rename it when you are ready.`,
+      });
+    } catch (copyError) {
+      setNotice({
+        type: 'error',
+        text: apiError(copyError, 'Could not duplicate this course.'),
+      });
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -90,6 +116,25 @@ export default function InstructorCourses() {
           <Plus size={14} /> New course
         </Link>
       </header>
+
+      {notice && (
+        <div
+          className={`mb-4 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${
+            notice.type === 'error'
+              ? 'border-danger/30 bg-danger/[0.07] text-danger'
+              : 'border-success/30 bg-success/[0.07] text-success'
+          }`}
+        >
+          <span>{notice.text}</span>
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            className="shrink-0 text-xs font-semibold opacity-70 hover:opacity-100"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/[0.07] px-4 py-3 text-sm text-danger">
@@ -193,6 +238,19 @@ export default function InstructorCourses() {
                         className="btn-ghost text-[11px]"
                       >
                         <PencilLine size={13} /> Edit details
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => duplicate(course)}
+                        disabled={duplicatingId === course.id}
+                        className="btn-ghost text-[11px]"
+                      >
+                        {duplicatingId === course.id ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Copy size={13} />
+                        )}
+                        {duplicatingId === course.id ? 'Duplicating…' : 'Duplicate'}
                       </button>
                     </>
                   ) : (
