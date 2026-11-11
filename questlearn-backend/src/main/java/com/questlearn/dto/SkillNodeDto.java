@@ -14,6 +14,8 @@ public record SkillNodeDto(
         int orderIndex,
         ProgressStatus status,
         int score,
+        /** Graded tries so far; 1 means a clean first pass. */
+        int attempts,
         QuizType quizType,
         /** Lesson video attached to this node, null when it has none. */
         String videoUrl,

@@ -29,6 +29,13 @@ const UNSEEN_RANK = 101;
 const topicRank = (node) =>
   node.quizType && (node.score > 0 || node.status === 'COMPLETED') ? node.score : UNSEEN_RANK;
 
+/** "1 try" reads as a solid pass; several tries next to a score shows the grind. */
+const attemptsLabel = (node) => {
+  const tries = node.attempts ?? 0;
+  if (tries === 0) return 'no attempts yet';
+  return `${tries} ${tries === 1 ? 'try' : 'tries'}`;
+};
+
 const STATUS_DOT = {
   COMPLETED: 'bg-success',
   UNLOCKED: 'bg-gold',
@@ -294,7 +301,7 @@ export default function StudentPerformance() {
                         {node.title}
                       </p>
                       <p className="truncate text-[10px] text-fg-subtle">
-                        {node.courseTitle} · {node.subjectName}
+                        {node.courseTitle} · {node.subjectName} · {attemptsLabel(node)}
                       </p>
                     </div>
                     <Link
@@ -417,12 +424,12 @@ export default function StudentPerformance() {
                                   STATUS_DOT[node.status] ?? STATUS_DOT.LOCKED
                                 }`}
                               />
-                              <span className="min-w-0 flex-1 truncate text-foreground">
-                                {node.title}
-                              </span>
-                              <span className="shrink-0 text-[10px] text-fg-subtle">
-                                {node.xpReward} XP
-                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-foreground">{node.title}</p>
+                                <p className="text-[10px] text-fg-subtle">
+                                  {node.xpReward} XP · {attemptsLabel(node)}
+                                </p>
+                              </div>
                               <span
                                 className={`chip shrink-0 ${scoreChip(attempted ? node.score : null)}`}
                               >

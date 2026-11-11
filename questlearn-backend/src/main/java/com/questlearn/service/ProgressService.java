@@ -105,6 +105,7 @@ public class ProgressService {
                     module.getOrderIndex(),
                     status,
                     progress == null ? 0 : progress.getScore(),
+                    progress == null ? 0 : progress.getAttempts(),
                     module.getQuiz() == null ? null : module.getQuiz().getType(),
                     videoField(module, "videoUrl"),
                     videoField(module, "videoLabel")
