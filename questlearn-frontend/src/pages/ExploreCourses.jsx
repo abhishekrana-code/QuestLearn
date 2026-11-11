@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Check,
@@ -48,9 +48,8 @@ export default function ExploreCourses() {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState('');
-  const [teacherId, setTeacherId] = useState('all');
-  const [subject, setSubject] = useState('all');
   const [openTree, setOpenTree] = useState(null);
   const [trees, setTrees] = useState({});
 
@@ -98,6 +97,19 @@ export default function ExploreCourses() {
       .map(([name, count]) => ({ name, count }));
   }, [courses]);
 
+  const teacherParam = searchParams.get('teacher');
+  const subjectParam = searchParams.get('subject');
+
+  // A stale or hand-edited link falls back to "all" instead of an empty select.
+  const teacherId =
+    teacherParam && teacherOptions.some((teacher) => String(teacher.id) === teacherParam)
+      ? teacherParam
+      : 'all';
+  const subject =
+    subjectParam && subjectOptions.some((option) => option.name === subjectParam)
+      ? subjectParam
+      : 'all';
+
   const catalogue = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const matches = (course) => {
@@ -138,10 +150,19 @@ export default function ExploreCourses() {
 
   const filtersActive = Boolean(query.trim()) || teacherId !== 'all' || subject !== 'all';
 
+  const setFilter = (key, value) => {
+    const next = new URLSearchParams(searchParams);
+    if (!value || value === 'all') next.delete(key);
+    else next.set(key, value);
+    setSearchParams(next, { replace: true });
+  };
+
   const clearFilters = () => {
     setQuery('');
-    setTeacherId('all');
-    setSubject('all');
+    const next = new URLSearchParams(searchParams);
+    next.delete('teacher');
+    next.delete('subject');
+    setSearchParams(next, { replace: true });
   };
 
   const toggleTree = async (course) => {
@@ -217,7 +238,7 @@ export default function ExploreCourses() {
             className="field sm:w-48"
             aria-label="Filter by teacher"
             value={teacherId}
-            onChange={(event) => setTeacherId(event.target.value)}
+            onChange={(event) => setFilter('teacher', event.target.value)}
           >
             <option value="all">All teachers</option>
             {teacherOptions.map((teacher) => (
@@ -231,7 +252,7 @@ export default function ExploreCourses() {
             className="field sm:w-44"
             aria-label="Filter by subject"
             value={subject}
-            onChange={(event) => setSubject(event.target.value)}
+            onChange={(event) => setFilter('subject', event.target.value)}
           >
             <option value="all">All subjects</option>
             {subjectOptions.map((option) => (
