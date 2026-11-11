@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -78,6 +78,9 @@ const STEPS = [
   { id: 'publish', label: 'Publish', hint: 'Preview it, then make it live for students.' },
 ];
 
+/** Step ids double as the ?step= value, so a link can open the studio anywhere. */
+const STEP_IDS = STEPS.map((item) => item.id);
+
 function StepFooter({ onBack, backLabel, onNext, nextLabel }) {
   if (!onBack && !onNext) return null;
   return (
@@ -107,7 +110,7 @@ export default function InstructorStudio() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
-  const [step, setStep] = useState('course');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [courseForm, setCourseForm] = useState(EMPTY_COURSE);
   const [moduleForm, setModuleForm] = useState({
     title: '',
@@ -134,10 +137,17 @@ export default function InstructorStudio() {
     [courses, selectedId],
   );
 
+  const requestedStep = searchParams.get('step');
+  const step = STEP_IDS.includes(requestedStep) ? requestedStep : STEP_IDS[0];
+
   const notify = (type, text) => setMessage({ type, text });
 
   const goTo = (id) => {
-    setStep(id);
+    if (!STEP_IDS.includes(id)) return;
+    const params = new URLSearchParams(searchParams);
+    if (id === STEP_IDS[0]) params.delete('step');
+    else params.set('step', id);
+    setSearchParams(params, { replace: true });
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
