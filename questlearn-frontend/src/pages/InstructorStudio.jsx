@@ -19,6 +19,7 @@ import {
 import CourseDetailsDialog from '../components/studio/CourseDetailsDialog.jsx';
 import LessonEditor from '../components/studio/LessonEditor.jsx';
 import NodeEditorDialog from '../components/studio/NodeEditorDialog.jsx';
+import QuizEditor from '../components/studio/QuizEditor.jsx';
 import VideoUploader from '../components/studio/VideoUploader.jsx';
 import { generateCourse as requestGeneratedCourse, getAiStatus } from '../services/ai.js';
 import api, { apiError } from '../services/api.js';
@@ -357,7 +358,10 @@ export default function InstructorStudio() {
     if (!quizForm.moduleId) return;
     setBusy(true);
     try {
-      const payload = JSON.parse(quizForm.payload);
+      const payload =
+        typeof quizForm.payload === 'string'
+          ? JSON.parse(quizForm.payload)
+          : quizForm.payload;
       await api.post(`/modules/${quizForm.moduleId}/quiz`, {
         type: quizForm.type,
         passingScore: Number(quizForm.passingScore),
@@ -894,8 +898,7 @@ export default function InstructorStudio() {
                   <Sparkles size={15} className="text-arcane-text" /> Attach a quiz
                 </h2>
                 <p className="mt-1 text-[11px] text-fg-subtle">
-                  Pick a node, choose a question type, then edit the JSON. Answers are scored on the
-                  server.
+                  Pick a node, choose a question type, and design your questions. Answers are scored server-side.
                 </p>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -961,32 +964,14 @@ export default function InstructorStudio() {
                   </div>
                 </div>
 
-                <div className="mt-3">
-                  <div className="flex items-center justify-between">
-                    <label className="label" htmlFor="quiz-payload">
-                      Payload
-                    </label>
-                    <button
-                      type="button"
-                      className="mb-1.5 text-[11px] font-semibold text-gold-text hover:underline"
-                      onClick={() =>
-                        setQuizForm({ ...quizForm, payload: QUIZ_TEMPLATES[quizForm.type] })
-                      }
-                    >
-                      Reset to template
-                    </button>
-                  </div>
-                  <textarea
-                    id="quiz-payload"
-                    rows={7}
-                    spellCheck={false}
-                    className="field resize-y bg-muted/40 font-mono text-[12px] leading-relaxed"
-                    value={quizForm.payload}
-                    onChange={(event) =>
-                      setQuizForm({ ...quizForm, payload: event.target.value })
-                    }
-                  />
-                </div>
+                <QuizEditor
+                  type={quizForm.type}
+                  value={quizForm.payload}
+                  disabled={busy}
+                  onChange={(newPayload) =>
+                    setQuizForm({ ...quizForm, payload: newPayload })
+                  }
+                />
 
                 <button
                   type="submit"
