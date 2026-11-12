@@ -70,6 +70,7 @@ export default function SkillTreePage() {
   const [tree, setTree] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -90,6 +91,8 @@ export default function SkillTreePage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    // A retry must not leave the old failure on screen while it runs.
+    setError(null);
     loadTree()
       .catch((loadError) => {
         if (!cancelled) setError(apiError(loadError, 'Could not load this skill tree.'));
@@ -100,7 +103,7 @@ export default function SkillTreePage() {
     return () => {
       cancelled = true;
     };
-  }, [loadTree]);
+  }, [loadTree, loadAttempt]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -202,9 +205,18 @@ export default function SkillTreePage() {
       <div className="mx-auto max-w-3xl px-4 py-16 text-center">
         <div className="panel p-8">
           <p className="text-sm text-danger">{error}</p>
-          <Link to="/" className="btn-ghost mt-4">
-            <ArrowLeft size={15} /> Back to dashboard
-          </Link>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLoadAttempt((previous) => previous + 1)}
+              className="btn-primary"
+            >
+              <RotateCcw size={15} /> Try again
+            </button>
+            <Link to="/" className="btn-ghost">
+              <ArrowLeft size={15} /> Back to dashboard
+            </Link>
+          </div>
         </div>
       </div>
     );
