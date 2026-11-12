@@ -29,8 +29,42 @@ function detectBackendPort() {
 // or overrides with VITE_API_TARGET if explicitly provided.
 const apiTarget = process.env.VITE_API_TARGET || `http://localhost:${detectBackendPort()}`;
 
+/**
+ * A wrong API target otherwise surfaces only as a page full of failed requests, so
+ * probe it once the dev server is listening and say the answer in the terminal.
+ */
+function checkApiTarget(target) {
+  return {
+    name: 'questlearn-api-target',
+    apply: 'serve',
+    configureServer(server) {
+      server.httpServer?.once('listening', async () => {
+        const url = `${target.replace(/\/$/, '')}/actuator/health`;
+        const logger = server.config.logger;
+        try {
+          const response = await fetch(url, { signal: AbortSignal.timeout(2500) });
+          const body = await response.text();
+          if (response.ok && body.includes('"status"')) {
+            logger.info(`  [api] QuestLearn backend reachable at ${target}`);
+            return;
+          }
+          logger.warn(
+            `\n  [api] ${target} answered ${response.status} but is not QuestLearn's backend.` +
+              '\n  Check SERVER_PORT in questlearn-backend/.env, or set VITE_API_TARGET.\n',
+          );
+        } catch {
+          logger.warn(
+            `\n  [api] no backend answering at ${target} - API calls will fail.` +
+              '\n  Start it there, or set VITE_API_TARGET.\n',
+          );
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), checkApiTarget(apiTarget)],
   server: {
     // VITE_PORT lets a second project keep 5173 for itself on a shared machine.
     port: Number(process.env.VITE_PORT) || 5173,
