@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -41,9 +42,6 @@ const historySummary = (history) => {
   return 'Same score as the first try so far.';
 };
 
-/** How many times a failed load retries itself before waiting for a click. */
-const MAX_AUTO_RETRIES = 5;
-
 const ATTEMPT_LABEL = {
   VIVA_SPOKEN: 'Spoken viva',
   VIVA_WRITTEN: 'Typed viva',
@@ -81,8 +79,6 @@ export default function SkillTreePage() {
   const [vivaOpen, setVivaOpen] = useState(false);
   const [retaking, setRetaking] = useState(false);
   const [retakeKey, setRetakeKey] = useState(0);
-  const [retryPaused, setRetryPaused] = useState(false);
-  const autoRetries = useRef(0);
   const quizRef = useRef(null);
 
   const isPreview = user.role === 'INSTRUCTOR';
@@ -93,6 +89,15 @@ export default function SkillTreePage() {
     return data;
   }, [courseId]);
 
+  const {
+    paused: retryPaused,
+    reset: resetAutoRetry,
+    retryNow: retryLoadNow,
+  } = useAutoRetry({
+    active: Boolean(error) && !loading,
+    retry: () => setLoadAttempt((previous) => previous + 1),
+  });
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -100,10 +105,7 @@ export default function SkillTreePage() {
     setError(null);
     loadTree()
       .then(() => {
-        if (!cancelled) {
-          autoRetries.current = 0;
-          setRetryPaused(false);
-        }
+        if (!cancelled) resetAutoRetry();
       })
       .catch((loadError) => {
         if (!cancelled) setError(apiError(loadError, 'Could not load this skill tree.'));
@@ -115,23 +117,6 @@ export default function SkillTreePage() {
       cancelled = true;
     };
   }, [loadTree, loadAttempt]);
-
-  // A backend that is merely starting comes back within seconds, so keep trying
-  // on a widening gap instead of making the reader click. Manual retry resets it.
-  useEffect(() => {
-    if (!error || loading || retryPaused) return undefined;
-    if (autoRetries.current >= MAX_AUTO_RETRIES) {
-      // Out of patience: stop quietly and leave the manual button in charge.
-      setRetryPaused(true);
-      return undefined;
-    }
-    const gap = Math.min(10000, 3000 * 1.4 ** autoRetries.current);
-    const timer = setTimeout(() => {
-      autoRetries.current += 1;
-      setLoadAttempt((previous) => previous + 1);
-    }, gap);
-    return () => clearTimeout(timer);
-  }, [error, loading, retryPaused, loadAttempt]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -241,11 +226,7 @@ export default function SkillTreePage() {
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
-              onClick={() => {
-                autoRetries.current = 0;
-                setRetryPaused(false);
-                setLoadAttempt((previous) => previous + 1);
-              }}
+              onClick={retryLoadNow}
               className="btn-primary"
             >
               <RotateCcw size={15} /> Try again

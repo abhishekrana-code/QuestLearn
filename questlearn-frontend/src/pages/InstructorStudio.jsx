@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -23,6 +23,7 @@ import QuizEditor from '../components/studio/QuizEditor.jsx';
 import VideoUploader from '../components/studio/VideoUploader.jsx';
 import { generateCourse as requestGeneratedCourse, getAiStatus } from '../services/ai.js';
 import api, { apiError } from '../services/api.js';
+import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import { EMPTY_LESSON, lessonPayload } from '../services/lesson.js';
 
 const QUIZ_TEMPLATES = {
@@ -109,6 +110,7 @@ export default function InstructorStudio() {
   const [nodes, setNodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const failureNoticed = useRef(false);
   const [message, setMessage] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [copied, setCopied] = useState(false);
@@ -133,6 +135,8 @@ export default function InstructorStudio() {
   const [aiStatus, setAiStatus] = useState(null);
   const [aiForm, setAiForm] = useState({ topic: '', audience: '', category: '', nodeCount: 6 });
   const [generating, setGenerating] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const selectedCourse = useMemo(
     () => courses.find((course) => course.id === selectedId) ?? null,
@@ -143,6 +147,13 @@ export default function InstructorStudio() {
   const step = STEP_IDS.includes(requestedStep) ? requestedStep : STEP_IDS[0];
 
   const notify = (type, text) => setMessage({ type, text });
+
+  // A backend that is still starting usually answers within seconds, so the
+  // studio reloads itself instead of leaving the instructor with a stale toast.
+  const { reset: resetAutoRetry } = useAutoRetry({
+    active: loadFailed && !loading,
+    retry: () => setReloadKey((previous) => previous + 1),
+  });
 
   const goTo = (id) => {
     if (!STEP_IDS.includes(id)) return;
@@ -204,8 +215,20 @@ export default function InstructorStudio() {
         if (!cancelled && (shared ?? data[0])) {
           await loadNodes((shared ?? data[0]).id);
         }
+        if (!cancelled) {
+          setLoadFailed(false);
+          failureNoticed.current = false;
+          resetAutoRetry();
+        }
       } catch (error) {
-        if (!cancelled) notify('error', apiError(error, 'Could not load your courses.'));
+        if (!cancelled) {
+          // Retries stay silent: the first failure already told the instructor.
+          if (!failureNoticed.current) {
+            notify('error', apiError(error, 'Could not load your courses.'));
+            failureNoticed.current = true;
+          }
+          setLoadFailed(true);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -213,7 +236,7 @@ export default function InstructorStudio() {
     return () => {
       cancelled = true;
     };
-  }, [loadCourses, loadNodes]);
+  }, [loadCourses, loadNodes, reloadKey, resetAutoRetry]);
 
   useEffect(() => {
     getAiStatus()
