@@ -266,7 +266,7 @@ export default function AdminPanel() {
                   className="btn-ghost px-2.5 py-1.5 text-[11px]"
                 >
                   {course.published ? <EyeOff size={12} /> : <Eye size={12} />}
-                  {course.published ? 'Unpublish' : 'Approve'}
+                  {course.published ? 'Unpublish' : 'Publish'}
                 </button>
                 <Link
                   to={`/courses/${course.id}`}
