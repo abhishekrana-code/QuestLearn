@@ -41,6 +41,9 @@ const historySummary = (history) => {
   return 'Same score as the first try so far.';
 };
 
+/** How many times a failed load retries itself before waiting for a click. */
+const MAX_AUTO_RETRIES = 5;
+
 const ATTEMPT_LABEL = {
   VIVA_SPOKEN: 'Spoken viva',
   VIVA_WRITTEN: 'Typed viva',
@@ -78,6 +81,8 @@ export default function SkillTreePage() {
   const [vivaOpen, setVivaOpen] = useState(false);
   const [retaking, setRetaking] = useState(false);
   const [retakeKey, setRetakeKey] = useState(0);
+  const [retryPaused, setRetryPaused] = useState(false);
+  const autoRetries = useRef(0);
   const quizRef = useRef(null);
 
   const isPreview = user.role === 'INSTRUCTOR';
@@ -94,6 +99,12 @@ export default function SkillTreePage() {
     // A retry must not leave the old failure on screen while it runs.
     setError(null);
     loadTree()
+      .then(() => {
+        if (!cancelled) {
+          autoRetries.current = 0;
+          setRetryPaused(false);
+        }
+      })
       .catch((loadError) => {
         if (!cancelled) setError(apiError(loadError, 'Could not load this skill tree.'));
       })
@@ -104,6 +115,23 @@ export default function SkillTreePage() {
       cancelled = true;
     };
   }, [loadTree, loadAttempt]);
+
+  // A backend that is merely starting comes back within seconds, so keep trying
+  // on a widening gap instead of making the reader click. Manual retry resets it.
+  useEffect(() => {
+    if (!error || loading || retryPaused) return undefined;
+    if (autoRetries.current >= MAX_AUTO_RETRIES) {
+      // Out of patience: stop quietly and leave the manual button in charge.
+      setRetryPaused(true);
+      return undefined;
+    }
+    const gap = Math.min(10000, 3000 * 1.4 ** autoRetries.current);
+    const timer = setTimeout(() => {
+      autoRetries.current += 1;
+      setLoadAttempt((previous) => previous + 1);
+    }, gap);
+    return () => clearTimeout(timer);
+  }, [error, loading, retryPaused, loadAttempt]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -205,10 +233,19 @@ export default function SkillTreePage() {
       <div className="mx-auto max-w-3xl px-4 py-16 text-center">
         <div className="panel p-8">
           <p className="text-sm text-danger">{error}</p>
+          <p className="mt-2 text-xs text-fg-muted">
+            {retryPaused
+              ? 'Automatic retries paused — use Try again when the server is back.'
+              : 'Trying again automatically…'}
+          </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
-              onClick={() => setLoadAttempt((previous) => previous + 1)}
+              onClick={() => {
+                autoRetries.current = 0;
+                setRetryPaused(false);
+                setLoadAttempt((previous) => previous + 1);
+              }}
               className="btn-primary"
             >
               <RotateCcw size={15} /> Try again
