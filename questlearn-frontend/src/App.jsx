@@ -4,6 +4,7 @@ import Navbar from './components/common/Navbar.jsx';
 import ProtectedRoute from './components/common/ProtectedRoute.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 import Login from './pages/Login.jsx';
+import NotFound from './pages/NotFound.jsx';
 import Register from './pages/Register.jsx';
 
 // The skill tree, dashboards and studio pull in framer-motion, lottie and
@@ -122,7 +123,7 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </main>
