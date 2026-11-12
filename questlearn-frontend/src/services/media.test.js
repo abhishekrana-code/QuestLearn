@@ -39,6 +39,18 @@ describe('media service', () => {
       );
     });
 
+    it('starts the embed at the timestamp in the link', () => {
+      expect(getYouTubeEmbedUrl('https://youtu.be/dQw4w9WgXcQ?t=90')).toBe(
+        'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=90',
+      );
+      expect(getYouTubeEmbedUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=1h2m3s')).toBe(
+        'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=3723',
+      );
+      expect(getYouTubeEmbedUrl('https://youtu.be/dQw4w9WgXcQ?start=45')).toBe(
+        'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=45',
+      );
+    });
+
     it('returns null for non-youtube URLs', () => {
       expect(getYouTubeEmbedUrl('https://vimeo.com/123456')).toBeNull();
       expect(getYouTubeEmbedUrl('')).toBeNull();

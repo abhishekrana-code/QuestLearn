@@ -7,13 +7,30 @@ export function isPlayableVideo(url) {
   return typeof url === 'string' && DIRECT_VIDEO.test(url);
 }
 
+/**
+ * The second a YouTube link asks the player to start at, so a long lesson can open
+ * at the part it is teaching. Accepts t=90, t=1m30s, t=1h2m3s and start=90.
+ */
+function youTubeStartSeconds(url) {
+  const found = url.match(/[?&](?:t|start)=([0-9hms]+)/i);
+  if (!found) return 0;
+  const value = found[1].toLowerCase();
+  if (/^\d+$/.test(value)) return Number(value);
+  const hours = Number(value.match(/(\d+)h/)?.[1] ?? 0);
+  const minutes = Number(value.match(/(\d+)m/)?.[1] ?? 0);
+  const seconds = Number(value.match(/(\d+)s/)?.[1] ?? 0);
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
 /** Extracts a privacy-enhanced YouTube embed URL if the URL is a YouTube link. */
 export function getYouTubeEmbedUrl(url) {
   if (typeof url !== 'string') return null;
   const match = url.match(
     /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i,
   );
-  return match ? `https://www.youtube-nocookie.com/embed/${match[1]}` : null;
+  if (!match) return null;
+  const start = youTubeStartSeconds(url);
+  return `https://www.youtube-nocookie.com/embed/${match[1]}${start > 0 ? `?start=${start}` : ''}`;
 }
 
 /** Extracts a Vimeo player embed URL if the URL is a Vimeo link. */
