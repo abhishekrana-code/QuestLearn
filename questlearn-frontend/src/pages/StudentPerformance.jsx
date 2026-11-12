@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  AlertTriangle,
   ArrowUpRight,
   ChevronDown,
   Flame,
@@ -11,7 +10,9 @@ import {
   Star,
   Target,
 } from 'lucide-react';
+import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useGamification } from '../context/GamificationContext.jsx';
+import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import api, { apiError } from '../services/api.js';
 
 const percentOf = (cleared, total) => (total > 0 ? Math.round((cleared / total) * 100) : 0);
@@ -91,9 +92,17 @@ export default function StudentPerformance() {
   const [histories, setHistories] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+
+  const { paused: retryPaused, reset: resetAutoRetry, retryNow: retryLoadNow } = useAutoRetry({
+    active: Boolean(error) && !loading,
+    retry: () => setLoadAttempt((previous) => previous + 1),
+  });
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     (async () => {
       try {
         const { data } = await api.get('/courses');
@@ -112,6 +121,7 @@ export default function StudentPerformance() {
           }
         });
         setTrees(loaded);
+        resetAutoRetry();
       } catch (loadError) {
         if (!cancelled) {
           setError(apiError(loadError, 'Could not load your performance.'));
@@ -123,7 +133,7 @@ export default function StudentPerformance() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt, resetAutoRetry]);
 
   const scoredNodes = useMemo(() => {
     const nodes = Object.values(trees).flat();
@@ -255,12 +265,12 @@ export default function StudentPerformance() {
         </p>
       </header>
 
-      {error && (
-        <div className="mb-4 flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/[0.07] px-4 py-3 text-sm text-danger">
-          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-          {error}
-        </div>
-      )}
+      <LoadErrorBanner
+        className="mb-4"
+        message={error}
+        paused={retryPaused}
+        onRetry={retryLoadNow}
+      />
 
       {loading ? (
         <div className="panel grid min-h-[240px] place-items-center text-sm text-slate-400">

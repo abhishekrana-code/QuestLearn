@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Crown, Flame, Medal } from 'lucide-react';
+import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import api, { apiError } from '../services/api.js';
 
 /* Only the current user's row gets accent colour; the podium is carried by
@@ -17,9 +19,11 @@ export default function Leaderboard() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const { data } = await api.get('/leaderboard');
       setEntries(data);
@@ -30,9 +34,18 @@ export default function Leaderboard() {
     }
   }, []);
 
+  const { paused: retryPaused, reset: resetAutoRetry, retryNow: retryLoadNow } = useAutoRetry({
+    active: Boolean(error) && !loading,
+    retry: load,
+  });
+
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, loadAttempt]);
+
+  useEffect(() => {
+    if (!error && !loading) resetAutoRetry();
+  }, [error, loading, resetAutoRetry]);
 
   if (loading) {
     return (
@@ -52,11 +65,12 @@ export default function Leaderboard() {
         </p>
       </header>
 
-      {error && (
-        <p className="rounded-xl border border-danger/30 bg-danger/[0.07] px-4 py-3 text-sm text-danger">
-          {error}
-        </p>
-      )}
+      <LoadErrorBanner
+        className="mb-4"
+        message={error}
+        paused={retryPaused}
+        onRetry={retryLoadNow}
+      />
 
       <ol className="space-y-2.5">
         {entries.length === 0 && !error && (
