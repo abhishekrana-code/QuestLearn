@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -22,6 +22,7 @@ import NodeEditorDialog from '../components/studio/NodeEditorDialog.jsx';
 import QuizEditor from '../components/studio/QuizEditor.jsx';
 import VideoUploader from '../components/studio/VideoUploader.jsx';
 import { generateCourse as requestGeneratedCourse, getAiStatus } from '../services/ai.js';
+import { RotateCcw } from 'lucide-react';
 import api, { apiError } from '../services/api.js';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import { EMPTY_LESSON, lessonPayload } from '../services/lesson.js';
@@ -110,7 +111,7 @@ export default function InstructorStudio() {
   const [nodes, setNodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const failureNoticed = useRef(false);
+  const [loadError, setLoadError] = useState(null);
   const [message, setMessage] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [copied, setCopied] = useState(false);
@@ -150,7 +151,11 @@ export default function InstructorStudio() {
 
   // A backend that is still starting usually answers within seconds, so the
   // studio reloads itself instead of leaving the instructor with a stale toast.
-  const { reset: resetAutoRetry } = useAutoRetry({
+  const {
+    paused: retryPaused,
+    retryNow: retryLoadNow,
+    reset: resetAutoRetry,
+  } = useAutoRetry({
     active: loadFailed && !loading,
     retry: () => setReloadKey((previous) => previous + 1),
   });
@@ -217,16 +222,13 @@ export default function InstructorStudio() {
         }
         if (!cancelled) {
           setLoadFailed(false);
-          failureNoticed.current = false;
+          setLoadError(null);
           resetAutoRetry();
         }
       } catch (error) {
         if (!cancelled) {
-          // Retries stay silent: the first failure already told the instructor.
-          if (!failureNoticed.current) {
-            notify('error', apiError(error, 'Could not load your courses.'));
-            failureNoticed.current = true;
-          }
+          // A persistent banner replaces the toast: retries refresh it quietly.
+          setLoadError(apiError(error, 'Could not load your courses.'));
           setLoadFailed(true);
         }
       } finally {
@@ -420,6 +422,24 @@ export default function InstructorStudio() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      {loadError && (
+        <div className="mb-6 rounded-xl border border-danger/30 bg-danger/[0.07] px-4 py-3">
+          <p className="text-sm text-danger">{loadError}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={retryLoadNow}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-gold-text hover:underline"
+            >
+              <RotateCcw size={12} /> Try again
+            </button>
+            <span className="text-[11px] text-fg-muted">
+              {retryPaused ? 'Automatic retries paused.' : 'Trying again automatically…'}
+            </span>
+          </div>
+        </div>
+      )}
+
       <header className="mb-6">
         <p className="eyebrow">Course studio</p>
         <h1 className="page-title mt-2">Build the quest map</h1>
