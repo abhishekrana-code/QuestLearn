@@ -2,6 +2,7 @@ package com.questlearn.config;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.questlearn.model.AttemptSource;
 import com.questlearn.model.Course;
 import com.questlearn.model.Module;
@@ -19,14 +20,21 @@ import com.questlearn.repository.QuizRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
 import com.questlearn.repository.UserRepository;
 import com.questlearn.service.GamificationService;
+import com.questlearn.service.MediaStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -59,6 +67,7 @@ public class DataInitializer implements ApplicationRunner {
     private final ModuleAttemptRepository attemptRepository;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
+    private final MediaStorageService mediaStorageService;
 
     @Override
     @Transactional
@@ -67,6 +76,7 @@ public class DataInitializer implements ApplicationRunner {
             seedDemoData();
         }
         seedRivalProgress();
+        attachDemoVideo();
         backfillDemoAttempts();
     }
 
@@ -341,6 +351,60 @@ public class DataInitializer implements ApplicationRunner {
             progress.setCompletedAt(finished);
             progressRepository.save(progress);
         }
+    }
+
+    /**
+     * One node carries a lesson video so the Videos step has something in it and the
+     * student briefing can show playback. The clip ships with the app; a node that
+     * already has a video is never overwritten.
+     */
+    private void attachDemoVideo() {
+        ClassPathResource clip = new ClassPathResource("demo/html-foundations.mp4");
+        if (!clip.exists()) {
+            return;
+        }
+
+        Course course = courseRepository.findAll().stream().findFirst().orElse(null);
+        if (course == null) {
+            return;
+        }
+
+        Module node = moduleRepository.findByCourseIdOrderByOrderIndexAsc(course.getId()).stream()
+                .filter(module -> "HTML Foundations".equals(module.getTitle()))
+                .findFirst()
+                .orElse(null);
+        if (node == null) {
+            return;
+        }
+
+        JsonNode raw = node.getContent();
+        if (raw == null || !raw.isObject()) {
+            return;
+        }
+        ObjectNode content = (ObjectNode) raw;
+        if (content.hasNonNull("videoUrl")) {
+            return;
+        }
+
+        String fileName = "demo-html-foundations.mp4";
+        Path target = mediaStorageService.videoDir().resolve(fileName);
+        try {
+            if (!Files.exists(target)) {
+                try (InputStream stream = clip.getInputStream()) {
+                    Files.copy(stream, target, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        } catch (IOException ex) {
+            System.out.printf("Demo lesson video skipped: %s%n", ex.getMessage());
+            return;
+        }
+
+        ObjectNode updated = content.deepCopy();
+        updated.put("videoUrl", MediaStorageService.PUBLIC_PREFIX + fileName);
+        updated.put("videoLabel", "Intro \u00b7 semantic scaffolding \u00b7 0:12");
+        node.setContent(updated);
+        moduleRepository.save(node);
+        System.out.printf("Demo lesson video attached to \"%s\"%n", node.getTitle());
     }
 
     /**
