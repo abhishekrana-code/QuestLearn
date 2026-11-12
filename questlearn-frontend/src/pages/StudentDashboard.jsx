@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Crown, Layers, Map, RotateCcw, Trophy, Zap } from 'lucide-react';
+import { Crown, Layers, Map, Trophy, Zap } from 'lucide-react';
+import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import StreakCounter from '../components/gamification/StreakCounter.jsx';
 import XPBar from '../components/gamification/XPBar.jsx';
@@ -98,23 +99,12 @@ export default function StudentDashboard() {
         </div>
       </div>
 
-      {error && (
-        <div className="mt-5 rounded-xl border border-danger/30 bg-danger/[0.07] px-4 py-3">
-          <p className="text-sm text-danger">{error}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={retryLoadNow}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-gold-text hover:underline"
-            >
-              <RotateCcw size={12} /> Try again
-            </button>
-            <span className="text-[11px] text-fg-muted">
-              {retryPaused ? 'Automatic retries paused.' : 'Trying again automatically…'}
-            </span>
-          </div>
-        </div>
-      )}
+      <LoadErrorBanner
+        className="mt-5"
+        message={error}
+        paused={retryPaused}
+        onRetry={retryLoadNow}
+      />
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_320px]">
         <section>

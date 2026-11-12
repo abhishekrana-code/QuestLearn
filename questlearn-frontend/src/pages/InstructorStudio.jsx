@@ -22,7 +22,7 @@ import NodeEditorDialog from '../components/studio/NodeEditorDialog.jsx';
 import QuizEditor from '../components/studio/QuizEditor.jsx';
 import VideoUploader from '../components/studio/VideoUploader.jsx';
 import { generateCourse as requestGeneratedCourse, getAiStatus } from '../services/ai.js';
-import { RotateCcw } from 'lucide-react';
+import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import api, { apiError } from '../services/api.js';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import { EMPTY_LESSON, lessonPayload } from '../services/lesson.js';
@@ -422,23 +422,12 @@ export default function InstructorStudio() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      {loadError && (
-        <div className="mb-6 rounded-xl border border-danger/30 bg-danger/[0.07] px-4 py-3">
-          <p className="text-sm text-danger">{loadError}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={retryLoadNow}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-gold-text hover:underline"
-            >
-              <RotateCcw size={12} /> Try again
-            </button>
-            <span className="text-[11px] text-fg-muted">
-              {retryPaused ? 'Automatic retries paused.' : 'Trying again automatically…'}
-            </span>
-          </div>
-        </div>
-      )}
+      <LoadErrorBanner
+        className="mb-6"
+        message={loadError}
+        paused={retryPaused}
+        onRetry={retryLoadNow}
+      />
 
       <header className="mb-6">
         <p className="eyebrow">Course studio</p>
