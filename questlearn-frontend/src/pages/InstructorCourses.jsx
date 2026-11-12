@@ -15,8 +15,10 @@ import {
   Trash2,
 } from 'lucide-react';
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
+import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import CourseDetailsDialog from '../components/studio/CourseDetailsDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import api, { apiError } from '../services/api.js';
 
 /** A labelled icon button, so a card can carry several actions without shouting. */
@@ -58,13 +60,28 @@ export default function InstructorCourses() {
   const [deleting, setDeleting] = useState(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+
+  const {
+    paused: retryPaused,
+    reset: resetAutoRetry,
+    retryNow: retryLoadNow,
+  } = useAutoRetry({
+    active: Boolean(error) && !loading,
+    retry: () => setLoadAttempt((previous) => previous + 1),
+  });
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     api
       .get('/courses')
       .then(({ data }) => {
-        if (!cancelled) setCourses(data);
+        if (!cancelled) {
+          setCourses(data);
+          resetAutoRetry();
+        }
       })
       .catch((loadError) => {
         if (!cancelled) setError(apiError(loadError, 'Could not load your courses.'));
@@ -75,7 +92,7 @@ export default function InstructorCourses() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt, resetAutoRetry]);
 
   const canManage = (course) => user.role === 'ADMIN' || course.instructorId === user.id;
   const isArchived = (course) => Boolean(course.archivedAt);
@@ -200,12 +217,12 @@ export default function InstructorCourses() {
         </div>
       )}
 
-      {error && (
-        <div className="mb-4 flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/[0.07] px-4 py-3 text-sm text-danger">
-          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-          {error}
-        </div>
-      )}
+      <LoadErrorBanner
+        className="mb-4"
+        message={error}
+        paused={retryPaused}
+        onRetry={retryLoadNow}
+      />
 
       <div className="panel mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-1" role="tablist" aria-label="Course state">
