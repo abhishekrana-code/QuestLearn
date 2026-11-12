@@ -62,17 +62,32 @@ api.interceptors.response.use(
   },
 );
 
+const OFFLINE_MESSAGE =
+  'Cannot reach the QuestLearn server. Make sure the backend is running, then try again.';
+
 /** Extracts a human-readable message from an axios error. */
 export function apiError(error, fallback = 'Something went wrong. Please try again.') {
-  const data = error?.response?.data;
+  if (error?.code === 'ERR_CANCELED') {
+    return fallback;
+  }
+
+  // No response at all: the server is down, still starting, or the network dropped.
+  if (!error?.response) {
+    return OFFLINE_MESSAGE;
+  }
+
+  const data = error.response.data;
   if (data?.fieldErrors) {
     const first = Object.values(data.fieldErrors)[0];
     if (first) return first;
   }
   if (data?.message) return data.message;
-  if (error?.code === 'ERR_NETWORK') {
-    return 'Cannot reach the QuestLearn API. Is the Spring Boot server running on port 8080?';
+
+  // A proxy in front of a dead backend answers with plain text, not our JSON.
+  if (typeof data === 'string' && error.response.status >= 500) {
+    return OFFLINE_MESSAGE;
   }
+
   return fallback;
 }
 
