@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, Eye, EyeOff, KeyRound, ShieldCheck, Users } from 'lucide-react';
+import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import api, { apiError } from '../services/api.js';
 
 const ROLE_OPTIONS = ['STUDENT', 'INSTRUCTOR', 'ADMIN'];
@@ -13,10 +15,18 @@ export default function AdminPanel() {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [busyId, setBusyId] = useState(null);
+
+  const { paused: retryPaused, reset: resetAutoRetry, retryNow: retryLoadNow } = useAutoRetry({
+    active: Boolean(loadError) && !loading,
+    retry: () => setLoadAttempt((previous) => previous + 1),
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [statsResponse, usersResponse, coursesResponse] = await Promise.all([
         api.get('/admin/stats'),
@@ -26,8 +36,9 @@ export default function AdminPanel() {
       setStats(statsResponse.data);
       setUsers(usersResponse.data);
       setCourses(coursesResponse.data);
+      resetAutoRetry();
     } catch (error) {
-      setMessage({ type: 'error', text: apiError(error, 'Could not load admin data.') });
+      setLoadError(apiError(error, 'Could not load admin data.'));
     } finally {
       setLoading(false);
     }
@@ -35,7 +46,7 @@ export default function AdminPanel() {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, loadAttempt]);
 
   const changeRole = async (targetUser, role) => {
     setBusyId(targetUser.id);
@@ -109,6 +120,13 @@ export default function AdminPanel() {
           Moderate accounts and control which quests are live for students.
         </p>
       </header>
+
+      <LoadErrorBanner
+        className="mb-5"
+        message={loadError}
+        paused={retryPaused}
+        onRetry={retryLoadNow}
+      />
 
       {message && (
         <div
