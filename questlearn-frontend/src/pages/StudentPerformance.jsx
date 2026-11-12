@@ -212,7 +212,10 @@ export default function StudentPerformance() {
     () =>
       subjects
         .flatMap((subject) => subject.topics)
-        .filter((node) => node.quizType && (node.score > 0 || node.status === 'COMPLETED'))
+        .filter(
+          (node) =>
+            node.quizType && (node.score > 0 || node.status === 'COMPLETED') && node.score < 100,
+        )
         .sort((a, b) => a.score - b.score || a.title.localeCompare(b.title))
         .slice(0, 6),
     [subjects],
@@ -327,7 +330,7 @@ export default function StudentPerformance() {
                   <Target size={15} className="text-warning" /> Focus next
                 </h2>
                 <p className="text-[11px] text-fg-subtle">
-                  Lowest quiz scores across every subject
+                  Quiz scores below 100% across every subject
                 </p>
               </div>
               <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
