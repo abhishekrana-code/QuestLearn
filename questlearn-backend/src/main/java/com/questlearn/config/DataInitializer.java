@@ -32,6 +32,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Demo seeder so the project is immediately playable during an evaluation.
@@ -64,6 +66,7 @@ public class DataInitializer implements ApplicationRunner {
         if (userRepository.count() == 0) {
             seedDemoData();
         }
+        seedRivalProgress();
         backfillDemoAttempts();
     }
 
@@ -290,48 +293,108 @@ public class DataInitializer implements ApplicationRunner {
      * it never rewrites a learner's attempts.</p>
      */
     private void backfillDemoAttempts() {
-        userRepository.findByEmailIgnoreCase("student@questlearn.dev").ifPresent(student -> {
-            for (UserModuleProgress progress : progressRepository.findByUserId(student.getId())) {
-                if (progress.getStatus() != ProgressStatus.COMPLETED) {
-                    continue;
-                }
+        for (String email : List.of(
+                "student@questlearn.dev", "mira@questlearn.dev", "sam@questlearn.dev")) {
+            userRepository.findByEmailIgnoreCase(email).ifPresent(this::backfillAttempts);
+        }
+    }
 
-                Module module = progress.getModule();
-                if (!attemptRepository
-                        .findByUserIdAndModuleIdOrderByCreatedAtAsc(student.getId(), module.getId())
-                        .isEmpty()) {
-                    continue;
-                }
-
-                int passing = module.getQuiz() == null ? 60 : module.getQuiz().getPassingScore();
-                int finalScore = progress.getScore();
-                // A believable climb: a rough first try, a near miss, then the score
-                // the progress row already records as the best.
-                int[] series = {
-                        Math.max(5, finalScore - 45),
-                        Math.max(15, finalScore - 20),
-                        finalScore,
-                };
-                Instant finished = progress.getCompletedAt() == null
-                        ? Instant.now()
-                        : progress.getCompletedAt();
-
-                for (int index = 0; index < series.length; index += 1) {
-                    attemptRepository.save(ModuleAttempt.builder()
-                            .user(student)
-                            .module(module)
-                            .score(series[index])
-                            .passed(series[index] >= passing)
-                            .source(AttemptSource.QUIZ)
-                            .createdAt(finished.minus(Duration.ofDays(
-                                    2L * (series.length - 1 - index))))
-                            .build());
-                }
-
-                progress.setAttempts(series.length);
-                progress.setCompletedAt(finished);
-                progressRepository.save(progress);
+    private void backfillAttempts(User student) {
+        for (UserModuleProgress progress : progressRepository.findByUserId(student.getId())) {
+            if (progress.getStatus() != ProgressStatus.COMPLETED) {
+                continue;
             }
+
+            Module module = progress.getModule();
+            if (!attemptRepository
+                    .findByUserIdAndModuleIdOrderByCreatedAtAsc(student.getId(), module.getId())
+                    .isEmpty()) {
+                continue;
+            }
+
+            int passing = module.getQuiz() == null ? 60 : module.getQuiz().getPassingScore();
+            int finalScore = progress.getScore();
+            // A believable climb: a rough first try, a near miss, then the score
+            // the progress row already records as the best.
+            int[] series = {
+                    Math.max(5, finalScore - 45),
+                    Math.max(15, finalScore - 20),
+                    finalScore,
+            };
+            Instant finished = progress.getCompletedAt() == null
+                    ? Instant.now()
+                    : progress.getCompletedAt();
+
+            for (int index = 0; index < series.length; index += 1) {
+                attemptRepository.save(ModuleAttempt.builder()
+                        .user(student)
+                        .module(module)
+                        .score(series[index])
+                        .passed(series[index] >= passing)
+                        .source(AttemptSource.QUIZ)
+                        .createdAt(finished.minus(Duration.ofDays(
+                                2L * (series.length - 1 - index))))
+                        .build());
+            }
+
+            progress.setAttempts(series.length);
+            progress.setCompletedAt(finished);
+            progressRepository.save(progress);
+        }
+    }
+
+    /**
+     * The leaderboard is more convincing when the students ahead of the demo account
+     * earned their place, so the two rivals get progress rows for the nodes their
+     * totals represent. A rival with any progress already is left alone.
+     */
+    private void seedRivalProgress() {
+        Course course = courseRepository.findAll().stream().findFirst().orElse(null);
+        if (course == null) {
+            return;
+        }
+
+        List<Module> modules = moduleRepository.findByCourseIdOrderByOrderIndexAsc(course.getId());
+        seedRival("mira@questlearn.dev", modules, Map.of(
+                "HTML Foundations", 100,
+                "CSS Layout Magic", 92,
+                "JavaScript Essentials", 84,
+                "React Components", 96));
+        seedRival("sam@questlearn.dev", modules, Map.of("HTML Foundations", 100));
+    }
+
+    private void seedRival(String email, List<Module> modules, Map<String, Integer> scores) {
+        userRepository.findByEmailIgnoreCase(email).ifPresent(rival -> {
+            if (!progressRepository.findByUserId(rival.getId()).isEmpty()) {
+                return;
+            }
+
+            Set<String> cleared = scores.keySet();
+            int totalXp = 0;
+            int clearedIndex = 0;
+            Instant newest = Instant.now().minus(Duration.ofDays(4));
+
+            for (Module module : modules) {
+                Integer score = scores.get(module.getTitle());
+                if (score != null) {
+                    totalXp += module.getXpReward();
+                    seedProgress(rival, module, ProgressStatus.COMPLETED, score,
+                            newest.minus(Duration.ofDays(4L * (scores.size() - 1 - clearedIndex))));
+                    clearedIndex += 1;
+                    continue;
+                }
+
+                boolean unlocked = module.getParentModule() == null
+                        || cleared.contains(module.getParentModule().getTitle());
+                seedProgress(rival, module,
+                        unlocked ? ProgressStatus.UNLOCKED : ProgressStatus.LOCKED, 0);
+            }
+
+            // The totals are the rewards of the cleared nodes, not a number typed in
+            // beside them: 480 and 160 could not be reached by any legal node set.
+            rival.setTotalXp(totalXp);
+            rival.setCurrentLevel(GamificationService.levelForXp(totalXp));
+            userRepository.save(rival);
         });
     }
 
@@ -375,13 +438,18 @@ public class DataInitializer implements ApplicationRunner {
     }
 
     private void seedProgress(User user, Module module, ProgressStatus status, int score) {
+        seedProgress(user, module, status, score, Instant.now());
+    }
+
+    private void seedProgress(User user, Module module, ProgressStatus status, int score,
+                              Instant completedAt) {
         progressRepository.save(UserModuleProgress.builder()
                 .user(user)
                 .module(module)
                 .status(status)
                 .score(score)
                 .attempts(status == ProgressStatus.COMPLETED ? 1 : 0)
-                .completedAt(status == ProgressStatus.COMPLETED ? Instant.now() : null)
+                .completedAt(status == ProgressStatus.COMPLETED ? completedAt : null)
                 .build());
     }
 
