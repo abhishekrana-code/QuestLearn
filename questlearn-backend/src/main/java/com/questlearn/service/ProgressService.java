@@ -349,6 +349,8 @@ public class ProgressService {
                     student.getTotalXp(),
                     student.getCurrentLevel(),
                     student.getStreakDays(),
+                    (int) progressRepository.countByUserIdAndStatus(
+                            student.getId(), ProgressStatus.COMPLETED),
                     student.getId().equals(principal.id())
             ));
         }

@@ -7,6 +7,7 @@ public record LeaderboardEntry(
         int totalXp,
         int currentLevel,
         int streakDays,
+        int modulesCleared,
         boolean currentUser
 ) {
 }

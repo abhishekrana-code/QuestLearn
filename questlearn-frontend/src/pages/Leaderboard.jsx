@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Crown, Flame, Medal } from 'lucide-react';
+import { Crown, Flame, Layers, Medal } from 'lucide-react';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
@@ -106,10 +106,14 @@ export default function Leaderboard() {
                   {entry.name}
                   {entry.currentUser && <span className="ml-1.5 text-gold-text">(you)</span>}
                 </p>
-                <p className="mt-0.5 flex items-center gap-2 text-[11px] text-fg-muted">
+                <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-fg-muted">
                   <Crown size={11} className="text-gold-text" /> Level {entry.currentLevel}
                   <span className="inline-flex items-center gap-1">
                     <Flame size={11} className="text-warning" /> {entry.streakDays}d
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Layers size={11} className="text-fg-subtle" /> {entry.modulesCleared}{' '}
+                    {entry.modulesCleared === 1 ? 'node' : 'nodes'}
                   </span>
                 </p>
               </div>
