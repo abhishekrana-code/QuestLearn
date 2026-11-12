@@ -80,6 +80,7 @@ export default function SkillTreePage() {
   const [retaking, setRetaking] = useState(false);
   const [retakeKey, setRetakeKey] = useState(0);
   const quizRef = useRef(null);
+  const briefingRef = useRef(null);
 
   const isPreview = user.role === 'INSTRUCTOR';
 
@@ -117,6 +118,16 @@ export default function SkillTreePage() {
       cancelled = true;
     };
   }, [loadTree, loadAttempt]);
+
+  // On a phone the briefing sits below the map, so a tap would otherwise look like it
+  // did nothing. Wait for the briefing content to render first: the map grows as it
+  // lays out, and scrolling before that leaves the page at the top. From xl upward the
+  // panel is already beside the map, so nothing moves.
+  useEffect(() => {
+    if (!selectedId || !window.matchMedia('(max-width: 1279px)').matches) return undefined;
+    const timer = setTimeout(() => briefingRef.current?.scrollIntoView({ block: 'start' }), 80);
+    return () => clearTimeout(timer);
+  }, [selectedId, detail]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -347,7 +358,10 @@ export default function SkillTreePage() {
           onLockedClick={handleLockedClick}
         />
 
-        <section className="xl:sticky xl:top-24 xl:h-[calc(100vh-7rem)]">
+        <section
+          ref={briefingRef}
+          className="scroll-mt-24 xl:sticky xl:top-24 xl:h-[calc(100vh-7rem)]"
+        >
           <div className="panel-raised flex h-full min-h-[320px] flex-col overflow-hidden">
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-100">
