@@ -495,6 +495,8 @@ a:focus-visible, button:focus-visible { outline: 2px solid hsl(var(--ring)); out
 
 @media (max-width: 640px) {
   header.sticky > div { padding-top: .65rem; padding-bottom: .65rem; }
+  /* Four role links have to share a 320px row without the last one clipping. */
+  header.sticky nav a { padding: .5rem .45rem; }
   main .mx-auto.max-w-7xl { padding-top: 1.35rem; }
   .page-title { font-size: 1.8rem; }
   .panel, .panel-raised { border-radius: 1rem; }

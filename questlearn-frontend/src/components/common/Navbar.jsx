@@ -65,7 +65,7 @@ export default function Navbar() {
               to={link.to}
               end={link.end}
               className={({ isActive }) =>
-                `whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors duration-150 ${
+                `whitespace-nowrap rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-colors duration-150 sm:text-[13px] ${
                   isActive
                     ? 'bg-gold/[0.12] text-gold-text ring-1 ring-inset ring-gold/20'
                     : 'text-fg-muted hover:bg-muted hover:text-foreground'

@@ -433,7 +433,7 @@ export default function ExploreCourses() {
                       : 0;
 
                   return (
-                    <article key={course.id} className="panel flex flex-col p-4">
+                    <article key={course.id} className="panel flex min-w-0 flex-col p-4">
                       <div className="flex items-start gap-2.5">
                         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-muted text-lg">
                           {course.emoji || '🗺️'}
