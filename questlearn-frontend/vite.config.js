@@ -20,7 +20,9 @@ function detectBackendPort() {
       }
     }
   }
-  return '8080';
+  // QuestLearn's backend runs on 8091; 8080 belongs to another project on this
+  // machine, so a missing SERVER_PORT must never send our API calls there.
+  return '8091';
 }
 
 // Where the dev server forwards /api to. Defaults to detected backend SERVER_PORT
