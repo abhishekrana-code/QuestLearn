@@ -179,16 +179,16 @@ public class ProgressService {
         );
     }
 
-    /**
-     * Transactional completion: verifies the node is UNLOCKED, scores the quiz,
-     * awards XP, recalculates level and streak, then unlocks child nodes.
-     */
-    @Transactional
     /** Reads one string out of the node's JSONB lesson content; null when absent. */
     private static String videoField(Module module, String field) {
         return module.getContent() == null ? null : module.getContent().path(field).asText(null);
     }
 
+    /**
+     * Transactional completion: verifies the node is UNLOCKED, scores the quiz,
+     * awards XP, recalculates level and streak, then unlocks child nodes.
+     */
+    @Transactional
     public XpAwardResponse completeModule(Long moduleId,
                                           AppUserPrincipal principal,
                                           List<AnswerRequest> answers) {
