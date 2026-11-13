@@ -212,7 +212,7 @@ All routes are under `/api/v1`. Protected routes need `Authorization: Bearer <to
 | `POST` | `/modules/{id}/viva` | Student, Admin | Multipart `audio` → transcript, verdict, XP, unlock children |
 | `POST` | `/modules/{id}/viva` | Student, Admin | JSON `{"answer": "..."}` → typed answer, same grading (no-microphone fallback) |
 | `GET` | `/leaderboard` | Student, Admin | Top 10 students by XP |
-| `GET` | `/courses/{id}/leaderboard` | Student, Admin | Top 10 in one course, by XP earned in it |
+| `GET` | `/courses/{id}/leaderboard?cohortId=` | Student, Instructor (owner), Admin | Top 10 in one course, by XP earned in it; `cohortId` ranks a single class |
 
 ### AI (Groq)
 

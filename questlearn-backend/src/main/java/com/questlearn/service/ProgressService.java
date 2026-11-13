@@ -35,6 +35,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +49,8 @@ public class ProgressService {
     private final QuizService quizService;
     private final GamificationService gamificationService;
     private final CourseService courseService;
+    private final com.questlearn.repository.CohortRepository cohortRepository;
+    private final com.questlearn.repository.CohortMembershipRepository cohortMembershipRepository;
 
     /**
      * Returns the course as a skill tree merged with the learner's progress.
@@ -366,10 +369,31 @@ public class ProgressService {
      * lifetime total, so a transfer student does not arrive at the top of the board
      * and someone who finished three courses elsewhere does not swamp their class.</p>
      */
-    @Transactional(readOnly = true)
     public List<CourseLeaderboardEntry> courseLeaderboard(Long courseId, AppUserPrincipal principal) {
+        return courseLeaderboard(courseId, null, principal);
+    }
+
+    /**
+     * @param cohortId when set, the board ranks only that class, which is what a
+     *                 teacher means by "how is 10B doing?"
+     */
+    @Transactional(readOnly = true)
+    public List<CourseLeaderboardEntry> courseLeaderboard(Long courseId, Long cohortId, AppUserPrincipal principal) {
         Course course = requireCourse(courseId);
         courseService.assertCanView(course, principal);
+
+        Set<Long> classMembers = null;
+        if (cohortId != null) {
+            var cohort = cohortRepository.findById(cohortId)
+                    .orElseThrow(() -> ApiException.notFound("Class not found"));
+            if (!cohort.getCourseId().equals(courseId)) {
+                throw ApiException.notFound("That class is not part of this course");
+            }
+            classMembers = cohortMembershipRepository.findByCohortIdOrderByJoinedAtAsc(cohortId).stream()
+                    .map(membership -> membership.getUserId())
+                    .collect(java.util.stream.Collectors.toSet());
+        }
+        final Set<Long> allowed = classMembers;
 
         Map<Long, Integer> xpByLearner = new HashMap<>();
         Map<Long, Integer> clearedByLearner = new HashMap<>();
@@ -391,6 +415,7 @@ public class ProgressService {
 
         List<CourseLeaderboardEntry> board = learners.values().stream()
                 .filter(learner -> learner.getRole() == Role.STUDENT)
+                .filter(learner -> allowed == null || allowed.contains(learner.getId()))
                 .sorted(Comparator
                         .comparingInt((User learner) -> xpByLearner.getOrDefault(learner.getId(), 0))
                         .reversed()

@@ -203,8 +203,12 @@ class QuestLearnApiIntegrationTest {
     }
 
     private JsonNode skillTree() throws Exception {
+        return skillTree(studentToken);
+    }
+
+    private JsonNode skillTree(String token) throws Exception {
         MvcResult result = mvc.perform(get("/api/v1/courses/" + course.getId() + "/skill-tree")
-                        .header("Authorization", "Bearer " + studentToken))
+                        .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andReturn();
         return json.readTree(result.getResponse().getContentAsString());
@@ -639,6 +643,66 @@ class QuestLearnApiIntegrationTest {
         mvc.perform(get("/api/v1/courses/" + draft.getId() + "/leaderboard")
                         .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void theCourseBoardCanRankJustOneClass() throws Exception {
+        String teacherToken = login("teacher@it.test");
+
+        users.save(User.builder()
+                .name("Other Learner")
+                .email("other@it.test")
+                .passwordHash(passwordEncoder.encode(PASSWORD))
+                .role(Role.STUDENT)
+                .totalXp(0)
+                .currentLevel(1)
+                .streakDays(0)
+                .build());
+        String otherToken = login("other@it.test");
+
+        MvcResult created = mvc.perform(post("/api/v1/courses/" + course.getId() + "/cohorts")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("name", "10B"))))
+                .andExpect(status().isOk())
+                .andReturn();
+        long cohortId = json.readTree(created.getResponse().getContentAsString()).path("id").asLong();
+        String code = json.readTree(created.getResponse().getContentAsString()).path("joinCode").asText();
+
+        mvc.perform(post("/api/v1/cohorts/join")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("code", code))))
+                .andExpect(status().isOk());
+
+        // The second learner works in the same course but never joined the class.
+        skillTree(otherToken);
+        complete(otherToken, root.getId(), 1);
+        skillTree(studentToken);
+        complete(studentToken, root.getId(), 1);
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/leaderboard")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/leaderboard?cohortId=" + cohortId)
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].rank").value(1))
+                .andExpect(jsonPath("$[0].name").value("Learner"));
+
+        // A class from another course cannot scope this board.
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/leaderboard?cohortId=999999")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isNotFound());
+
+        // The teacher who owns the course can rank it; that is who the class scope
+        // is for.
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/leaderboard")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk());
     }
 
     @Test

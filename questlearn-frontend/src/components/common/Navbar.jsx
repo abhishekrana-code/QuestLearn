@@ -18,6 +18,7 @@ const LINKS_BY_ROLE = {
   INSTRUCTOR: [
     { to: '/studio/courses', label: 'My courses' },
     { to: '/studio', label: 'Course studio', end: true },
+    { to: '/leaderboard', label: 'Leaderboard' },
   ],
   ADMIN: [
     { to: '/studio/courses', label: 'My courses' },

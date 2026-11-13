@@ -41,15 +41,32 @@ export default function Leaderboard() {
   const { user } = useAuth();
   const [entries, setEntries] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [coursesLoaded, setCoursesLoaded] = useState(false);
   // 'all' ranks lifetime XP across the building; a course id ranks one class.
   const [scope, setScope] = useState('all');
+  // '' is the whole course; a cohort id narrows to that class.
+  const [cohorts, setCohorts] = useState([]);
+  const [cohort, setCohort] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
 
+  // Only staff can list a course's classes, and only staff ever need to.
+  const isStaff = user?.role === 'INSTRUCTOR' || user?.role === 'ADMIN';
   const scopedCourse = courses.find((course) => String(course.id) === String(scope));
+  const scopedCohort = cohorts.find((item) => String(item.id) === String(cohort));
+  // A teacher has no building-wide board, so their board opens on their first course.
+  const waitingForOwnCourse = user?.role === 'INSTRUCTOR' && scope === 'all' && !coursesLoaded;
 
   const load = useCallback(async () => {
+    if (waitingForOwnCourse) {
+      return;
+    }
+    // A teacher with no courses has no board to ask for; the 403 would only nag.
+    if (user?.role === 'INSTRUCTOR' && scope === 'all') {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -59,7 +76,9 @@ export default function Leaderboard() {
       } else {
         // The course board ranks XP earned in that course, so it arrives as its
         // own shape and is mapped onto the card the page already draws.
-        const { data } = await api.get(`/courses/${scope}/leaderboard`);
+        const { data } = await api.get(`/courses/${scope}/leaderboard`, {
+          params: cohort ? { cohortId: cohort } : {},
+        });
         setEntries(data.map((entry) => ({ ...entry, totalXp: entry.courseXp })));
       }
     } catch (loadError) {
@@ -67,7 +86,7 @@ export default function Leaderboard() {
     } finally {
       setLoading(false);
     }
-  }, [scope]);
+  }, [scope, cohort, waitingForOwnCourse, user?.role]);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,11 +97,40 @@ export default function Leaderboard() {
       })
       .catch(() => {
         /* the picker just stays on "all learners" */
+      })
+      .finally(() => {
+        if (!cancelled) setCoursesLoaded(true);
       });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (user?.role === 'INSTRUCTOR' && scope === 'all' && courses.length > 0) {
+      setScope(String(courses[0].id));
+    }
+  }, [user?.role, scope, courses]);
+
+  useEffect(() => {
+    setCohort('');
+    if (!isStaff || scope === 'all') {
+      setCohorts([]);
+      return undefined;
+    }
+    let cancelled = false;
+    api
+      .get(`/courses/${scope}/cohorts`)
+      .then(({ data }) => {
+        if (!cancelled) setCohorts(data);
+      })
+      .catch(() => {
+        /* the class picker just does not appear */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scope, isStaff]);
 
   const { paused: retryPaused, reset: resetAutoRetry, retryNow: retryLoadNow } = useAutoRetry({
     active: Boolean(error) && !loading,
@@ -111,6 +159,9 @@ export default function Leaderboard() {
     );
   }
 
+  // A course a teacher sees but cannot rank is not an error worth a banner.
+  const boardTitle = scopedCohort?.name ?? scopedCourse?.title;
+
   const podium = [entries[1], entries[0], entries[2]].filter(Boolean);
   const rest = entries.slice(3);
 
@@ -120,9 +171,11 @@ export default function Leaderboard() {
         <p className="eyebrow">Standings</p>
         <h1 className="page-title mt-3">Leaderboard</h1>
         <p className="page-subtitle mt-2">
-          {scopedCourse
-            ? `Ranked by XP earned inside ${scopedCourse.title}, so a class compares with itself.`
-            : 'Ranked by total XP earned across every completed node. Consistency beats cramming.'}
+          {scopedCohort
+            ? `Everyone in ${scopedCohort.name}, ranked by XP earned inside ${scopedCourse?.title ?? 'this course'}.`
+            : scopedCourse
+              ? `Ranked by XP earned inside ${scopedCourse.title}, so a class compares with itself.`
+              : 'Ranked by total XP earned across every completed node. Consistency beats cramming.'}
         </p>
       </header>
 
@@ -135,7 +188,7 @@ export default function Leaderboard() {
             onChange={(event) => setScope(event.target.value)}
             aria-label="Choose what this leaderboard ranks"
           >
-            <option value="all">All learners</option>
+            {user?.role !== 'INSTRUCTOR' && <option value="all">All learners</option>}
             {courses.map((course) => (
               <option key={course.id} value={course.id}>
                 {course.title}
@@ -143,6 +196,25 @@ export default function Leaderboard() {
             ))}
           </select>
         </label>
+
+        {isStaff && scope !== 'all' && cohorts.length > 0 && (
+          <label className="flex items-center gap-2 text-[11px] font-semibold text-fg-muted">
+            Class
+            <select
+              className="field w-auto min-w-[12rem] text-[12px]"
+              value={cohort}
+              onChange={(event) => setCohort(event.target.value)}
+              aria-label="Rank one class instead of the whole course"
+            >
+              <option value="">Whole course</option>
+              {cohorts.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <LoadErrorBanner
@@ -158,9 +230,17 @@ export default function Leaderboard() {
             <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-brand-tint text-gold-text">
               <Crown size={18} />
             </span>
-            <p className="mt-3 text-sm font-semibold text-foreground">No students on the board yet</p>
+            <p className="mt-3 text-sm font-semibold text-foreground">
+              {scopedCohort
+                ? `Nobody in ${scopedCohort.name} has cleared a node yet`
+                : user?.role === 'INSTRUCTOR' && scope === 'all'
+                  ? 'You have no courses to rank yet'
+                  : 'No students on the board yet'}
+            </p>
             <p className="mt-1 text-[12px] leading-5 text-fg-muted">
-              Clear a node to claim the first slot.
+              {scopedCohort
+                ? 'Pick another class, or the whole course, to see who is moving.'
+                : 'Clear a node to claim the first slot.'}
             </p>
           </div>
         </div>
@@ -268,8 +348,8 @@ export default function Leaderboard() {
           )}
 
           <p className="mt-6 text-center text-[11px] text-fg-subtle">
-            {scopedCourse
-              ? `Only XP earned in ${scopedCourse.title} counts on this board.`
+            {boardTitle
+              ? `Only XP earned in ${scopedCourse?.title ?? 'this course'} counts on this board.`
               : `Your current rank is based on ${user.role === 'STUDENT' ? 'student' : 'account'} XP.`}
           </p>
         </>

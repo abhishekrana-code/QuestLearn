@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -63,11 +64,17 @@ public class ProgressController {
         return progressService.leaderboard(principal);
     }
 
+    /**
+     * Teachers included: a class teacher ranking their own class is the point of the
+     * cohort scope. Visibility is still checked by assertCanView, so a draft course
+     * stays private to the teacher who owns it.
+     */
     @GetMapping("/courses/{courseId}/leaderboard")
-    @PreAuthorize("hasAnyRole('STUDENT','ADMIN')")
+    @PreAuthorize("hasAnyRole('STUDENT','INSTRUCTOR','ADMIN')")
     @Operation(summary = "Top students in one course, ranked by XP earned in it")
     public List<CourseLeaderboardEntry> courseLeaderboard(@PathVariable Long courseId,
+                                                          @RequestParam(required = false) Long cohortId,
                                                           @AuthenticationPrincipal AppUserPrincipal principal) {
-        return progressService.courseLeaderboard(courseId, principal);
+        return progressService.courseLeaderboard(courseId, cohortId, principal);
     }
 }

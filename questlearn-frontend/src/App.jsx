@@ -101,7 +101,7 @@ export default function App() {
             <Route
               path="/leaderboard"
               element={
-                <ProtectedRoute roles={['STUDENT', 'ADMIN']}>
+                <ProtectedRoute roles={['STUDENT', 'INSTRUCTOR', 'ADMIN']}>
                   <Leaderboard />
                 </ProtectedRoute>
               }

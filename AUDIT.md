@@ -30,8 +30,8 @@ After the hardening release described below: the same routes plus
 `GET /admin/audit`, 94 backend tests (16 PostgreSQL integration tests), and 24
 frontend tests across 5 files.
 
-After the enrollment release (also 13 November 2026): 43 API routes, 105 backend
-tests (27 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
+After the enrollment release (also 13 November 2026): 43 API routes, 106 backend
+tests (28 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
 "my courses" split, per-course rosters, a CSV export, per-learner attempt history and
 a course-scoped leaderboard are all live and covered by tests.
 
@@ -126,10 +126,11 @@ gating, email and deadlines.
 This item is now substantially closed. A teacher can create a class with a join
 code, mark the course **members only** so it leaves the catalogue until a code adds
 a student, narrow the roster (and therefore the CSV) to one class, open any
-learner's attempt trail, and rank the course on its own board. What is left is the
-class-sized view of competition and import: the board still ranks the whole course
-rather than one cohort, and a class list cannot be imported from a spreadsheet.
-*Fix shape:* a `cohortId` scope on the course board and a roster CSV import.
+learner's attempt trail, rank the course on its own board, and **rank a single
+class** on that board. What is left is bulk setup: a class list cannot be imported
+from a spreadsheet.
+*Fix shape:* a roster CSV import, which should reuse the join path so imported
+students land in the same class list as a code would put them.
 
 **2. No email transport at all.**
 Consequences: no address verification, no self-service password recovery, no
@@ -182,7 +183,7 @@ below), so the order starts from what a graded term still needs.
 
 | Order | Work | Effort | Why first |
 |---|---|---|---|
-| 1 | Cohort-scoped class board + roster CSV import | 2–3 days | The last pieces of "run my class inside the product" |
+| 1 | Roster CSV import + a teacher's own view of a class board | 1–2 days | The last piece of "set my class up from the register" |
 | 2 | Email transport: verification + self-service reset | 3–5 days | Removes the most embarrassing support path |
 | 3 | Deadlines and notifications | 1–2 weeks | Turns self-paced study into schedulable coursework |
 | 4 | Object storage for lesson video | 3–5 days | Protects the single server and slow connections |
@@ -203,7 +204,8 @@ below), so the order starts from what a graded term still needs.
 | `3bc1b2b` | `GET /courses/{id}/roster/{userId}`: per-learner attempt trail, 404 for anyone not on that roster, 403 for students | Integration test covering the trail, the 404 and the 403; live page reviewed |
 | `76a253d` | `GET /courses/{id}/leaderboard`: class ranking by XP earned inside one course, plus a scope picker on the leaderboard page | Integration test (rank, course XP, modules cleared, draft 403); live scope switch on the page |
 | `c40bcb5` | Cohorts (V7): create/list/delete a class, eight-character join codes without ambiguous characters, and `POST /cohorts/join` which enrolls and joins in one step | 2 integration tests (code join, idempotency, case-insensitivity, 404, role refusals, delete keeps enrollment); live: instructor created "10B Demo", the student joined with a lower-case code, roster showed 1 member, deleting the class left Leo enrolled |
-| `_pending commit_` | Course gating (V8 `membership_required`): a members-only course leaves the catalogue and refuses non-members, while a class code still works; plus `?cohortId=` on the roster and the class picker, and a members-only switch on the classes page | 2 integration tests (gated course hidden + 403 + code still joins + owner-only toggle; roster narrowing 2 → 1 and a foreign class 404); live: switch on → "Members only", switch off restored, roster picker 4 → 1 learner |
+| `_pending_` | Class board: `?cohortId=` on `/courses/{id}/leaderboard`, the board opens to the owning instructor, and the standings page gains a class picker under the course one | 1 integration test (whole course 2 → one class 1, rank restarts at 1, unknown class 404, teacher may read own board); live: instructor's board auto-opened on their course, picking "10B Board" left Leo alone on it |
+| `09f4b4c` | Course gating (V8 `membership_required`): a members-only course leaves the catalogue and refuses non-members, while a class code still works; plus `?cohortId=` on the roster and the class picker, and a members-only switch on the classes page | 2 integration tests (gated course hidden + 403 + code still joins + owner-only toggle; roster narrowing 2 → 1 and a foreign class 404); live: switch on → "Members only", switch off restored, roster picker 4 → 1 learner |
 
 ---
 
