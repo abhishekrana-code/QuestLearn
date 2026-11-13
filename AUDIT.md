@@ -15,7 +15,7 @@ status, so it can be used as the backlog for "what does a real class still need"
 | Layer | What was exercised |
 |---|---|
 | Browser | Chrome via the in-app browser at a 375 px and desktop viewport, light and dark themes, logged in as admin, instructor and student |
-| API | All 25 documented endpoints, plus negative cases (wrong role, bad enum, missing parameter, duplicate email, weak password, unknown path) |
+| API | Every route in the README, plus negative cases (wrong role, bad enum, missing parameter, duplicate email, weak password, unknown path) |
 | Database | Seeded demo data: 5 accounts, 1 published course, 6 nodes, 6 quizzes, 1 lesson video |
 | Production | A second backend booted with `SPRING_PROFILES_ACTIVE=prod` on port 8092, real PostgreSQL, strict secrets |
 | Quality gates | `mvn verify` against PostgreSQL, `npm test`, `npm run build`, Lighthouse on the landing page, GitHub Actions |
@@ -23,8 +23,12 @@ status, so it can be used as the backlog for "what does a real class still need"
 Demo accounts used: `admin@questlearn.dev`, `instructor@questlearn.dev`,
 `student@questlearn.dev` — all with `password123`.
 
-At the time of the audit: 25 API paths, 89 backend tests (11 of them PostgreSQL
+At the time of the audit: 32 API routes, 89 backend tests (11 of them PostgreSQL
 integration tests), 22 frontend tests, and CI green on both halves.
+
+After the hardening release described below: the same routes plus
+`GET /admin/audit`, 94 backend tests (16 PostgreSQL integration tests), and 24
+frontend tests across 5 files.
 
 ---
 
@@ -36,8 +40,8 @@ integration tests), 22 frontend tests, and CI green on both halves.
 | Accessibility | 9/10 | Lighthouse 100 / 100 / 100 on the landing page (a11y, best practices, SEO); visible focus rings; reduced-motion support |
 | Student learning flow | 8/10 | Skill tree → lesson → quiz → viva, with XP and a progress page that reads well |
 | Instructor authoring | 8/10 | Five-step studio, AI draft builder, quiz and video editors |
-| Admin and account management | 6/10 | Moderation works; rosters, audit trail and search were missing |
-| Authentication and security | 7/10 | Strong role enforcement and throttling; sessions could not be revoked |
+| Admin and account management | 7/10 | Moderation, search and an audit feed work; rosters still missing |
+| Authentication and security | 8/10 | Role enforcement, throttling and revocable sessions; no email verification |
 | Classroom operations | 2/10 | No enrollment, cohorts, deadlines or gradebook export |
 | Reliability and observability | 5/10 | Health endpoint only; no metrics, tracing or error aggregation |
 | Tests and CI | 8/10 | Real PostgreSQL in CI, guards against silently skipped tests, both halves gated |
@@ -81,12 +85,29 @@ The craft is high; the operations layer is what is missing.
 | 3 | Medium | Subtle text measured **4.02:1** on cream (AA needs 4.5:1) | Tokens raised to 4.99:1 light / 4.72:1 dark; Lighthouse back to 100 | `826502d` |
 | 4 | Low | `/robots.txt` fell through to `index.html` | Real `robots.txt` that keeps signed-in workspaces out of search | `826502d` |
 | 5 | CI | The PostgreSQL guard asserted exactly 10 tests, so adding an eleventh failed a green run | Guard now asserts a floor of 10 and zero skipped | `91d39f5` |
-| 6 | High | Sessions could not be revoked: a password reset or a stolen token stayed valid for 24 hours | `tokenVersion` claim checked against the database on every request; password change and admin reset invalidate every other session | `security hardening commit` |
-| 7 | Medium | A role change did not take effect until the user signed in again | The filter now reads the role from the database, so demotion is immediate | `security hardening commit` |
-| 8 | Medium | `PATCH /auth/password` existed but was unreachable from the UI | Change-password dialog in the account menu; the endpoint returns a fresh token | `security hardening commit` |
-| 9 | Medium | No record of who changed a role, reset a password, or unpublished a course | Append-only `admin_audit_log`, written inside the same transaction as the action, shown on the admin page | `security hardening commit` |
-| 10 | Medium | Admin could only scroll a flat list of every account | Case-insensitive server-side search by name or email on `/admin/users?query=` | `security hardening commit` |
-| 11 | Low | Minimum password length was 6 | Raised to 8 on registration and password change | `security hardening commit` |
+| 6 | High | Sessions could not be revoked: a password reset or a stolen token stayed valid for 24 hours | `tokenVersion` claim checked against the database on every request; password change and admin reset invalidate every other session | `b4e0576` |
+| 7 | Medium | A role change did not take effect until the user signed in again | The filter now reads the role from the database, so demotion is immediate | `b4e0576` |
+| 8 | Medium | `PATCH /auth/password` existed but was unreachable from the UI | Change-password dialog in the account menu; the endpoint returns a fresh token | `b4e0576` |
+| 9 | Medium | No record of who changed a role, reset a password, or unpublished a course | Append-only `admin_audit_log`, written inside the same transaction as the action, shown on the admin page | `b4e0576` |
+| 10 | Medium | Admin could only scroll a flat list of every account | Case-insensitive server-side search by name or email on `/admin/users?query=` | `b4e0576` |
+| 11 | Low | Minimum password length was 6 | Raised to 8 on registration and password change | `b4e0576` |
+
+### How the hardening release was verified
+
+- **Live browser session, signed in as admin:** the audit feed showed a publish
+  and an unpublish performed seconds earlier; the account search filtered the
+  roster to one row for `sam` and restored all five when cleared; the
+  change-password dialog opened centred, rejected a mismatched confirmation, and
+  reached its success state without signing the admin out.
+- **Live password rotation:** the admin password was rotated to a temporary value
+  and back through the dialog. The pre-rotation token returned **401** on
+  `/auth/me`, the returned token returned **200**, and the temporary password was
+  rejected once it had been changed back.
+- **Suites:** `mvn -B verify` 94 tests / 16 integration, `npm test` 24 tests
+  across 5 files, `npm run build` clean.
+- **Schema:** Flyway applied `V4` and `V5` on the existing dev database with no
+  manual step, and Hibernate's `validate` passed, so the migrations match the
+  entities.
 
 ---
 
