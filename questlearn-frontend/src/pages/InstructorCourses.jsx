@@ -309,7 +309,8 @@ export default function InstructorCourses() {
                     </h2>
                     <p className="mt-0.5 truncate text-[11px] text-fg-subtle">
                       {course.category || 'Uncategorised'} · {course.moduleCount} node
-                      {course.moduleCount === 1 ? '' : 's'}
+                      {course.moduleCount === 1 ? '' : 's'} · {course.enrolledCount ?? 0} learner
+                      {(course.enrolledCount ?? 0) === 1 ? '' : 's'} joined
                     </p>
                   </div>
                   <span
