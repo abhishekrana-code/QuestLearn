@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Clock, Lock, Unlock } from 'lucide-react';
+import { ArrowLeft, Check, Clock, Lock, RotateCcw, Unlock } from 'lucide-react';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import api, { apiError } from '../services/api.js';
 
@@ -33,8 +34,10 @@ function shortDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-function NodeCard({ node }) {
+function NodeCard({ node, canReset, resetting, onReset }) {
   const { label, chip, Icon } = STATUS[node.status] ?? STATUS.LOCKED;
+  // Nothing to reset on a node they never touched.
+  const resettable = canReset && (node.attempts > 0 || node.status === 'COMPLETED');
   return (
     <article className="panel p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -47,9 +50,22 @@ function NodeCard({ node }) {
             {node.status === 'COMPLETED' && ` · best ${node.score}% · cleared ${shortDate(node.completedAt)}`}
           </p>
         </div>
-        <span className={`chip shrink-0 ${chip}`}>
-          <Icon size={11} /> {label}
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className={`chip ${chip}`}>
+            <Icon size={11} /> {label}
+          </span>
+          {resettable && (
+            <button
+              type="button"
+              onClick={() => onReset(node)}
+              disabled={resetting}
+              className="btn-ghost px-2 py-1 text-[11px]"
+              title="Give this node back so the learner can retry it"
+            >
+              <RotateCcw size={12} /> {resetting ? 'Resetting…' : 'Reset'}
+            </button>
+          )}
+        </div>
       </div>
 
       {node.history.length > 0 ? (
@@ -86,7 +102,10 @@ function NodeCard({ node }) {
  */
 export default function LearnerDetail() {
   const { courseId, userId } = useParams();
+  const { user } = useAuth();
   const [learner, setLearner] = useState(null);
+  const [resetting, setResetting] = useState(null);
+  const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -117,6 +136,25 @@ export default function LearnerDetail() {
     if (!error && !loading) resetAutoRetry();
   }, [error, loading, resetAutoRetry]);
 
+  const resetNode = async (node) => {
+    const confirmed = window.confirm(
+      `Reset ${learner?.name ?? 'this learner'}'s progress on "${node.title}"?\n\n` +
+        'The node goes back to where it started and the XP they earned for it is removed.',
+    );
+    if (!confirmed) return;
+    setResetting(node.moduleId);
+    setNotice(null);
+    try {
+      await api.delete(`/admin/users/${userId}/modules/${node.moduleId}/progress`);
+      setNotice({ type: 'success', text: `"${node.title}" was reset.` });
+      setLoadAttempt((previous) => previous + 1);
+    } catch (resetError) {
+      setNotice({ type: 'error', text: apiError(resetError, 'Could not reset that node.') });
+    } finally {
+      setResetting(null);
+    }
+  };
+
   const nodes = learner?.nodes ?? [];
 
   return (
@@ -143,6 +181,18 @@ export default function LearnerDetail() {
         onRetry={retryLoadNow}
       />
 
+      {notice && (
+        <div
+          className={`mb-4 rounded-lg border px-4 py-2.5 text-[12px] ${
+            notice.type === 'error'
+              ? 'border-danger/30 bg-danger/[0.07] text-danger'
+              : 'border-success/30 bg-success/[0.07] text-success'
+          }`}
+        >
+          {notice.text}
+        </div>
+      )}
+
       {loading ? (
         <div className="panel grid min-h-[200px] place-items-center text-sm text-fg-muted">
           Loading their attempts…
@@ -164,7 +214,13 @@ export default function LearnerDetail() {
 
           <div className="grid gap-3 sm:grid-cols-2">
             {nodes.map((node) => (
-              <NodeCard key={node.moduleId} node={node} />
+              <NodeCard
+                key={node.moduleId}
+                node={node}
+                canReset={user?.role === 'ADMIN' || user?.role === 'INSTRUCTOR'}
+                resetting={resetting === node.moduleId}
+                onReset={resetNode}
+              />
             ))}
           </div>
         </>

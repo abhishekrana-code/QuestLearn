@@ -410,6 +410,35 @@ class QuestLearnApiIntegrationTest {
     }
 
     @Test
+    void aTeacherCanResetOneNodeInTheirOwnCourse() throws Exception {
+        String teacherToken = login("teacher@it.test");
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+        skillTree();
+        complete(studentToken, root.getId(), 1);
+
+        mvc.perform(delete("/api/v1/admin/users/" + student.getId() + "/modules/" + root.getId()
+                        + "/progress")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalXp").value(0));
+
+        // The node is open again and the XP is gone, not doubled back.
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster/" + student.getId())
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.clearedNodes").value(0))
+                .andExpect(jsonPath("$.nodes[0].status").value("UNLOCKED"))
+                .andExpect(jsonPath("$.nodes[0].attempts").value(0));
+
+        mvc.perform(delete("/api/v1/admin/users/" + student.getId() + "/modules/" + root.getId()
+                        + "/progress")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void anAdminPasswordResetRevokesLiveSessions() throws Exception {
         String adminToken = login("admin@it.test");
         String liveToken = login("learner@it.test");

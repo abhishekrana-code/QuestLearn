@@ -30,8 +30,8 @@ After the hardening release described below: the same routes plus
 `GET /admin/audit`, 94 backend tests (16 PostgreSQL integration tests), and 24
 frontend tests across 5 files.
 
-After the enrollment release (also 13 November 2026): 45 API routes, 110 backend
-tests (32 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
+After the enrollment release (also 13 November 2026): 45 API routes, 111 backend
+tests (33 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
 "my courses" split, per-course rosters, a CSV export, per-learner attempt history and
 a course-scoped leaderboard are all live and covered by tests.
 
@@ -179,8 +179,11 @@ email.**
     analytics dashboards, Playwright end-to-end tests, load testing, richer metrics
     (`/actuator/health` is the only exposed actuator endpoint), an accessibility
     statement page, and a documented data-retention policy.
-11. **Admin progress reset** exists in the API (`DELETE /admin/users/{userId}/modules/{moduleId}/progress`)
-    but has no UI. It is the right tool for "let me retry that quiz" support tickets.
+11. **Admin progress reset — CLOSED.** `DELETE /admin/users/{userId}/modules/{moduleId}/progress`
+    now has a Reset button on each node of a learner's detail page, and it is open to
+    the course's own instructor as well as admins (the service refuses any course the
+    teacher does not own). The node returns to its starting state and the XP it earned
+    is taken back.
 
 ---
 
@@ -192,14 +195,10 @@ below), so the order starts from what a graded term still needs.
 | Order | Work | Effort | Why first |
 |---|---|---|---|
 | 1 | Email transport: verification + self-service reset | 3–5 days | The only P0 left, and the most embarrassing support path |
-| 2 | Email transport: verification + self-service reset | 3–5 days | Removes the most embarrassing support path |
-| 3 | Deadlines and notifications | 1–2 weeks | Turns self-paced study into schedulable coursework |
-| 4 | Object storage for lesson video | 3–5 days | Protects the single server and slow connections |
-| 5 | `/admin/users` pagination | 1 day | Prevents a bad day at 500 accounts |
-| 6 | Dependency majors (Vite 8, Vitest 5, react-router 7) | 2–4 days | Clears two critical advisories; needs its own quiet week |
-| 7 | Dependency majors (Vite 8, Vitest 5, react-router 7) | 2–4 days | Clears two critical advisories; needs its own quiet week |
-| 8 | E2E smoke suite (signup → enroll → complete → report) | 3–5 days | Catches wiring regressions the unit tests cannot |
-| 9 | Admin progress-reset UI | Half a day | Closes a support workflow that already exists in the API |
+| 2 | Deadlines and notifications | 1–2 weeks | Turns self-paced study into schedulable coursework |
+| 3 | Object storage for lesson video | 3–5 days | Protects the single server and slow connections |
+| 4 | Dependency majors (Vite 8, Vitest 5, react-router 7) | 2–4 days | Clears two critical advisories; needs its own quiet week |
+| 5 | E2E smoke suite (signup → enroll → complete → report) | 3–5 days | Catches wiring regressions the unit tests cannot |
 
 ### The enrollment release (13 November 2026)
 
@@ -212,7 +211,8 @@ below), so the order starts from what a graded term still needs.
 | `3bc1b2b` | `GET /courses/{id}/roster/{userId}`: per-learner attempt trail, 404 for anyone not on that roster, 403 for students | Integration test covering the trail, the 404 and the 403; live page reviewed |
 | `76a253d` | `GET /courses/{id}/leaderboard`: class ranking by XP earned inside one course, plus a scope picker on the leaderboard page | Integration test (rank, course XP, modules cleared, draft 403); live scope switch on the page |
 | `c40bcb5` | Cohorts (V7): create/list/delete a class, eight-character join codes without ambiguous characters, and `POST /cohorts/join` which enrolls and joins in one step | 2 integration tests (code join, idempotency, case-insensitivity, 404, role refusals, delete keeps enrollment); live: instructor created "10B Demo", the student joined with a lower-case code, roster showed 1 member, deleting the class left Leo enrolled |
-| `_pending-2_` | Admin pagination (page/size, total and totalPages, size capped at 100, pager in the admin table) and edge hardening: `deploy/security-headers.conf` with CSP/HSTS/permissions policy included from `nginx.conf`, and the Google Fonts CDN removed so `font-src` can stay `'self'` | 1 integration test (page 0 and 1 of 3 accounts, clamped size, unchanged search shape); live: admin table showed "1–5 of 5" with both pager buttons disabled, network had no font request, and the heading computed to the system stack |
+| `_pending-2_` | Progress reset in the UI: a Reset button on each touched node of a learner's detail page, and the existing endpoint opened to the owning instructor (ownership checked in the service) | 1 integration test (teacher resets a cleared node, XP returns to 0, node back to UNLOCKED with no attempts, student refused); live: Leo's two cleared nodes show Reset, the four untouched ones do not |
+| `b587165` | Admin pagination (page/size, total and totalPages, size capped at 100, pager in the admin table) and edge hardening: `deploy/security-headers.conf` with CSP/HSTS/permissions policy included from `nginx.conf`, and the Google Fonts CDN removed so `font-src` can stay `'self'` | 1 integration test (page 0 and 1 of 3 accounts, clamped size, unchanged search shape); live: admin table showed "1–5 of 5" with both pager buttons disabled, network had no font request, and the heading computed to the system stack |
 | `e10bdfa` | Roster import + node filter + print: `POST /courses/{id}/roster/import` (addresses only, duplicates collapsed, unknown accounts reported), `?nodeId=&nodeCleared=` on the roster, `nodes` on the roster payload so the picker survives an empty result, and a print stylesheet | 2 integration tests (import idempotency, case-folded duplicates, unknown address, student refused; node filter cleared/not-cleared and a foreign node 404); live: import via the UI reported 1 enrolled and 1 unknown, repeat returned "already in", node filter narrowed to Leo then emptied the list with the picker still present |
 | `55b4b6c` | Demo data: a second course, "Data Structures Detour" (3 nodes, a quiz on the last), with two nodes cleared for the demo student, an enrollment row and an account total recomputed from the work; written to apply to an existing database, not just a fresh one | 107 tests still pass (the seeder is excluded from the `it` profile); live: Leo 420 XP across 2 courses, level 3, `mine` shows 2/6 and 2/3, per-course board 200 XP and the combined board 420 |
 | `df5e268` | Overall board: `GET /leaderboard/overall` sums the XP of every cleared node across every course per learner, with a node count, a course count and the top three contributing courses; the standings page opens on it ("All courses combined") and keeps lifetime XP as a second option | 1 integration test (combined 100 from one node, one course, the course named, teacher refused); live: Mira 520/4 nodes, Leo 220/2, Sam 100/1, each attributed to the one course |

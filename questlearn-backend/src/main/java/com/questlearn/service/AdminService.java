@@ -126,6 +126,14 @@ public class AdminService {
         Module module = moduleRepository.findById(moduleId)
                 .orElseThrow(() -> ApiException.notFound("Module not found"));
 
+        // A teacher may only undo work in a course they own; the class instructor is
+        // who a "please let me retry" request actually reaches.
+        if (principal.role() == Role.INSTRUCTOR
+                && (module.getCourse() == null || module.getCourse().getInstructor() == null
+                || !principal.id().equals(module.getCourse().getInstructor().getId()))) {
+            throw ApiException.forbidden("You can only reset progress in your own course");
+        }
+
         UserModuleProgress progress = progressRepository
                 .findByUserIdAndModuleId(userId, moduleId)
                 .orElseThrow(() -> ApiException.notFound(

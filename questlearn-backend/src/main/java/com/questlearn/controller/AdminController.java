@@ -58,7 +58,13 @@ public class AdminController {
         return adminService.resetPassword(userId, principal);
     }
 
+    /**
+     * Open to instructors as well as admins: "let me retry that quiz" is a support
+     * ticket that lands with the teacher, and the service refuses any course they do
+     * not own.
+     */
     @DeleteMapping("/users/{userId}/modules/{moduleId}/progress")
+    @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
     @Operation(summary = "Reset one learner's progress on one node so they can retry it")
     public UserDto resetProgress(@PathVariable Long userId,
                                  @PathVariable Long moduleId,
