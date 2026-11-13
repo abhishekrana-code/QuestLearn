@@ -47,3 +47,8 @@ Thumbs.db
 
 # Uploaded lesson videos (user content, never committed)
 uploads/
+
+# Playwright
+questlearn-frontend/test-results/
+questlearn-frontend/playwright-report/
+questlearn-frontend/.playwright/

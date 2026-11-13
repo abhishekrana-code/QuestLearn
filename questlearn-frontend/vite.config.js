@@ -79,6 +79,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // Playwright owns e2e/; vitest must not try to run those specs in jsdom.
+    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
   },
   build: {
     rollupOptions: {

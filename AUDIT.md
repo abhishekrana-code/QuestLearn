@@ -198,7 +198,6 @@ below), so the order starts from what a graded term still needs.
 | 2 | Deadlines and notifications | 1–2 weeks | Turns self-paced study into schedulable coursework |
 | 3 | Object storage for lesson video | 3–5 days | Protects the single server and slow connections |
 | 4 | Dependency majors (Vite 8, Vitest 5, react-router 7) | 2–4 days | Clears two critical advisories; needs its own quiet week |
-| 5 | E2E smoke suite (signup → enroll → complete → report) | 3–5 days | Catches wiring regressions the unit tests cannot |
 
 ### The enrollment release (13 November 2026)
 
@@ -214,6 +213,7 @@ below), so the order starts from what a graded term still needs.
 | `_pending_` | Audit pass over the above: roster import now refuses an empty list and caps at 500 addresses instead of returning a silent 200 or holding a transaction across ten thousand lookups; the dead `roster` and `courseLeaderboard` overloads (which would have bypassed `@Transactional` through self-invocation) are gone, along with two unused repository finders; the import panel no longer prints | 1 new integration test (empty object, blank strings, 501 addresses all 400, a normal import still 200); live regression sweep: gating hides course 18 from an unenrolled learner and 403s the direct link, a class round-trip filters roster, board and node filter and leaves progress intact on delete (2/6, 420 XP) |
 | `c4fec20` | Progress reset in the UI: a Reset button on each touched node of a learner's detail page, and the existing endpoint opened to the owning instructor (ownership checked in the service) | 1 integration test (teacher resets a cleared node, XP returns to 0, node back to UNLOCKED with no attempts, student refused); live: Leo's two cleared nodes show Reset, the four untouched ones do not |
 | `b587165` | Admin pagination (page/size, total and totalPages, size capped at 100, pager in the admin table) and edge hardening: `deploy/security-headers.conf` with CSP/HSTS/permissions policy included from `nginx.conf`, and the Google Fonts CDN removed so `font-src` can stay `'self'` | 1 integration test (page 0 and 1 of 3 accounts, clamped size, unchanged search shape); live: admin table showed "1–5 of 5" with both pager buttons disabled, network had no font request, and the heading computed to the system stack |
+| Playwright smoke suite | `questlearn-frontend/e2e/smoke.spec.js` signs a brand-new account up, joins the course from the catalogue, clears *HTML Foundations* through the quiz UI, then signs in as the instructor and reads that learner off the roster at 1/6 cleared. Runs against the live API, with the frontend dev server started by the config | Passing locally in ~12s (headless Chromium, `npm run test:e2e`); its own `e2e` CI job builds the jar, starts it on :8091 against a throwaway PostgreSQL database, and uploads the report plus API log if it fails |
 | `e10bdfa` | Roster import + node filter + print: `POST /courses/{id}/roster/import` (addresses only, duplicates collapsed, unknown accounts reported), `?nodeId=&nodeCleared=` on the roster, `nodes` on the roster payload so the picker survives an empty result, and a print stylesheet | 2 integration tests (import idempotency, case-folded duplicates, unknown address, student refused; node filter cleared/not-cleared and a foreign node 404); live: import via the UI reported 1 enrolled and 1 unknown, repeat returned "already in", node filter narrowed to Leo then emptied the list with the picker still present |
 | `55b4b6c` | Demo data: a second course, "Data Structures Detour" (3 nodes, a quiz on the last), with two nodes cleared for the demo student, an enrollment row and an account total recomputed from the work; written to apply to an existing database, not just a fresh one | 107 tests still pass (the seeder is excluded from the `it` profile); live: Leo 420 XP across 2 courses, level 3, `mine` shows 2/6 and 2/3, per-course board 200 XP and the combined board 420 |
 | `df5e268` | Overall board: `GET /leaderboard/overall` sums the XP of every cleared node across every course per learner, with a node count, a course count and the top three contributing courses; the standings page opens on it ("All courses combined") and keeps lifetime XP as a second option | 1 integration test (combined 100 from one node, one course, the course named, teacher refused); live: Mira 520/4 nodes, Leo 220/2, Sam 100/1, each attributed to the one course |
@@ -232,6 +232,9 @@ IT_DB_USER=postgres IT_DB_PASSWORD=... mvn -B verify
 
 # Frontend
 cd questlearn-frontend && npm test && npm run build
+
+# Browser smoke suite, with the backend already running on :8091
+cd questlearn-frontend && npm run test:e2e
 
 # Production profile smoke test
 SPRING_PROFILES_ACTIVE=prod JWT_SECRET=... CORS_ORIGINS=https://example.com \

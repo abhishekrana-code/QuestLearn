@@ -337,6 +337,24 @@ cd questlearn-backend && mvn -B -DskipTests package
 cd questlearn-frontend && npm run build
 ```
 
+### Smoke suite (Playwright)
+
+One browser test drives the whole loop a real learner and teacher go through:
+register a fresh account, join a course from the catalogue, clear the first node,
+then sign in as the instructor and find that learner on the roster with `1/6`
+cleared. It is the only check that exercises the pages against the real API.
+
+```bash
+# Needs the backend on :8091 (the spec checks and says so if it is missing).
+# The dev server is started for you on :5180 if it is not already running.
+cd questlearn-frontend
+npx playwright install chromium   # once per machine
+npm run test:e2e
+```
+
+Each run registers a new `smoke.<timestamp>@questlearn.dev` student, so a local
+database collects a few of them over time; CI uses a throwaway database.
+
 ## Troubleshooting
 
 | Symptom | Fix |
