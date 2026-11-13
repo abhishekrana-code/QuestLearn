@@ -302,6 +302,8 @@ export default function Leaderboard() {
                   </p>
                   <p className="mt-1 text-[10px] text-fg-subtle">
                     {entry.modulesCleared} {entry.modulesCleared === 1 ? 'node' : 'nodes'} cleared
+                    {entry.coursesCleared > 0 &&
+                      ` · ${entry.coursesCleared} ${entry.coursesCleared === 1 ? 'course' : 'courses'}`}
                   </p>
                 </motion.article>
               );

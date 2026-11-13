@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.questlearn.model.AttemptSource;
 import com.questlearn.model.Course;
+import com.questlearn.model.Enrollment;
 import com.questlearn.model.Module;
 import com.questlearn.model.ModuleAttempt;
 import com.questlearn.model.ProgressStatus;
@@ -14,6 +15,7 @@ import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.model.UserModuleProgress;
 import com.questlearn.repository.CourseRepository;
+import com.questlearn.repository.EnrollmentRepository;
 import com.questlearn.repository.ModuleAttemptRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.QuizRepository;
@@ -61,6 +63,7 @@ public class DataInitializer implements ApplicationRunner {
 
     private final UserRepository userRepository;
     private final CourseRepository courseRepository;
+    private final EnrollmentRepository enrollmentRepository;
     private final ModuleRepository moduleRepository;
     private final QuizRepository quizRepository;
     private final UserModuleProgressRepository progressRepository;
@@ -76,6 +79,7 @@ public class DataInitializer implements ApplicationRunner {
             seedDemoData();
         }
         seedRivalProgress();
+        seedSecondCourse();
         attachDemoVideo();
         backfillDemoAttempts();
     }
@@ -292,6 +296,123 @@ public class DataInitializer implements ApplicationRunner {
         // touch admin/instructor so they are not reported as unused by the compiler
         List<User> staff = new ArrayList<>(List.of(admin, instructor));
         staff.size();
+    }
+
+    private static final String SECOND_COURSE_TITLE = "Data Structures Detour";
+
+    /**
+     * A second course for the same learner.
+     *
+     * <p>Every board used to be measured inside one course, so a combined total was
+     * indistinguishable from a single course's XP. Leo now has work in two courses,
+     * which is what lets the overall board be checked rather than assumed.</p>
+     *
+     * <p>Written to run against a database that already has the demo data, so an
+     * existing dev database gets the course on its next restart instead of needing a
+     * wipe. It only ever adds: an existing copy of the course stops it.</p>
+     */
+    private void seedSecondCourse() throws Exception {
+        boolean alreadyThere = courseRepository.findAll().stream()
+                .anyMatch(course -> SECOND_COURSE_TITLE.equals(course.getTitle()));
+        if (alreadyThere) {
+            return;
+        }
+
+        var instructor = userRepository.findByEmailIgnoreCase("instructor@questlearn.dev").orElse(null);
+        var student = userRepository.findByEmailIgnoreCase("student@questlearn.dev").orElse(null);
+        if (instructor == null || student == null) {
+            return;
+        }
+
+        Course course = courseRepository.save(Course.builder()
+                .title(SECOND_COURSE_TITLE)
+                .description("Three nodes on the structures underneath every list, index and search. "
+                        + "A second course, so XP can be earned in more than one place.")
+                .category("Computer Science")
+                .emoji("\uD83E\uDDE9")
+                .published(true)
+                .instructor(instructor)
+                .build());
+
+        Module arrays = seedModule(course, null, "Arrays and Big-O", 90, 0, 0, 0,
+                "Why reading an index is instant and inserting into the middle is not.",
+                sections(
+                        "Constant time reads",
+                        "An array knows where it starts and how wide each slot is, so element n is one "
+                                + "multiplication away. That is why indexing is O(1).",
+                        "Linear time inserts",
+                        "Pushing a value into the middle shifts every later element, which makes it O(n) "
+                                + "no matter how fast the shift is.")
+                        .toString(),
+                "Pick a structure by the operation you do most, not by habit.");
+        Module lists = seedModule(course, arrays, "Linked Lists", 110, 1, 1, 1,
+                "Pointers trade instant access for instant insertion.",
+                sections(
+                        "Nodes and next",
+                        "Each node holds a value and a reference to the next one. There is no index to "
+                                + "jump to, so finding the tenth element means walking nine links.",
+                        "Cheap surgery",
+                        "Inserting after a known node is a pair of pointer writes, which is why a list "
+                                + "beats an array when the middle changes constantly.")
+                        .toString(),
+                "A list is a promise about order, not about location.");
+        Module trees = seedModule(course, lists, "Trees and Traversal", 130, 2, 2, 2,
+                "Search a sorted tree in logarithmic steps instead of walking every node.",
+                sections(
+                        "Half the work each step",
+                        "A balanced search tree compares once and discards half the remaining nodes, so a "
+                                + "thousand values take about ten steps.",
+                        "Depth first or breadth first",
+                        "Depth-first traversal uses a stack and suits path questions; breadth-first uses a "
+                                + "queue and finds the shortest route in an unweighted graph.")
+                        .toString(),
+                "The shape of the data decides the speed of the search.");
+
+        quizRepository.save(quiz(trees, QuizType.MULTIPLE_CHOICE, 60, """
+                {
+                  "questions": [
+                    {
+                      "id": "trees-q1",
+                      "prompt": "Why does a balanced binary search tree find a value quickly?",
+                      "options": [
+                        "It stores values in a hash table",
+                        "Each comparison discards half the remaining nodes",
+                        "It keeps values in insertion order",
+                        "It caches the last lookup"
+                      ],
+                      "correctIndex": 1,
+                      "explanation": "Halving the search space each step is what makes the cost logarithmic."
+                    },
+                    {
+                      "id": "trees-q2",
+                      "prompt": "Which structure does a breadth-first traversal use?",
+                      "options": ["A stack", "A queue", "A heap", "A set"],
+                      "correctIndex": 1,
+                      "explanation": "A queue visits nodes in the order they were discovered."
+                    }
+                  ]
+                }
+                """));
+
+        enrollmentRepository.save(Enrollment.builder()
+                .userId(student.getId())
+                .courseId(course.getId())
+                .build());
+
+        seedProgress(student, arrays, ProgressStatus.COMPLETED, 100);
+        seedProgress(student, lists, ProgressStatus.COMPLETED, 80);
+        seedProgress(student, trees, ProgressStatus.UNLOCKED, 0);
+
+        // The account total was typed in when there was one course. Keep it equal to
+        // the work actually finished, so lifetime XP and combined XP tell the same
+        // story until a learner earns something new.
+        int totalXp = progressRepository.findByUserId(student.getId()).stream()
+                .filter(progress -> progress.getStatus() == ProgressStatus.COMPLETED)
+                .mapToInt(progress -> progress.getModule().getXpReward())
+                .sum();
+        student.setTotalXp(totalXp);
+        student.setCurrentLevel(GamificationService.levelForXp(totalXp));
+        userRepository.save(student);
     }
 
     /**

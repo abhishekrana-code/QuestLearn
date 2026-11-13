@@ -132,8 +132,10 @@ Open <http://localhost:5173>. Vite reads `SERVER_PORT` from the backend `.env` a
 | Admin | `admin@questlearn.dev` | `password123` |
 
 The demo course **“Full-Stack Web Engineering Quest”** ships with six linked nodes and a quiz on
-every node. The demo student already has two nodes cleared, 220 XP, level 2 and a 4-day streak, so
-the dashboard and leaderboard are populated from the first login.
+every node. The demo student starts with two nodes cleared, a 4-day streak, and work in a second
+course, **“Data Structures Detour”** (three nodes, two cleared), so 420 XP, level 3 and both boards —
+combined across courses and scoped to one — are populated from the first login. The rival learners
+stay inside the first course, which is what makes the two boards read differently.
 
 ---
 
