@@ -364,10 +364,17 @@ cd questlearn-frontend && npm run build
 
 ### Smoke suite (Playwright)
 
-One browser test drives the whole loop a real learner and teacher go through:
-register a fresh account, join a course from the catalogue, clear the first node,
-then sign in as the instructor and find that learner on the roster with `1/6`
-cleared. It is the only check that exercises the pages against the real API.
+Two browser tests drive the loops a real learner and teacher go through, and they
+are the only checks that exercise the pages against the real API.
+
+1. **Open course:** register a fresh account, join a course from the catalogue,
+   clear the first node, then sign in as the instructor and find that learner on
+   the roster with `1/6` cleared.
+2. **Members-only course:** the instructor flips a course to members only, creates a
+   class and reads out its code; a new student cannot see the course in the
+   catalogue and is refused the direct link, then joins with the code and lands on
+   the skill tree. The test restores the course and deletes its class when it
+   finishes, even after a failure.
 
 ```bash
 # Needs the backend on :8091 (the spec checks and says so if it is missing).
