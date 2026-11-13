@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, BookOpen, Compass, Crown, Layers, Sparkles, Trophy, Zap } from 'lucide-react';
+import { ArrowRight, BookOpen, Check, Compass, Crown, Layers, Sparkles, Trophy, Zap } from 'lucide-react';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import StreakCounter from '../components/gamification/StreakCounter.jsx';
@@ -48,8 +48,15 @@ export default function StudentDashboard() {
     if (!error && !loading) resetAutoRetry();
   }, [error, loading, resetAutoRetry]);
 
-  const totalNodes = courses.reduce((sum, course) => sum + (course.moduleCount ?? 0), 0);
-  const clearedNodes = courses.reduce((sum, course) => sum + (course.completedModules ?? 0), 0);
+  const enrolledCourses = courses.filter((course) => course.enrolled);
+  // A learner who has not joined anything yet still sees the catalogue, so the
+  // dashboard is never an empty page on first sign-in.
+  const listedCourses = enrolledCourses.length > 0 ? enrolledCourses : courses;
+  const totalNodes = listedCourses.reduce((sum, course) => sum + (course.moduleCount ?? 0), 0);
+  const clearedNodes = listedCourses.reduce(
+    (sum, course) => sum + (course.completedModules ?? 0),
+    0,
+  );
   const firstName = user.name.split(' ')[0];
 
   return (
@@ -122,7 +129,7 @@ export default function StudentDashboard() {
                 <div key={key} className="panel h-[116px] animate-pulse bg-muted/50" />
               ))}
             </div>
-          ) : courses.length === 0 ? (
+          ) : listedCourses.length === 0 ? (
             <div className="panel p-8 text-center">
               <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-brand-tint text-gold-text">
                 <Compass size={18} />
@@ -137,7 +144,7 @@ export default function StudentDashboard() {
             </div>
           ) : (
             <div className="space-y-3">
-              {courses.map((course, index) => {
+              {listedCourses.map((course, index) => {
                 const percent =
                   course.moduleCount > 0
                     ? Math.round((course.completedModules / course.moduleCount) * 100)
@@ -163,6 +170,11 @@ export default function StudentDashboard() {
                             {course.title}
                           </h3>
                           {course.category && <span className="chip">{course.category}</span>}
+                          {course.enrolled && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-success/30 bg-success/[0.08] px-2 py-0.5 text-[10px] font-semibold text-success">
+                              <Check size={10} /> Enrolled
+                            </span>
+                          )}
                         </div>
 
                         <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-fg-muted">

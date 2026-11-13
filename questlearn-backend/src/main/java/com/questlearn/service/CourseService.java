@@ -9,12 +9,14 @@ import com.questlearn.dto.ModuleUpdateRequest;
 import com.questlearn.dto.QuizRequest;
 import com.questlearn.exception.ApiException;
 import com.questlearn.model.Course;
+import com.questlearn.model.Enrollment;
 import com.questlearn.model.Module;
 import com.questlearn.model.ProgressStatus;
 import com.questlearn.model.Quiz;
 import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.repository.CourseRepository;
+import com.questlearn.repository.EnrollmentRepository;
 import com.questlearn.repository.ModuleAttemptRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.QuizRepository;
@@ -30,10 +32,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +54,7 @@ public class CourseService {
     private final QuizService quizService;
     private final MediaStorageService mediaStorageService;
     private final AuditService auditService;
+    private final EnrollmentRepository enrollmentRepository;
 
     @Transactional(readOnly = true)
     public List<CourseDto> listCourses(AppUserPrincipal principal) {
@@ -62,9 +69,90 @@ public class CourseService {
             courseRepository.findByPublishedTrueOrderByIdAsc().forEach(c -> visible.put(c.getId(), c));
         }
 
-        return visible.values().stream()
+        List<Course> ordered = visible.values().stream()
                 .sorted(Comparator.comparing(Course::getId))
-                .map(course -> toCourseDto(course, principal))
+                .toList();
+        return withEnrollmentContext(ordered, principal);
+    }
+
+    /**
+     * The learner's own courses: the ones they joined, still live.
+     *
+     * <p>Instructors and admins get their normal list; enrollment is a student
+     * concept, so pretending otherwise would only produce an empty page.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<CourseDto> listMyCourses(AppUserPrincipal principal) {
+        if (principal.role() != Role.STUDENT) {
+            return listCourses(principal);
+        }
+        Set<Long> enrolledIds = enrollmentRepository.findByUserIdOrderByEnrolledAtDesc(principal.id())
+                .stream()
+                .map(Enrollment::getCourseId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (enrolledIds.isEmpty()) {
+            return List.of();
+        }
+        List<Course> courses = courseRepository.findAllById(enrolledIds).stream()
+                .filter(Course::isPublished)
+                .filter(course -> course.getArchivedAt() == null)
+                .sorted(Comparator.comparing(Course::getId))
+                .toList();
+        return withEnrollmentContext(courses, principal);
+    }
+
+    /**
+     * Joining is idempotent: clicking twice, or in two tabs, is not an error and
+     * does not duplicate a roster entry.
+     */
+    @Transactional
+    public CourseDto enroll(Long courseId, AppUserPrincipal principal) {
+        if (principal.role() != Role.STUDENT) {
+            throw ApiException.forbidden("Only students join courses");
+        }
+        Course course = loadCourse(courseId);
+        assertCanView(course, principal);
+        if (!enrollmentRepository.existsByUserIdAndCourseId(principal.id(), courseId)) {
+            enrollmentRepository.save(Enrollment.builder()
+                    .userId(principal.id())
+                    .courseId(courseId)
+                    .build());
+        }
+        return toCourseDto(course, principal);
+    }
+
+    /**
+     * Leaving removes the roster entry only. Progress is the learner's work and is
+     * kept, so re-joining later resumes where they stopped.
+     */
+    @Transactional
+    public void unenroll(Long courseId, AppUserPrincipal principal) {
+        if (principal.role() != Role.STUDENT) {
+            throw ApiException.forbidden("Only students join courses");
+        }
+        enrollmentRepository.deleteByUserIdAndCourseId(principal.id(), courseId);
+    }
+
+    /**
+     * Adds the per-principal enrollment flag and roster sizes to a page of
+     * courses with one extra query each, instead of one query per card.
+     */
+    private List<CourseDto> withEnrollmentContext(List<Course> courses, AppUserPrincipal principal) {
+        if (courses.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = courses.stream().map(Course::getId).toList();
+        Map<Long, Long> rosterCounts = new HashMap<>();
+        for (Object[] row : enrollmentRepository.countByCourseIds(ids)) {
+            rosterCounts.put((Long) row[0], (Long) row[1]);
+        }
+        Set<Long> enrolledIds = principal.role() == Role.STUDENT
+                ? enrollmentRepository.findByUserIdOrderByEnrolledAtDesc(principal.id()).stream()
+                        .map(Enrollment::getCourseId)
+                        .collect(Collectors.toSet())
+                : Set.of();
+        return courses.stream()
+                .map(course -> toCourseDto(course, principal, enrolledIds, rosterCounts))
                 .toList();
     }
 
@@ -403,6 +491,17 @@ public class CourseService {
     }
 
     private CourseDto toCourseDto(Course course, AppUserPrincipal principal) {
+        return toCourseDto(course, principal, null, null);
+    }
+
+    /**
+     * @param enrolledIds   the caller's enrollments when a page is being mapped, or
+     *                      {@code null} to ask for this one course
+     * @param rosterCounts  counts for the whole page when available, or
+     *                      {@code null} to count this one course
+     */
+    private CourseDto toCourseDto(Course course, AppUserPrincipal principal,
+                                  Set<Long> enrolledIds, Map<Long, Long> rosterCounts) {
         long moduleCount = moduleRepository.countByCourseId(course.getId());
         long completed = 0;
         if (principal.role() != Role.INSTRUCTOR) {
@@ -415,6 +514,14 @@ public class CourseService {
             completed = 0;
         }
 
+        boolean enrolled = enrolledIds != null
+                ? enrolledIds.contains(course.getId())
+                : principal.role() == Role.STUDENT
+                        && enrollmentRepository.existsByUserIdAndCourseId(principal.id(), course.getId());
+        long enrolledCount = rosterCounts != null
+                ? rosterCounts.getOrDefault(course.getId(), 0L)
+                : enrollmentRepository.countByCourseId(course.getId());
+
         return new CourseDto(
                 course.getId(),
                 course.getTitle(),
@@ -426,6 +533,8 @@ public class CourseService {
                 course.getInstructor() == null ? "QuestLearn" : course.getInstructor().getName(),
                 moduleCount,
                 completed,
+                enrolledCount,
+                enrolled,
                 course.getCreatedAt(),
                 course.getArchivedAt()
         );

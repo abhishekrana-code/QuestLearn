@@ -4,14 +4,18 @@ import {
   ArrowUpRight,
   Check,
   ChevronDown,
+  DoorOpen,
   Lock,
   Loader2,
   Search,
   Sparkles,
+  UserPlus,
   Users,
   X,
 } from 'lucide-react';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
+import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import api, { apiError } from '../services/api.js';
 
@@ -74,6 +78,8 @@ function initials(name = '') {
  */
 export default function ExploreCourses() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isStudent = user?.role === 'STUDENT';
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -82,6 +88,10 @@ export default function ExploreCourses() {
   const [openTree, setOpenTree] = useState(null);
   const [trees, setTrees] = useState({});
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [joinBusy, setJoinBusy] = useState(null);
+  const [leaveTarget, setLeaveTarget] = useState(null);
+  const [leaveBusy, setLeaveBusy] = useState(false);
+  const [notice, setNotice] = useState(null);
 
   const {
     paused: retryPaused,
@@ -257,6 +267,48 @@ export default function ExploreCourses() {
     }
   };
 
+  const joinCourse = async (course) => {
+    setJoinBusy(course.id);
+    setNotice(null);
+    try {
+      const { data } = await api.post(`/courses/${course.id}/enroll`);
+      setCourses((previous) => previous.map((item) => (item.id === data.id ? data : item)));
+      setNotice({ type: 'success', text: `You joined ${data.title}. It is now in your dashboard.` });
+    } catch (joinError) {
+      setNotice({ type: 'error', text: apiError(joinError, 'Could not join this course.') });
+    } finally {
+      setJoinBusy(null);
+    }
+  };
+
+  const leaveCourse = async () => {
+    if (!leaveTarget) return;
+    setLeaveBusy(true);
+    try {
+      await api.delete(`/courses/${leaveTarget.id}/enroll`);
+      setCourses((previous) =>
+        previous.map((item) =>
+          item.id === leaveTarget.id
+            ? {
+                ...item,
+                enrolled: false,
+                enrolledCount: Math.max(0, (item.enrolledCount ?? 1) - 1),
+              }
+            : item,
+        ),
+      );
+      setNotice({
+        type: 'success',
+        text: `You left ${leaveTarget.title}. Your progress is kept if you join again.`,
+      });
+      setLeaveTarget(null);
+    } catch (leaveError) {
+      setNotice({ type: 'error', text: apiError(leaveError, 'Could not leave this course.') });
+    } finally {
+      setLeaveBusy(false);
+    }
+  };
+
   return (
     <div className="shell py-8 sm:py-10">
       <header className="mb-7">
@@ -274,6 +326,27 @@ export default function ExploreCourses() {
         paused={retryPaused}
         onRetry={retryLoadNow}
       />
+
+      {notice && (
+        <div
+          role="status"
+          className={`mb-4 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-[12.5px] leading-relaxed ${
+            notice.type === 'error'
+              ? 'border-danger/30 bg-danger/[0.07] text-danger'
+              : 'border-success/30 bg-success/[0.07] text-success'
+          }`}
+        >
+          <span>{notice.text}</span>
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            aria-label="Dismiss message"
+            className="shrink-0 rounded p-0.5 transition-colors hover:text-foreground"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
 
       <div className="panel mb-4 space-y-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -456,6 +529,22 @@ export default function ExploreCourses() {
                         <span className="chip shrink-0">{course.moduleCount} nodes</span>
                       </div>
 
+                      {(course.enrolled || (isStudent && course.enrolledCount > 0)) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {course.enrolled && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-success/30 bg-success/[0.08] px-2 py-0.5 text-[10px] font-semibold text-success">
+                              <Check size={10} /> Enrolled
+                            </span>
+                          )}
+                          {course.enrolledCount > 0 && (
+                            <span className="text-[10px] text-fg-subtle">
+                              {course.enrolledCount}{' '}
+                              {course.enrolledCount === 1 ? 'learner' : 'learners'} joined
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       <p className="mt-2.5 line-clamp-2 min-h-[2.5rem] text-[11.5px] leading-5 text-fg-muted">
                         {course.description || 'No description yet.'}
                       </p>
@@ -496,14 +585,54 @@ export default function ExploreCourses() {
                           />
                           {expanded ? 'Hide tree' : 'Preview path'}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/courses/${course.id}`)}
-                          className="ml-auto inline-flex items-center gap-1 text-[10.5px] font-semibold text-gold-text hover:underline"
-                        >
-                          Open course
-                          <ArrowUpRight size={11} />
-                        </button>
+                        <div className="ml-auto flex items-center gap-1.5">
+                          {isStudent ? (
+                            course.enrolled ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setLeaveTarget(course)}
+                                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10.5px] font-medium text-fg-subtle transition-colors hover:text-danger"
+                                  aria-label={`Leave ${course.title}`}
+                                >
+                                  <DoorOpen size={11} />
+                                  Leave
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/courses/${course.id}`)}
+                                  className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-gold-text hover:underline"
+                                >
+                                  Continue
+                                  <ArrowUpRight size={11} />
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => joinCourse(course)}
+                                disabled={joinBusy === course.id}
+                                className="btn-primary h-8 px-2.5 text-[10.5px]"
+                              >
+                                {joinBusy === course.id ? (
+                                  <Loader2 size={12} className="animate-spin" />
+                                ) : (
+                                  <UserPlus size={12} />
+                                )}
+                                Join course
+                              </button>
+                            )
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/courses/${course.id}`)}
+                              className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-gold-text hover:underline"
+                            >
+                              Open course
+                              <ArrowUpRight size={11} />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {expanded && (
@@ -551,6 +680,17 @@ export default function ExploreCourses() {
             </section>
           ))}
         </div>
+      )}
+
+      {leaveTarget && (
+        <ConfirmDialog
+          title={`Leave ${leaveTarget.title}?`}
+          message="The course leaves your dashboard, but your progress and XP are kept. You can join again at any time."
+          confirmLabel="Leave course"
+          busy={leaveBusy}
+          onConfirm={leaveCourse}
+          onClose={() => !leaveBusy && setLeaveTarget(null)}
+        />
       )}
     </div>
   );

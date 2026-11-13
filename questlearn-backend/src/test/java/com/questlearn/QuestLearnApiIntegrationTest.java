@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -87,8 +88,8 @@ class QuestLearnApiIntegrationTest {
     @BeforeEach
     void seed() throws Exception {
         // The suite owns the whole database, so start from nothing every time.
-        jdbc.execute("TRUNCATE TABLE admin_audit_log, module_attempts, user_module_progress, "
-                + "quizzes, modules, courses, users RESTART IDENTITY CASCADE");
+        jdbc.execute("TRUNCATE TABLE admin_audit_log, enrollments, module_attempts, "
+                + "user_module_progress, quizzes, modules, courses, users RESTART IDENTITY CASCADE");
 
         instructor = users.save(User.builder()
                 .name("Teacher")
@@ -493,5 +494,76 @@ class QuestLearnApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.title == 'Integration Quest')]").exists())
                 .andExpect(jsonPath("$[?(@.title == 'Unpublished Quest')]").doesNotExist());
+    }
+
+    // ------------------------------------------------------------- enrollment
+
+    @Test
+    void joiningIsIdempotentAndShowsUpAsMyCourse() throws Exception {
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enrolled").value(true))
+                .andExpect(jsonPath("$.enrolledCount").value(1));
+
+        // A second click, or a second tab, must not duplicate the roster row.
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enrolledCount").value(1));
+
+        mvc.perform(get("/api/v1/courses/mine").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].title").value("Integration Quest"));
+
+        // The catalogue marks it too, so the card can say "Continue".
+        mvc.perform(get("/api/v1/courses/" + course.getId())
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enrolled").value(true));
+        mvc.perform(get("/api/v1/courses").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.enrolled == true)]").exists());
+
+        mvc.perform(delete("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/courses/mine").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void theRosterCountIsVisibleToTheCourseOwner() throws Exception {
+        String teacherToken = login("teacher@it.test");
+
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/courses/" + course.getId())
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enrolled").value(false))
+                .andExpect(jsonPath("$.enrolledCount").value(1));
+    }
+
+    @Test
+    void onlyStudentsJoinAndOnlyLiveCoursesCanBeJoined() throws Exception {
+        String teacherToken = login("teacher@it.test");
+
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(post("/api/v1/courses/" + draft.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(post("/api/v1/courses/999999/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isNotFound());
     }
 }

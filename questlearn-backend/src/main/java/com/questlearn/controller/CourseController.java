@@ -46,6 +46,27 @@ public class CourseController {
         return courseService.listCourses(principal);
     }
 
+    @GetMapping("/courses/mine")
+    @Operation(summary = "Courses the current learner has joined")
+    public List<CourseDto> myCourses(@AuthenticationPrincipal AppUserPrincipal principal) {
+        return courseService.listMyCourses(principal);
+    }
+
+    @PostMapping("/courses/{courseId}/enroll")
+    @Operation(summary = "Join a published course (idempotent)")
+    public CourseDto enroll(@PathVariable Long courseId,
+                            @AuthenticationPrincipal AppUserPrincipal principal) {
+        return courseService.enroll(courseId, principal);
+    }
+
+    @DeleteMapping("/courses/{courseId}/enroll")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Leave a course; progress is kept")
+    public void unenroll(@PathVariable Long courseId,
+                         @AuthenticationPrincipal AppUserPrincipal principal) {
+        courseService.unenroll(courseId, principal);
+    }
+
     @GetMapping("/courses/{courseId}")
     public CourseDto getCourse(@PathVariable Long courseId,
                                @AuthenticationPrincipal AppUserPrincipal principal) {

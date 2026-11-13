@@ -22,6 +22,9 @@ still needs, see [`AUDIT.md`](AUDIT.md).
   animated Lottie/confetti milestone celebrations.
 - **Interactive micro-assessments** — multiple-choice, code-snippet ordering and drag-and-drop
   matching quizzes stored as PostgreSQL `JSONB`, scored **on the server** so XP cannot be faked.
+- **Course catalogue and enrollment** — students browse every published quest, preview its whole
+  path, then join the ones they are taking. Joined courses appear on the dashboard; leaving keeps
+  the work they have already done.
 - **Role-based access control (RBAC)** — strictly JWT-secured boundaries between **Student**,
   **Instructor** and **Admin** dashboards, enforced with `@PreAuthorize` on the controller layer.
 - **Viva boss battles** — every node can be cleared by *answering the examiner* instead of taking the
@@ -172,7 +175,10 @@ All routes are under `/api/v1`. Protected routes need `Authorization: Bearer <to
 
 | Method | Path | Access | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/courses` | authenticated | Role-filtered course list |
+| `GET` | `/courses` | authenticated | Role-filtered course list, each with `enrolled` and `enrolledCount` |
+| `GET` | `/courses/mine` | authenticated | Courses the learner has joined (staff get their normal list) |
+| `POST` | `/courses/{id}/enroll` | Student | Join a published course; idempotent |
+| `DELETE` | `/courses/{id}/enroll` | Student | Leave a course; progress and XP are kept |
 | `GET` | `/courses/{id}` | authenticated | Course summary |
 | `POST` | `/courses` | Instructor, Admin | Create a draft course |
 | `PATCH` | `/courses/{id}/publish?published=true` | Instructor (owner), Admin | Publish / unpublish |

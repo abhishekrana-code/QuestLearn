@@ -13,6 +13,8 @@ public record CourseDto(
         String instructorName,
         long moduleCount,
         long completedModules,
+        long enrolledCount,
+        boolean enrolled,
         Instant createdAt,
         Instant archivedAt
 ) {
