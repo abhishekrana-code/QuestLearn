@@ -11,7 +11,7 @@ export default function LevelUpModal({ level, xpGained, unlocked = 0, onClose })
       particleCount: 120,
       spread: 80,
       origin: { y: 0.6 },
-      colors: ['#f4c95d', '#8b5cf6', '#22d3ee', '#f8e3a3'],
+      colors: ['#FA4614', '#FF8F66', '#F5C8A8', '#2F7D6B'],
       disableForReducedMotion: true,
     });
   }, []);
@@ -44,30 +44,30 @@ export default function LevelUpModal({ level, xpGained, unlocked = 0, onClose })
           transition={{ type: 'spring', stiffness: 220, damping: 22 }}
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(244,201,93,0.22),transparent_60%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,hsl(var(--gold)/0.16),transparent_62%)]" />
 
           <div className="relative mx-auto -mt-4 h-40 w-40">
             <Lottie animationData={levelUpAnimation} loop={false} autoplay />
             <div className="pointer-events-none absolute inset-0 grid place-items-center">
-              <Trophy size={40} className="text-gold drop-shadow-[0_0_12px_rgba(244,201,93,0.8)]" />
+              <Trophy size={40} className="text-gold drop-shadow-[0_0_12px_hsl(var(--gold)/0.45)]" />
             </div>
           </div>
 
-          <p className="text-[11px] font-bold uppercase tracking-[0.35em] text-gold">Level up</p>
-          <h2 className="mt-2 font-display text-5xl font-bold text-slate-50">{level}</h2>
+          <p className="eyebrow justify-center">Level up</p>
+          <h2 className="mt-2 font-display text-[52px] font-semibold leading-none tracking-[-0.05em] text-foreground">
+            {level}
+          </h2>
           {xpGained > 0 && (
-            <p className="mt-2 text-sm text-slate-300">
-              +{xpGained} XP earned this node
-            </p>
+            <p className="mt-2 text-[13px] text-fg-muted">+{xpGained} XP earned this node</p>
           )}
           {unlocked > 0 && (
-            <p className="mt-1 text-sm text-rune">
+            <p className="mt-1 text-[13px] text-rune-text">
               {unlocked} new {unlocked === 1 ? 'node' : 'nodes'} unlocked on the skill tree
             </p>
           )}
 
-          <button type="button" onClick={onClose} className="btn-primary mt-6 w-full">
-            Continue the quest
+          <button type="button" onClick={onClose} className="btn-primary mt-6 h-11 w-full text-[13px]">
+            Keep going
           </button>
         </motion.div>
       </motion.div>

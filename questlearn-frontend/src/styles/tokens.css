@@ -1,110 +1,144 @@
 /*
- * QuestLearn — Aurora design system
- * Deep ink surfaces, electric indigo, mint and warm amber accents.
+ * QuestLearn — Warm Editorial design system
+ *
+ * A cream paper canvas, one confident orange, and warm neutrals in light mode.
+ * Dark mode swaps to a warm near-black rather than the old blue-black so the
+ * brand still feels the same after sunset.
+ *
+ * Tokens are HSL channels because Tailwind consumes
+ * `hsl(var(--token) / <alpha-value>)`.
  */
-:root, .dark {
-  color-scheme: dark;
-  --ink-900: 230 35% 6%;
-  --ink-800: 230 31% 9%;
-  --ink-700: 230 27% 12%;
-  --ink-600: 228 24% 16%;
-  --background: 230 35% 6%;
-  --foreground: 220 25% 96%;
-  --card: 230 29% 10%;
-  --card-foreground: 220 25% 96%;
-  --surface-raised: 229 25% 13%;
-  --muted: 228 22% 15%;
-  --muted-foreground: 220 13% 68%;
-  --subtle-foreground: 220 11% 57%;
-  --border: 226 20% 19%;
-  --border-strong: 225 18% 29%;
-  --input: 229 23% 13%;
-  --ring: 246 92% 72%;
-  --primary: 246 92% 70%;
-  --primary-foreground: 0 0% 100%;
-  --gold: 246 92% 70%;
-  --gold-soft: 249 96% 78%;
-  --gold-text: 247 95% 78%;
-  /* Primary-button fill. Darker than --gold so white labels clear 4.5:1 on
-     the light end of the gradient; --gold itself stays bright for type. */
-  --btn-primary-from: 246 88% 62%;
-  --btn-primary-to: 263 84% 56%;
-  /* Same reason as the primary fill: --arcane stays bright for icons, the
-     button fill is dark enough for a white label. */
-  --btn-arcane-fill: 277 76% 56%;
-  /* Accent surface that carries white ink (selected answers, primary fills).
-     --gold stays brighter because it is also used as type on dark surfaces. */
-  --accent-fill: 246 88% 62%;
-  --arcane: 277 82% 70%;
-  --arcane-soft: 278 90% 82%;
-  --arcane-text: 278 90% 82%;
-  --rune: 163 72% 52%;
-  --rune-text: 163 72% 64%;
-  --success: 153 62% 48%;
-  --danger: 0 75% 65%;
-  --warning: 35 92% 62%;
-  --scrim: 230 40% 3%;
-  --scrim-alpha: .8;
-  --shadow-color: 230 50% 2%;
-  --shadow-1: 0 2px 4px hsl(var(--shadow-color) / .25), 0 12px 32px -18px hsl(var(--shadow-color) / .8);
-  --shadow-2: 0 2px 5px hsl(var(--shadow-color) / .3), 0 24px 60px -28px hsl(var(--shadow-color) / .9);
-  --hairline: inset 0 1px 0 hsl(0 0% 100% / .055);
-  --ambient-1: 250 88% 64%;
-  --ambient-1-alpha: .19;
-  --ambient-2: 166 75% 48%;
-  --ambient-2-alpha: .11;
-  --radius: 1rem;
-  --radius-sm: .65rem;
-  --radius-lg: 1.35rem;
-  --radius-xl: 1.85rem;
-  --ease-out: cubic-bezier(.22,1,.36,1);
-  --ease-in-out: cubic-bezier(.4,0,.2,1);
-  --dur-fast: 140ms;
-  --dur: 220ms;
-}
+:root,
 .light {
   color-scheme: light;
-  --ink-900: 225 40% 98%;
+
+  /* Surfaces */
+  --ink-900: 36 50% 96%;
   --ink-800: 0 0% 100%;
-  --ink-700: 225 30% 96%;
-  --ink-600: 225 25% 93%;
-  --background: 225 38% 97%;
-  --foreground: 230 34% 13%;
+  --ink-700: 36 33% 94%;
+  --ink-600: 36 17% 89%;
+  --background: 36 50% 96%;
+  --foreground: 30 4% 9%;
   --card: 0 0% 100%;
-  --card-foreground: 230 34% 13%;
-  --surface-raised: 0 0% 100%;
-  --muted: 225 28% 94%;
-  --muted-foreground: 225 13% 39%;
-  --subtle-foreground: 225 10% 45%;
-  --border: 225 18% 88%;
-  --border-strong: 225 16% 77%;
+  --card-foreground: 30 4% 9%;
+  --surface-raised: 36 100% 99%;
+  --muted: 36 33% 94%;
+  --muted-foreground: 33 6% 38%;
+  --subtle-foreground: 34 6% 49%;
+  --border: 36 17% 89%;
+  --border-strong: 35 12% 81%;
   --input: 0 0% 100%;
-  --ring: 247 72% 54%;
-  --primary: 247 76% 58%;
+
+  /* Brand */
+  --ring: 13 96% 53%;
+  --primary: 12 60% 40%;
   --primary-foreground: 0 0% 100%;
-  --gold: 247 76% 58%;
-  --gold-soft: 247 80% 66%;
-  --gold-text: 247 70% 43%;
-  --btn-primary-from: 247 76% 56%;
-  --btn-primary-to: 263 70% 50%;
-  --btn-arcane-fill: 278 65% 56%;
-  --accent-fill: 247 76% 56%;
-  --arcane: 278 65% 56%;
-  --arcane-soft: 278 65% 66%;
-  --arcane-text: 278 58% 42%;
-  --rune: 163 70% 34%;
-  --rune-text: 163 70% 28%;
-  --success: 153 62% 31%;
-  --danger: 0 68% 45%;
-  --warning: 30 90% 34%;
-  --scrim: 230 40% 16%;
-  --scrim-alpha: .42;
-  --shadow-color: 225 35% 55%;
-  --shadow-1: 0 2px 5px hsl(var(--shadow-color) / .08), 0 12px 30px -20px hsl(var(--shadow-color) / .38);
-  --shadow-2: 0 2px 5px hsl(var(--shadow-color) / .1), 0 24px 55px -28px hsl(var(--shadow-color) / .4);
-  --hairline: inset 0 1px 0 hsl(0 0% 100% / .9);
-  --ambient-1: 250 80% 60%;
-  --ambient-1-alpha: .09;
-  --ambient-2: 166 70% 42%;
-  --ambient-2-alpha: .06;
+  --gold: 13 96% 53%;
+  --gold-soft: 16 100% 65%;
+  --gold-text: 12 60% 40%;
+  --brand: 13 96% 53%;
+  --brand-shade: 12 60% 40%;
+  --brand-tint: 20 100% 96%;
+
+  /* Primary button: deep enough for a white 15px label to clear 4.5:1. */
+  --btn-primary-from: 12 71% 44%;
+  --btn-primary-to: 12 60% 36%;
+  --accent-fill: 12 60% 40%;
+  --btn-arcane-fill: 22 22% 20%;
+
+  /* Secondary accents */
+  --arcane: 22 14% 38%;
+  --arcane-soft: 22 12% 50%;
+  --arcane-text: 22 18% 28%;
+  --rune: 168 48% 32%;
+  --rune-text: 168 52% 27%;
+  --success: 152 52% 30%;
+  --danger: 4 52% 44%;
+  --warning: 30 92% 31%;
+
+  /* Depth */
+  --scrim: 30 20% 12%;
+  --scrim-alpha: 0.45;
+  --shadow-color: 30 25% 40%;
+  --shadow-1:
+    0 1px 2px hsl(var(--shadow-color) / 0.05),
+    0 10px 28px -22px hsl(var(--shadow-color) / 0.28);
+  --shadow-2:
+    0 2px 4px hsl(var(--shadow-color) / 0.06),
+    0 26px 60px -32px hsl(var(--shadow-color) / 0.32);
+  --hairline: inset 0 1px 0 hsl(0 0% 100% / 0.9);
+  --ambient-1: 20 100% 70%;
+  --ambient-1-alpha: 0.1;
+  --ambient-2: 168 40% 55%;
+  --ambient-2-alpha: 0.05;
+
+  /* Shape and motion */
+  --radius: 0.75rem;
+  --radius-sm: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur: 220ms;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --ink-900: 0 5% 7%;
+  --ink-800: 0 0% 10%;
+  --ink-700: 0 0% 13%;
+  --ink-600: 0 0% 18%;
+  --background: 0 5% 7%;
+  --foreground: 9 50% 97%;
+  --card: 0 0% 10%;
+  --card-foreground: 9 50% 97%;
+  --surface-raised: 0 0% 12%;
+  --muted: 0 0% 13%;
+  --muted-foreground: 0 0% 65%;
+  --subtle-foreground: 0 0% 52%;
+  --border: 0 0% 17%;
+  --border-strong: 0 0% 26%;
+  --input: 0 0% 12%;
+
+  --ring: 17 100% 66%;
+  --primary: 17 100% 66%;
+  --primary-foreground: 0 5% 7%;
+  --gold: 17 100% 64%;
+  --gold-soft: 20 100% 72%;
+  --gold-text: 17 100% 70%;
+  --brand: 13 96% 55%;
+  --brand-shade: 12 60% 30%;
+  --brand-tint: 16 31% 14%;
+
+  --btn-primary-from: 12 71% 44%;
+  --btn-primary-to: 12 60% 36%;
+  --accent-fill: 12 60% 40%;
+  --btn-arcane-fill: 24 18% 24%;
+
+  --arcane: 26 18% 46%;
+  --arcane-soft: 26 20% 62%;
+  --arcane-text: 28 35% 78%;
+  --rune: 168 52% 58%;
+  --rune-text: 168 60% 68%;
+  --success: 152 55% 62%;
+  --danger: 4 80% 68%;
+  --warning: 32 92% 65%;
+
+  --scrim: 0 0% 0%;
+  --scrim-alpha: 0.72;
+  --shadow-color: 0 0% 0%;
+  --shadow-1:
+    0 1px 2px hsl(var(--shadow-color) / 0.35),
+    0 12px 32px -24px hsl(var(--shadow-color) / 0.8);
+  --shadow-2:
+    0 2px 6px hsl(var(--shadow-color) / 0.4),
+    0 28px 64px -34px hsl(var(--shadow-color) / 0.9);
+  --hairline: inset 0 1px 0 hsl(0 0% 100% / 0.06);
+  --ambient-1: 15 80% 45%;
+  --ambient-1-alpha: 0.12;
+  --ambient-2: 168 50% 35%;
+  --ambient-2-alpha: 0.07;
 }

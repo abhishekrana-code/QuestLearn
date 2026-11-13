@@ -11,21 +11,21 @@ export default function XPBar({ compact = false }) {
 
   if (compact) {
     return (
-      <div className="flex min-w-[150px] items-center gap-2">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-gold/50 bg-gold/10 text-xs font-bold text-gold">
+      <div className="flex min-w-[142px] items-center gap-2">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-tint text-[11px] font-bold text-gold-text">
           {currentLevel}
         </span>
         <div className="flex-1">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <motion.div
-              className="h-full rounded-full bg-gradient-to-r from-gold via-gold-soft to-rune"
+              className="h-full rounded-full bg-gradient-to-r from-gold to-gold-soft"
               initial={false}
               animate={{ width: `${percent}%` }}
               transition={{ type: 'spring', stiffness: 90, damping: 20 }}
             />
           </div>
-          <p className="mt-1 text-[10px] font-medium uppercase tracking-wider text-slate-400">
-            {totalXp} / {levelEnd} XP
+          <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-fg-subtle">
+            {totalXp.toLocaleString()} / {levelEnd.toLocaleString()} XP
           </p>
         </div>
       </div>
@@ -33,28 +33,37 @@ export default function XPBar({ compact = false }) {
   }
 
   return (
-    <div className="panel-raised flex h-full flex-col justify-center gap-3 p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Sparkles size={16} className="text-gold" />
-          <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-            Level {currentLevel}
+    <div className="panel-raised flex h-full flex-col justify-center gap-3 p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-tint text-gold-text">
+            <Sparkles size={16} />
           </span>
+          <div>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
+              Level
+            </p>
+            <p className="font-display text-lg font-semibold leading-none tracking-[-0.04em] text-foreground">
+              {currentLevel}
+            </p>
+          </div>
         </div>
-        <span className="text-xs font-medium text-slate-300">
+        <p className="text-[11px] font-semibold tabular-nums text-fg-muted">
           {totalXp.toLocaleString()} / {levelEnd.toLocaleString()} XP
-        </span>
+        </p>
       </div>
-      <div className="h-3 w-full overflow-hidden rounded-full border border-white/10 bg-ink-900">
+
+      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
         <motion.div
-          className="h-full rounded-full bg-gradient-to-r from-gold via-gold-soft to-rune shadow-[0_0_18px_rgba(244,201,93,0.5)]"
+          className="h-full rounded-full bg-gradient-to-r from-gold to-gold-soft"
           initial={false}
           animate={{ width: `${percent}%` }}
           transition={{ type: 'spring', stiffness: 70, damping: 18 }}
         />
       </div>
-      <p className="mt-2 text-[11px] text-slate-400">
-        {Math.max(0, levelEnd - totalXp).toLocaleString()} XP to level {currentLevel + 1}
+
+      <p className="text-[10px] text-fg-subtle">
+        {Math.max(0, levelEnd - totalXp).toLocaleString()} XP to reach level {currentLevel + 1}
       </p>
     </div>
   );

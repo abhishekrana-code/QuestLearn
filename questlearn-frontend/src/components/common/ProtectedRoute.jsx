@@ -7,9 +7,9 @@ export default function ProtectedRoute({ roles, children }) {
   if (booting) {
     return (
       <div className="grid min-h-[70vh] place-items-center">
-        <div className="flex flex-col items-center gap-3 text-sm text-slate-400">
-          <span className="h-9 w-9 animate-spin rounded-full border-2 border-gold/30 border-t-gold" />
-          Loading your quest…
+        <div className="flex flex-col items-center gap-3 text-[12px] text-fg-muted">
+          <span className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-gold" />
+          Opening QuestLearn…
         </div>
       </div>
     );

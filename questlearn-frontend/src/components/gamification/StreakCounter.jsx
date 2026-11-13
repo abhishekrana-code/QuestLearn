@@ -9,33 +9,33 @@ export default function StreakCounter({ compact = false }) {
   if (compact) {
     return (
       <div
-        className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${
+        className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold ${
           active
-            ? 'border-warning/40 bg-warning/10 text-warning'
-            : 'border-white/10 bg-white/5 text-slate-400'
+            ? 'border-warning/30 bg-warning/10 text-warning'
+            : 'border-line bg-card text-fg-subtle'
         }`}
         title={`${streakDays} day learning streak`}
       >
-        <Flame size={14} className={active ? 'text-warning' : ''} />
+        <Flame size={13} className={active ? 'text-warning' : ''} />
         {streakDays}d
       </div>
     );
   }
 
   return (
-    <div className="panel-raised flex h-full items-center gap-3 p-3.5 sm:gap-4 sm:p-4">
+    <div className="panel-raised flex h-full items-center gap-3 p-4">
       <motion.div
-        animate={active ? { scale: [1, 1.08, 1] } : {}}
-        transition={{ repeat: Infinity, duration: 2.4, ease: 'easeInOut' }}
-        className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl sm:h-12 sm:w-12 sm:rounded-2xl ${
-          active ? 'bg-warning/15 text-warning' : 'bg-muted text-fg-subtle'
+        animate={active ? { scale: [1, 1.06, 1] } : {}}
+        transition={{ repeat: Infinity, duration: 2.6, ease: 'easeInOut' }}
+        className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${
+          active ? 'bg-warning/12 text-warning' : 'bg-muted text-fg-subtle'
         }`}
       >
-        <Flame size={24} />
+        <Flame size={21} />
       </motion.div>
       <div>
         <p className="stat-value">{streakDays}</p>
-        <p className="text-[10px] font-semibold uppercase leading-tight tracking-wider text-slate-400 sm:text-[11px]">
+        <p className="text-[10px] font-semibold uppercase leading-tight tracking-[0.1em] text-fg-muted">
           Day streak
         </p>
       </div>

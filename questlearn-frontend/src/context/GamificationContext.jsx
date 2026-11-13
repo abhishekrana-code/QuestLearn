@@ -84,7 +84,7 @@ export function GamificationProvider({ children }) {
 
       {xpBurst && (
         <div className="pointer-events-none fixed inset-x-0 top-20 z-50 flex justify-center">
-          <div className="animate-float rounded-full border border-gold/40 bg-ink-800/95 px-5 py-2 text-sm font-bold text-gold-text shadow-glow">
+          <div className="animate-float rounded-full border border-gold/40 bg-card px-5 py-2 text-[13px] font-bold text-gold-text shadow-raised">
             +{xpBurst.amount} XP
           </div>
         </div>

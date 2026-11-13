@@ -3,12 +3,14 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import Navbar from './components/common/Navbar.jsx';
 import ProtectedRoute from './components/common/ProtectedRoute.jsx';
 import { useAuth } from './context/AuthContext.jsx';
+import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import NotFound from './pages/NotFound.jsx';
 import Register from './pages/Register.jsx';
 
 // The skill tree, dashboards and studio pull in framer-motion, lottie and
-// confetti. Loading them on demand keeps the sign-in page small on a phone.
+// confetti. Loading them on demand keeps the landing and sign-in pages small
+// on a phone.
 const StudentDashboard = lazy(() => import('./pages/StudentDashboard.jsx'));
 const SkillTreePage = lazy(() => import('./pages/SkillTreePage.jsx'));
 const Leaderboard = lazy(() => import('./pages/Leaderboard.jsx'));
@@ -18,24 +20,26 @@ const ExploreCourses = lazy(() => import('./pages/ExploreCourses.jsx'));
 const StudentPerformance = lazy(() => import('./pages/StudentPerformance.jsx'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel.jsx'));
 
-function RouteFallback() {
+function LoadingScreen({ label = 'Opening QuestLearn…' }) {
   return (
-    <div className="grid min-h-[60vh] place-items-center text-sm text-slate-400">
-      Loading your quest…
+    <div className="grid min-h-[60vh] place-items-center">
+      <div className="flex flex-col items-center gap-3 text-sm text-fg-muted">
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-gold" />
+        {label}
+      </div>
     </div>
   );
 }
 
-function HomeRedirect() {
+function HomeRoute() {
   const { user, booting } = useAuth();
-  if (booting) {
-    return (
-      <div className="grid min-h-[60vh] place-items-center text-sm text-slate-400">
-        Loading your quest…
-      </div>
-    );
-  }
-  if (!user) return <Navigate to="/login" replace />;
+
+  if (booting) return <LoadingScreen />;
+
+  // Signed-out visitors get the public page instead of an immediate bounce to
+  // the sign-in form.
+  if (!user) return <Landing />;
+
   if (user.role === 'INSTRUCTOR') return <Navigate to="/studio" replace />;
   if (user.role === 'ADMIN') return <Navigate to="/admin" replace />;
   return <Navigate to="/dashboard" replace />;
@@ -48,9 +52,9 @@ export default function App() {
     <div className="flex min-h-screen flex-col">
       {user && <Navbar />}
       <main className="flex-1">
-        <Suspense fallback={<RouteFallback />}>
+        <Suspense fallback={<LoadingScreen />}>
           <Routes>
-            <Route path="/" element={<HomeRedirect />} />
+            <Route path="/" element={<HomeRoute />} />
             <Route
               path="/login"
               element={user ? <Navigate to="/" replace /> : <Login />}

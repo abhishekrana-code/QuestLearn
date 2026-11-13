@@ -115,7 +115,7 @@ export default function AdminPanel() {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <header className="mb-7">
         <p className="eyebrow">Admin</p>
-        <h1 className="page-title mt-2">War room</h1>
+        <h1 className="page-title mt-2">Admin overview</h1>
         <p className="page-subtitle mt-1.5 max-w-2xl">
           Moderate accounts and control which quests are live for students.
         </p>
@@ -170,7 +170,52 @@ export default function AdminPanel() {
             </span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <ul className="divide-y divide-line md:hidden">
+              {users.map((row) => (
+                <li key={row.id} className="px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-medium text-foreground">{row.name}</p>
+                      <p className="truncate text-[11px] text-fg-subtle">{row.email}</p>
+                    </div>
+                    <span className="shrink-0 text-[11px] font-semibold tabular-nums text-gold-text">
+                      {row.totalXp} XP
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <select
+                      className="field h-9 min-w-0 flex-1 px-2 py-1.5 text-[11px]"
+                      value={row.role}
+                      disabled={row.id === user.id || busyId === row.id}
+                      onChange={(event) => changeRole(row, event.target.value)}
+                      title={row.id === user.id ? 'You cannot change your own role' : ''}
+                    >
+                      {ROLE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={busyId === `pw-${row.id}`}
+                      onClick={() => resetPassword(row)}
+                      className="btn-ghost h-9 shrink-0 px-2.5 text-[11px]"
+                      title="Issue a one-time temporary password"
+                    >
+                      <KeyRound size={12} />
+                      Reset
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
+                    Level {row.currentLevel}
+                    {row.id === user.id ? ' · you' : ''}
+                  </p>
+                </li>
+              ))}
+            </ul>
+
+            <table className="hidden w-full text-left text-xs md:table">
               <thead className="border-b border-line bg-muted/40 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
                 <tr>
                   <th className="px-5 py-2.5 font-semibold">User</th>

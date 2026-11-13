@@ -42,16 +42,16 @@ export default function SkillNode({ node, x, y, active, onSelect, onLockedClick 
         whileHover={locked ? {} : { scale: 1.06 }}
         className={`relative grid place-items-center rounded-full border-2 transition-shadow ${
           completed
-            ? 'border-gold bg-gradient-to-br from-gold/30 to-gold/5 text-gold shadow-glow'
+            ? 'border-gold bg-gold text-white shadow-glow'
             : locked
-              ? 'cursor-not-allowed border-white/10 bg-ink-700/60 text-fg-subtle'
-              : 'border-rune/60 bg-gradient-to-br from-arcane/30 to-ink-700 text-rune shadow-arcane'
-        } ${active ? 'ring-2 ring-white/40 ring-offset-2 ring-offset-ink-900' : ''}`}
+              ? 'cursor-not-allowed border-line bg-muted text-fg-subtle'
+              : 'border-gold bg-brand-tint text-gold-text shadow-glow'
+        } ${active ? 'ring-2 ring-gold ring-offset-2 ring-offset-background' : ''}`}
         style={{ width: NODE_SIZE, height: NODE_SIZE }}
         aria-label={`${node.title} (${node.status.toLowerCase()})`}
       >
         {!locked && !completed && (
-          <span className="pointer-events-none absolute inset-0 rounded-full border border-rune/40 animate-pulse-ring" />
+          <span className="pointer-events-none absolute inset-0 animate-pulse-ring rounded-full border border-gold/50" />
         )}
 
         {completed ? (
@@ -63,27 +63,31 @@ export default function SkillNode({ node, x, y, active, onSelect, onLockedClick 
         )}
 
         {QuizIcon && (
-          <span className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full border border-white/15 bg-ink-900 text-slate-200">
+          <span className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full border border-line bg-card text-fg-muted shadow-card">
             <QuizIcon size={13} />
           </span>
         )}
 
         {completed && (
-          <span className="absolute -top-1 -right-1 rounded-full border border-gold/50 bg-ink-900 px-1.5 py-0.5 text-[9px] font-bold text-gold-text">
+          <span className="absolute -right-1.5 -top-1.5 rounded-full border border-gold/50 bg-card px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-gold-text shadow-card">
             {node.score}%
           </span>
         )}
       </motion.button>
 
       <div className="mt-3 text-center">
-        <p className={`text-xs font-semibold leading-tight ${locked ? 'text-fg-subtle' : 'text-foreground'}`}>
+        <p
+          className={`text-[12px] font-semibold leading-tight ${
+            locked ? 'text-fg-subtle' : 'text-foreground'
+          }`}
+        >
           {node.title}
         </p>
-        <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gold-text">
+        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-gold-text">
           +{node.xpReward} XP
         </p>
         {locked && (
-          <p className="mt-0.5 text-[10px] uppercase tracking-wider text-fg-subtle">Locked</p>
+          <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-fg-subtle">Locked</p>
         )}
       </div>
     </motion.div>

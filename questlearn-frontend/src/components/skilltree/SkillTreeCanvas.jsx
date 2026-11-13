@@ -3,7 +3,7 @@ import SkillNode from './SkillNode.jsx';
 
 const COLUMN_WIDTH = 230;
 const ROW_HEIGHT = 185;
-const PADDING_X = 55;
+const PADDING_X = 32;
 const PADDING_Y = 60;
 
 export default function SkillTreeCanvas({ nodes, onSelect, onLockedClick, activeId }) {
@@ -34,7 +34,7 @@ export default function SkillTreeCanvas({ nodes, onSelect, onLockedClick, active
     });
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-line bg-card/50">
+    <div className="overflow-x-auto rounded-2xl border border-line bg-card">
       <div
         className="relative grid-floor"
         style={{ width, height, minWidth: '100%' }}

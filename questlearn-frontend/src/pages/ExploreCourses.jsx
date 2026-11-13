@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
+  ArrowUpRight,
   Check,
   ChevronDown,
   Lock,
@@ -29,13 +30,13 @@ function StatusIcon({ status }) {
 /** One active filter, removable in place without hunting through the selects. */
 function FilterChip({ label, onRemove }) {
   return (
-    <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-gold/30 bg-gold/[0.08] py-1 pl-2.5 pr-1 text-[11px] font-medium text-gold-text">
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-gold/25 bg-brand-tint py-1 pl-2.5 pr-1 text-[10.5px] font-semibold text-gold-text">
       <span className="truncate">{label}</span>
       <button
         type="button"
         onClick={onRemove}
         aria-label={`Remove filter: ${label}`}
-        className="grid h-5 w-5 shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-gold/20"
+        className="grid h-5 w-5 shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-gold/15"
       >
         <X size={11} />
       </button>
@@ -257,13 +258,13 @@ export default function ExploreCourses() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <header className="mb-6">
-        <p className="eyebrow">Catalogue</p>
-        <h1 className="page-title mt-2">Teachers &amp; courses</h1>
-        <p className="page-subtitle mt-1.5 max-w-2xl">
-          Every published quest, grouped by the teacher who built it. Unfold a skill tree to see the
-          whole path before you start.
+    <div className="shell py-8 sm:py-10">
+      <header className="mb-7">
+        <p className="eyebrow">Course catalogue</p>
+        <h1 className="page-title mt-3">Find your next course.</h1>
+        <p className="page-subtitle mt-2 max-w-2xl">
+          Every published course, grouped by the teacher who built it. Preview the whole path before
+          you start.
         </p>
       </header>
 
@@ -274,9 +275,9 @@ export default function ExploreCourses() {
         onRetry={retryLoadNow}
       />
 
-      <div className="panel mb-4 space-y-2.5 px-4 py-3">
+      <div className="panel mb-4 space-y-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="flex items-center gap-2 text-xs text-fg-subtle">
+          <p className="flex items-center gap-2 text-[11px] text-fg-subtle">
             <Users size={14} className="text-gold-text" />
             <span>
               <span className="font-semibold text-foreground">{catalogue.teachers.length}</span>{' '}
@@ -298,44 +299,6 @@ export default function ExploreCourses() {
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row">
-          <select
-            className="field sm:w-48"
-            aria-label="Filter by teacher"
-            value={teacherId}
-            onChange={(event) => setFilter('teacher', event.target.value)}
-          >
-            <option value="all">All teachers</option>
-            {teacherOptions.map((teacher) => (
-              <option key={teacher.id} value={String(teacher.id)}>
-                {teacher.name} ({teacher.count})
-              </option>
-            ))}
-          </select>
-
-          <select
-            className="field sm:w-44"
-            aria-label="Filter by subject"
-            value={subject}
-            onChange={(event) => setFilter('subject', event.target.value)}
-          >
-            <option value="all">All subjects</option>
-            {subjectOptions.map((option) => (
-              <option key={option.name} value={option.name}>
-                {option.name} ({option.count})
-              </option>
-            ))}
-          </select>
-
-          <select
-            className="field sm:w-40"
-            aria-label="Sort courses"
-            value={sort}
-            onChange={(event) => setSort(event.target.value)}
-          >
-            <option value="newest">Newest first</option>
-            <option value="progress">My progress</option>
-          </select>
-
           <label className="relative w-full sm:flex-1">
             <Search
               size={14}
@@ -349,6 +312,44 @@ export default function ExploreCourses() {
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
+
+          <select
+            className="field sm:w-44"
+            aria-label="Filter by teacher"
+            value={teacherId}
+            onChange={(event) => setFilter('teacher', event.target.value)}
+          >
+            <option value="all">All teachers</option>
+            {teacherOptions.map((teacher) => (
+              <option key={teacher.id} value={String(teacher.id)}>
+                {teacher.name} ({teacher.count})
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="field sm:w-40"
+            aria-label="Filter by subject"
+            value={subject}
+            onChange={(event) => setFilter('subject', event.target.value)}
+          >
+            <option value="all">All subjects</option>
+            {subjectOptions.map((option) => (
+              <option key={option.name} value={option.name}>
+                {option.name} ({option.count})
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="field sm:w-36"
+            aria-label="Sort courses"
+            value={sort}
+            onChange={(event) => setSort(event.target.value)}
+          >
+            <option value="newest">Newest</option>
+            <option value="progress">My progress</option>
+          </select>
         </div>
       </div>
 
@@ -379,43 +380,46 @@ export default function ExploreCourses() {
       )}
 
       {loading ? (
-        <div className="panel grid min-h-[240px] place-items-center text-sm text-slate-400">
-          Gathering the catalogue…
+        <div className="panel grid min-h-[260px] place-items-center p-8 text-center">
+          <div className="flex flex-col items-center gap-2 text-[12px] text-fg-muted">
+            <Loader2 size={18} className="animate-spin text-gold" />
+            Loading the catalogue…
+          </div>
         </div>
       ) : catalogue.teachers.length === 0 ? (
-        <div className="panel grid min-h-[240px] place-items-center p-8 text-center">
+        <div className="panel grid min-h-[260px] place-items-center p-8 text-center">
           <div>
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-sm font-semibold text-foreground">
               {filtersActive ? 'No course matches those filters' : 'No published courses yet'}
             </p>
-            <p className="mt-1 text-xs text-fg-subtle">
+            <p className="mt-1 text-[12px] leading-5 text-fg-muted">
               {filtersActive
                 ? 'Try another teacher or subject, or clear the filters.'
-                : 'When a teacher publishes a quest it will appear here.'}
+                : 'When a teacher publishes a course it will appear here.'}
             </p>
             {filtersActive && (
-              <button type="button" onClick={clearFilters} className="btn-ghost mt-4 text-xs">
+              <button type="button" onClick={clearFilters} className="btn-ghost mt-4 h-9 text-[12px]">
                 Clear filters
               </button>
             )}
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-7">
           {catalogue.teachers.map((teacher) => (
             <section key={teacher.id} aria-labelledby={`teacher-${teacher.id}`}>
-              <div className="mb-2.5 flex flex-wrap items-center gap-2.5">
-                <span className="grid h-9 w-9 place-items-center rounded-xl border border-gold/25 bg-gold/[0.1] text-[11px] font-bold text-gold-text">
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-tint text-[10px] font-bold text-gold-text">
                   {initials(teacher.name)}
                 </span>
                 <div className="min-w-0">
                   <h2
                     id={`teacher-${teacher.id}`}
-                    className="truncate text-sm font-semibold text-foreground"
+                    className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground"
                   >
                     {teacher.name}
                   </h2>
-                  <p className="text-[11px] text-fg-subtle">
+                  <p className="text-[10.5px] text-fg-subtle">
                     {teacher.courses.length} {teacher.courses.length === 1 ? 'course' : 'courses'} ·{' '}
                     {teacher.nodeTotal} {teacher.nodeTotal === 1 ? 'node' : 'nodes'} · {teacher.cleared}{' '}
                     cleared by you
@@ -433,37 +437,38 @@ export default function ExploreCourses() {
                       : 0;
 
                   return (
-                    <article key={course.id} className="panel flex min-w-0 flex-col p-4">
-                      <div className="flex items-start gap-2.5">
-                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-muted text-lg">
+                    <article
+                      key={course.id}
+                      className="panel card-hover flex min-w-0 flex-col p-4 sm:p-5"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-muted text-lg">
                           {course.emoji || '🗺️'}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <h3 className="truncate text-sm font-semibold text-foreground">
+                          <h3 className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
                             {course.title}
                           </h3>
-                          <p className="mt-0.5 truncate text-[11px] text-fg-subtle">
+                          <p className="mt-0.5 truncate text-[10.5px] text-fg-subtle">
                             {course.category || 'Uncategorised'}
                           </p>
                         </div>
-                        <span className="chip shrink-0 border-line text-fg-muted">
-                          {course.moduleCount} nodes
-                        </span>
+                        <span className="chip shrink-0">{course.moduleCount} nodes</span>
                       </div>
 
-                      <p className="mt-2 line-clamp-2 min-h-[2.4rem] text-xs leading-relaxed text-fg-muted">
+                      <p className="mt-2.5 line-clamp-2 min-h-[2.5rem] text-[11.5px] leading-5 text-fg-muted">
                         {course.description || 'No description yet.'}
                       </p>
 
                       <div className="mt-2">
-                        <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
+                        <div className="flex items-center justify-between text-[9.5px] font-semibold uppercase tracking-[0.1em] text-fg-subtle">
                           <span>
                             {course.completedModules}/{course.moduleCount} cleared
                           </span>
                           <span className="tabular-nums">{percent}%</span>
                         </div>
                         <div
-                          className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"
+                          className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
                           role="progressbar"
                           aria-valuenow={percent}
                           aria-valuemin={0}
@@ -471,32 +476,33 @@ export default function ExploreCourses() {
                           aria-label={`Progress in ${course.title}`}
                         >
                           <div
-                            className="h-full rounded-full bg-gold"
+                            className="h-full rounded-full bg-gradient-to-r from-gold to-gold-soft"
                             style={{ width: `${percent}%` }}
                           />
                         </div>
                       </div>
 
-                      <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-line pt-3">
+                      <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-line pt-3">
                         <button
                           type="button"
                           onClick={() => toggleTree(course)}
                           aria-expanded={expanded}
                           aria-controls={`tree-${course.id}`}
-                          className="btn-ghost text-[11px]"
+                          className="btn-ghost h-8 px-2.5 text-[10.5px]"
                         >
                           <ChevronDown
                             size={13}
                             className={`transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
                           />
-                          {expanded ? 'Hide tree' : 'View skill tree'}
+                          {expanded ? 'Hide tree' : 'Preview path'}
                         </button>
                         <button
                           type="button"
                           onClick={() => navigate(`/courses/${course.id}`)}
-                          className="ml-auto text-[11px] font-semibold text-gold-text hover:underline"
+                          className="ml-auto inline-flex items-center gap-1 text-[10.5px] font-semibold text-gold-text hover:underline"
                         >
                           Open course
+                          <ArrowUpRight size={11} />
                         </button>
                       </div>
 
@@ -504,10 +510,10 @@ export default function ExploreCourses() {
                         <div id={`tree-${course.id}`} className="mt-2.5">
                           {tree?.loading ? (
                             <p className="flex items-center gap-2 py-2 text-[11px] text-fg-muted">
-                              <Loader2 size={12} className="animate-spin" /> Loading the tree…
+                              <Loader2 size={12} className="animate-spin" /> Loading the path…
                             </p>
                           ) : tree?.error ? (
-                            <p className="rounded-lg border border-danger/30 bg-danger/[0.08] px-2.5 py-2 text-[11px] leading-relaxed text-danger">
+                            <p className="rounded-lg border border-danger/25 bg-danger/[0.06] px-2.5 py-2 text-[10.5px] leading-relaxed text-danger">
                               {tree.error}
                             </p>
                           ) : tree?.nodes.length === 0 ? (
@@ -519,11 +525,11 @@ export default function ExploreCourses() {
                               {tree.nodes.map((node, index) => (
                                 <li
                                   key={node.id}
-                                  className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] ${
+                                  className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[10.5px] ${
                                     STATUS_STYLE[node.status] ?? STATUS_STYLE.LOCKED
                                   }`}
                                 >
-                                  <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-black/10">
+                                  <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-foreground/5">
                                     <StatusIcon status={node.status} />
                                   </span>
                                   <span className="min-w-0 flex-1 truncate font-medium">

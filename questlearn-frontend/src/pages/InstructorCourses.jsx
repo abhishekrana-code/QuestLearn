@@ -261,7 +261,7 @@ export default function InstructorCourses() {
       </div>
 
       {loading ? (
-        <div className="panel grid min-h-[220px] place-items-center text-sm text-slate-400">
+        <div className="panel grid min-h-[220px] place-items-center text-sm text-fg-muted">
           Opening your library…
         </div>
       ) : visible.length === 0 ? (

@@ -21,6 +21,13 @@ export default {
         'fg-muted': 'hsl(var(--muted-foreground) / <alpha-value>)',
         'fg-subtle': 'hsl(var(--subtle-foreground) / <alpha-value>)',
 
+        // Warm brand family.
+        brand: {
+          DEFAULT: 'hsl(var(--brand) / <alpha-value>)',
+          shade: 'hsl(var(--brand-shade) / <alpha-value>)',
+          tint: 'hsl(var(--brand-tint) / <alpha-value>)',
+        },
+
         // Accents. Bright tokens are for fills, *-text tokens for type.
         gold: {
           DEFAULT: 'hsl(var(--gold) / <alpha-value>)',
@@ -41,8 +48,22 @@ export default {
         success: 'hsl(var(--success) / <alpha-value>)',
       },
       fontFamily: {
-        sans: ['"Segoe UI Variable Text"', '"Segoe UI"', 'system-ui', '-apple-system', 'sans-serif'],
-        display: ['"Segoe UI Variable Display"', '"Segoe UI"', 'system-ui', 'sans-serif'],
+        sans: [
+          '"Segoe UI Variable Text"',
+          '"Segoe UI"',
+          'system-ui',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'Roboto',
+          'sans-serif',
+        ],
+        display: [
+          'Poppins',
+          '"Segoe UI Variable Display"',
+          '"Segoe UI"',
+          'system-ui',
+          'sans-serif',
+        ],
         mono: ['"Cascadia Code"', '"JetBrains Mono"', 'Consolas', 'monospace'],
       },
       borderRadius: {
@@ -50,12 +71,14 @@ export default {
         sm: 'var(--radius-sm)',
         lg: 'var(--radius-lg)',
         xl: 'var(--radius-xl)',
+        '2xl': 'var(--radius-2xl)',
       },
       boxShadow: {
         card: 'var(--shadow-1)',
         raised: 'var(--shadow-2)',
-        glow: '0 0 0 1px hsl(var(--gold) / 0.3), 0 12px 32px -18px hsl(var(--gold) / 0.55)',
-        arcane: '0 0 0 1px hsl(var(--arcane) / 0.3), 0 12px 32px -18px hsl(var(--arcane) / 0.5)',
+        glow: '0 0 0 1px hsl(var(--gold) / 0.25), 0 14px 34px -22px hsl(var(--gold) / 0.5)',
+        arcane:
+          '0 0 0 1px hsl(var(--arcane) / 0.25), 0 14px 34px -22px hsl(var(--arcane) / 0.45)',
       },
       transitionTimingFunction: {
         out: 'var(--ease-out)',

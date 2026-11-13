@@ -40,21 +40,21 @@ const attemptsLabel = (node) => {
 const STATUS_DOT = {
   COMPLETED: 'bg-success',
   UNLOCKED: 'bg-gold',
-  LOCKED: 'bg-slate-400',
+  LOCKED: 'bg-line-strong',
 };
 
 function StatCard({ icon: Icon, label, value, hint, accent = 'text-gold-text' }) {
   return (
-    <div className="panel-raised flex items-center gap-3 p-3.5 sm:p-4">
-      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-muted ${accent}`}>
+    <div className="panel-raised flex items-center gap-3 p-4">
+      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-muted ${accent}`}>
         <Icon size={18} />
       </span>
       <div className="min-w-0">
         <p className="stat-value">{value}</p>
-        <p className="text-[10px] font-semibold uppercase leading-tight tracking-wider text-fg-muted sm:text-[11px]">
+        <p className="text-[10px] font-semibold uppercase leading-tight tracking-[0.1em] text-fg-muted">
           {label}
         </p>
-        {hint && <p className="mt-0.5 truncate text-[10px] text-fg-subtle">{hint}</p>}
+        {hint && <p className="mt-1 truncate text-[10.5px] text-fg-subtle">{hint}</p>}
       </div>
     </div>
   );
@@ -63,14 +63,17 @@ function StatCard({ icon: Icon, label, value, hint, accent = 'text-gold-text' })
 function ProgressBar({ percent, label }) {
   return (
     <div
-      className="h-1.5 overflow-hidden rounded-full bg-muted"
+      className="h-2 overflow-hidden rounded-full bg-muted"
       role="progressbar"
       aria-valuenow={percent}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-label={label}
     >
-      <div className="h-full rounded-full bg-gold" style={{ width: `${percent}%` }} />
+      <div
+        className="h-full rounded-full bg-gradient-to-r from-gold to-gold-soft transition-all duration-500"
+        style={{ width: `${percent}%` }}
+      />
     </div>
   );
 }
@@ -259,11 +262,11 @@ export default function StudentPerformance() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <header className="mb-6">
+    <div className="shell py-8 sm:py-10">
+      <header className="mb-7">
         <p className="eyebrow">Progress</p>
-        <h1 className="page-title mt-2">Your performance</h1>
-        <p className="page-subtitle mt-1.5 max-w-2xl">
+        <h1 className="page-title mt-3">Your progress.</h1>
+        <p className="page-subtitle mt-2 max-w-2xl">
           How far you have come in every subject, with quiz averages where a course has quizzes.
         </p>
       </header>
@@ -276,17 +279,23 @@ export default function StudentPerformance() {
       />
 
       {loading ? (
-        <div className="panel grid min-h-[240px] place-items-center text-sm text-slate-400">
-          Adding up your progress…
+        <div className="panel grid min-h-[260px] place-items-center p-8">
+          <div className="flex flex-col items-center gap-2 text-[12px] text-fg-muted">
+            <span className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-gold" />
+            Adding up your progress…
+          </div>
         </div>
       ) : courses.length === 0 ? (
-        <div className="panel grid min-h-[240px] place-items-center p-8 text-center">
+        <div className="panel grid min-h-[280px] place-items-center p-8 text-center">
           <div>
-            <p className="text-sm font-medium text-foreground">Nothing to measure yet</p>
-            <p className="mt-1 text-xs text-fg-subtle">
+            <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-brand-tint text-gold-text">
+              <Sparkles size={18} />
+            </span>
+            <p className="mt-3 text-sm font-semibold text-foreground">Nothing to measure yet</p>
+            <p className="mt-1 text-[12px] leading-5 text-fg-muted">
               Finish a node in any course and your performance will appear here.
             </p>
-            <Link to="/explore" className="btn-primary mt-4 text-xs">
+            <Link to="/explore" className="btn-primary mt-4 h-9 text-[12px]">
               <Sparkles size={14} /> Browse courses
             </Link>
           </div>
@@ -310,23 +319,23 @@ export default function StudentPerformance() {
             />
           </div>
 
-          <div className="panel mt-4 p-4">
+          <div className="panel mt-4 p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-semibold text-foreground">Overall completion</p>
+              <p className="text-[13px] font-semibold text-foreground">Overall completion</p>
               <p className="text-[11px] text-fg-subtle">
                 {overall.started} of {courses.length} course{courses.length === 1 ? '' : 's'} started ·{' '}
                 {overall.completed} finished · {streakDays} day streak
               </p>
             </div>
-            <div className="mt-2">
+            <div className="mt-3">
               <ProgressBar percent={overall.percent} label="Overall completion across all courses" />
             </div>
           </div>
 
           {weakestTopics.length > 0 && (
-            <section className="panel mt-4 p-4">
+            <section className="panel mt-4 p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <h2 className="flex items-center gap-2 text-[14px] font-semibold text-foreground">
                   <Target size={15} className="text-warning" /> Focus next
                 </h2>
                 <p className="text-[11px] text-fg-subtle">
@@ -337,11 +346,11 @@ export default function StudentPerformance() {
                 {weakestTopics.map((node) => (
                   <li
                     key={node.id}
-                    className="flex min-w-0 items-center gap-2 rounded-xl border border-line bg-card/50 p-2.5"
+                    className="flex min-w-0 items-center gap-2.5 rounded-xl border border-line bg-background/40 p-2.5"
                   >
                     <span className={`chip shrink-0 ${scoreChip(node.score)}`}>{node.score}%</span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold text-foreground">
+                      <p className="truncate text-[12px] font-semibold text-foreground">
                         {node.title}
                       </p>
                       <p className="truncate text-[10px] text-fg-subtle">
@@ -366,8 +375,10 @@ export default function StudentPerformance() {
               <section key={subject.name} className="panel-raised p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h2 className="font-display text-base font-bold text-foreground">{subject.name}</h2>
-                    <p className="mt-0.5 text-[11px] text-fg-subtle">
+                    <h2 className="font-display text-[16px] font-semibold tracking-[-0.02em] text-foreground">
+                      {subject.name}
+                    </h2>
+                    <p className="mt-1 text-[11px] text-fg-subtle">
                       {subject.courses.length} course{subject.courses.length === 1 ? '' : 's'} ·{' '}
                       {subject.cleared}/{subject.totalNodes} nodes · {subject.quizzed} quiz
                       {subject.quizzed === 1 ? '' : 'zes'}
@@ -377,13 +388,13 @@ export default function StudentPerformance() {
                     <span className={`chip ${scoreChip(subject.avgScore)}`}>
                       {subject.avgScore === null ? 'no score yet' : `${subject.avgScore}% avg`}
                     </span>
-                    <span className="text-sm font-bold tabular-nums text-foreground">
+                    <span className="font-display text-[15px] font-semibold tabular-nums text-foreground">
                       {subject.percent}%
                     </span>
                   </div>
                 </div>
 
-                <div className="mt-2.5">
+                <div className="mt-3">
                   <ProgressBar percent={subject.percent} label={`Completion in ${subject.name}`} />
                 </div>
 
@@ -394,14 +405,14 @@ export default function StudentPerformance() {
                     return (
                       <li
                         key={course.id}
-                        className="rounded-xl border border-line bg-card/50 p-3"
+                        className="rounded-xl border border-line bg-background/40 p-3"
                       >
                         <div className="flex items-center gap-2.5">
                           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-line bg-muted text-sm">
                             {course.emoji || '🗺️'}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-semibold text-foreground">
+                            <p className="truncate text-[12px] font-semibold text-foreground">
                               {course.title}
                             </p>
                             <p className="text-[10px] text-fg-subtle">
@@ -422,7 +433,7 @@ export default function StudentPerformance() {
                             <ArrowUpRight size={13} />
                           </Link>
                         </div>
-                        <div className="mt-2">
+                        <div className="mt-2.5">
                           <ProgressBar percent={percent} label={`Completion in ${course.title}`} />
                         </div>
                       </li>
@@ -438,7 +449,7 @@ export default function StudentPerformance() {
                         setOpenTopic(openTopic === subject.name ? null : subject.name)
                       }
                       aria-expanded={openTopic === subject.name}
-                      className="btn-ghost text-[11px]"
+                      className="btn-ghost h-8 px-3 text-[11px]"
                     >
                       <ChevronDown
                         size={13}
@@ -471,7 +482,7 @@ export default function StudentPerformance() {
                                 }`}
                               />
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-foreground">{node.title}</p>
+                                <p className="truncate font-medium text-foreground">{node.title}</p>
                                 <p className="text-[10px] text-fg-subtle">
                                   {node.xpReward} XP · {attemptsLabel(node)}
                                 </p>
@@ -487,7 +498,7 @@ export default function StudentPerformance() {
                           return (
                             <li
                               key={node.id}
-                              className="rounded-lg border border-line bg-card/40 px-2.5 py-1.5 text-[11px]"
+                              className="rounded-lg border border-line bg-background/40 px-3 py-2 text-[11.5px]"
                             >
                               {attempted ? (
                                 <button

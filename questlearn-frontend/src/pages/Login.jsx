@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, Flame, Sparkles, Sword, Trophy } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, Flame, Route, Sparkles, Trophy } from 'lucide-react';
 import { apiError } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import ThemeToggle from '../components/common/ThemeToggle.jsx';
+import AuthShell from '../components/auth/AuthShell.jsx';
 
 const DEMO_ACCOUNTS = [
   { label: 'Student', email: 'student@questlearn.dev', password: 'password123' },
@@ -13,11 +13,93 @@ const DEMO_ACCOUNTS = [
 ];
 
 const HIGHLIGHTS = [
-  { icon: Sword, text: 'Branching skill trees instead of static module lists' },
-  { icon: Sparkles, text: 'Server-scored micro-quizzes with instant XP feedback' },
-  { icon: Flame, text: 'Daily streaks and level-ups that actually feel earned' },
-  { icon: Trophy, text: 'A leaderboard that rewards consistency, not cramming' },
+  { icon: Route, text: 'Skill trees that show the next step' },
+  { icon: Sparkles, text: 'Instant quiz feedback and XP' },
+  { icon: Flame, text: 'Streaks that reward small sessions' },
+  { icon: Trophy, text: 'A leaderboard built on consistency' },
 ];
+
+function LoginAside() {
+  return (
+    <div className="max-w-[520px]">
+      <p className="eyebrow">Your learning space</p>
+      <h1 className="mt-4 font-display text-[clamp(2.4rem,4.6vw,3.5rem)] font-semibold leading-[1.02] tracking-[-0.05em] text-foreground">
+        Pick up where
+        <br />
+        you left off.
+      </h1>
+      <p className="mt-4 max-w-md text-[14px] leading-7 text-fg-muted">
+        Your course is exactly where you left it. Open the next node, keep the streak alive, and
+        finish something today.
+      </p>
+
+      <div className="mt-8 rounded-[20px] border border-line bg-card p-5 shadow-card">
+        <div className="flex items-center justify-between">
+          <p className="text-[12px] font-semibold text-foreground">Your week</p>
+          <span className="chip text-gold-text">Level 5</span>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {[
+            { label: 'Streak', value: '7d' },
+            { label: 'Total XP', value: '1,240' },
+            { label: 'Nodes', value: '12' },
+          ].map((stat) => (
+            <div key={stat.label} className="rounded-xl border border-line bg-background/60 p-3">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
+                {stat.label}
+              </p>
+              <p className="mt-1 font-display text-lg font-semibold tracking-[-0.04em] text-foreground">
+                {stat.value}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {[
+            { title: 'Foundations of behaviour', state: 'done' },
+            { title: 'Memory and attention', state: 'active' },
+            { title: 'Learning and conditioning', state: 'locked' },
+          ].map((node) => (
+            <div
+              key={node.title}
+              className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 ${
+                node.state === 'active'
+                  ? 'border-gold/30 bg-brand-tint/70'
+                  : 'border-line bg-background/40'
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  node.state === 'done'
+                    ? 'bg-success'
+                    : node.state === 'active'
+                      ? 'bg-gold'
+                      : 'bg-line-strong'
+                }`}
+              />
+              <p className="min-w-0 flex-1 truncate text-[11px] font-medium text-foreground">
+                {node.title}
+              </p>
+              <span className="text-[9px] font-semibold text-fg-subtle">
+                {node.state === 'done' ? 'Cleared' : node.state === 'active' ? 'Next' : 'Locked'}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <ul className="mt-7 grid gap-2.5 sm:grid-cols-2">
+        {HIGHLIGHTS.map(({ icon: Icon, text }) => (
+          <li key={text} className="flex items-start gap-2 text-[12px] text-fg-muted">
+            <Icon size={14} className="mt-0.5 shrink-0 text-gold-text" />
+            {text}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export default function Login() {
   const { login } = useAuth();
@@ -25,6 +107,7 @@ export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const signIn = async (email, password) => {
     setBusy(true);
@@ -45,76 +128,20 @@ export default function Login() {
   };
 
   return (
-    <div className="relative mx-auto grid min-h-screen max-w-6xl items-center gap-14 px-4 py-12 lg:grid-cols-[1.05fr_1fr] lg:px-8">
-      <div className="absolute right-4 top-5 sm:right-8">
-        <ThemeToggle />
-      </div>
-
+    <AuthShell aside={<LoginAside />}>
       <motion.section
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-        className="hidden lg:block"
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        className="panel-raised p-6 sm:p-8"
       >
-        <div className="flex items-center gap-3">
-          <span className="grid h-11 w-11 place-items-center rounded-xl border border-gold/25 bg-gold/[0.12] text-gold">
-            <Sword size={19} />
-          </span>
-          <span className="leading-none">
-            <span className="block font-display text-xl font-extrabold tracking-[-0.045em] text-foreground">
-              Quest<span className="text-gold-text">Learn</span>
-            </span>
-            <span className="mt-1.5 block text-[9px] font-semibold uppercase tracking-[0.19em] text-fg-subtle">
-              Playable curriculum
-            </span>
-          </span>
-        </div>
-
-        <h1 className="mt-10 max-w-xl font-display text-[2.6rem] font-bold leading-[1.08] tracking-[-0.035em] text-foreground">
-          Turn your curriculum into a{' '}
-          <span className="text-gold-text">playable skill tree</span>.
-        </h1>
-        <p className="mt-5 max-w-lg text-sm leading-7 text-fg-muted">
-          QuestLearn replaces flat module lists with interconnected nodes. Clear a node, earn XP,
-          unlock the next branch, and keep your streak alive — all backed by a secured Spring Boot
-          API.
-        </p>
-
-        <div className="mt-9 grid gap-2.5">
-          {HIGHLIGHTS.map(({ icon: Icon, text }) => (
-            <div
-              key={text}
-              className="flex items-center gap-3 rounded-xl border border-line bg-card/60 px-3.5 py-2.5"
-            >
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-gold/20 bg-gold/[0.09] text-gold">
-                <Icon size={15} />
-              </span>
-              <span className="text-[13px] font-medium text-foreground/85">{text}</span>
-            </div>
-          ))}
-        </div>
-      </motion.section>
-
-      <motion.section
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.06, ease: [0.22, 1, 0.36, 1] }}
-        className="panel-raised mx-auto w-full max-w-md p-7"
-      >
-        <div className="mb-6 flex items-center gap-2.5 lg:hidden">
-          <span className="grid h-9 w-9 place-items-center rounded-xl border border-gold/25 bg-gold/[0.12] text-gold">
-            <Sword size={17} />
-          </span>
-          <span className="font-display text-lg font-extrabold tracking-[-0.045em] text-foreground">
-            Quest<span className="text-gold">Learn</span>
-          </span>
-        </div>
-
         <p className="eyebrow">Sign in</p>
-        <h2 className="mt-2 font-display text-2xl font-bold tracking-[-0.03em] text-foreground">
-          Resume your quest
+        <h2 className="mt-3 font-display text-[28px] font-semibold leading-tight tracking-[-0.04em] text-foreground">
+          Welcome back
         </h2>
-        <p className="mt-1.5 text-sm text-fg-muted">Sign in to keep your XP and streak moving.</p>
+        <p className="mt-1.5 text-[13px] leading-6 text-fg-muted">
+          Use your school account, or jump straight in with a demo profile.
+        </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
@@ -137,33 +164,43 @@ export default function Login() {
             <label className="label" htmlFor="password">
               Password
             </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              className="field"
-              placeholder="••••••••"
-              value={form.password}
-              onChange={(event) => setForm({ ...form, password: event.target.value })}
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                required
+                className="field pr-11"
+                placeholder="Enter your password"
+                value={form.password}
+                onChange={(event) => setForm({ ...form, password: event.target.value })}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="absolute right-1 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg text-fg-subtle transition-colors hover:text-foreground"
+              >
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
           </div>
 
           {error && (
-            <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+            <p className="rounded-xl border border-danger/25 bg-danger/[0.07] px-3.5 py-2.5 text-[12px] leading-5 text-danger">
               {error}
             </p>
           )}
 
-          <button type="submit" disabled={busy} className="btn-primary w-full">
+          <button type="submit" disabled={busy} className="btn-primary h-11 w-full text-[14px]">
             {busy ? 'Signing in…' : 'Sign in'}
-            {!busy && <ArrowRight size={16} />}
+            {!busy && <ArrowRight size={15} />}
           </button>
         </form>
 
-        <div className="my-5 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-fg-subtle">
+        <div className="my-5 flex items-center gap-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
           <span className="h-px flex-1 bg-line" />
-          demo accounts
+          Demo accounts
           <span className="h-px flex-1 bg-line" />
         </div>
 
@@ -173,24 +210,25 @@ export default function Login() {
               key={account.label}
               type="button"
               disabled={busy}
+              title={`Sign in as ${account.label.toLowerCase()}`}
               onClick={() => {
                 setForm({ email: account.email, password: account.password });
                 signIn(account.email, account.password);
               }}
-              className="btn-ghost px-2 py-2 text-xs"
+              className="btn-ghost h-9 px-2 text-[11px]"
             >
               {account.label}
             </button>
           ))}
         </div>
 
-        <p className="mt-5 text-center text-xs text-fg-muted">
+        <p className="mt-5 text-center text-[12px] text-fg-muted">
           New here?{' '}
           <Link to="/register" className="font-semibold text-gold-text hover:underline">
             Create an account
           </Link>
         </p>
       </motion.section>
-    </div>
+    </AuthShell>
   );
 }

@@ -9,9 +9,9 @@ const systemTheme = () =>
     : 'dark';
 
 const readStored = () => {
-  if (typeof window === 'undefined') return 'dark';
+  if (typeof window === 'undefined') return 'light';
   const stored = window.localStorage.getItem(STORAGE_KEY);
-  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'dark';
+  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'light';
 };
 
 /**
@@ -41,7 +41,7 @@ export function ThemeProvider({ children }) {
     root.classList.add(resolved);
 
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', resolved === 'light' ? '#f6f7fa' : '#080d19');
+    if (meta) meta.setAttribute('content', resolved === 'light' ? '#FAF6F0' : '#141212');
 
     // Keep native form controls and scrollbars in step with the theme.
     root.style.colorScheme = resolved;

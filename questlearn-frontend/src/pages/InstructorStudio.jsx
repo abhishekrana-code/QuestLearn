@@ -408,7 +408,7 @@ export default function InstructorStudio() {
 
   if (loading) {
     return (
-      <div className="grid min-h-[70vh] place-items-center text-sm text-slate-400">
+      <div className="grid min-h-[70vh] place-items-center text-sm text-fg-muted">
         Opening the workshop…
       </div>
     );
@@ -499,7 +499,7 @@ export default function InstructorStudio() {
         </div>
       )}
 
-      <nav aria-label="Studio steps" className="mb-5 flex gap-1.5 overflow-x-auto pb-1">
+      <nav aria-label="Studio steps" className="mb-5 flex flex-wrap gap-1.5">
         {STEPS.map((item, index) => {
           const active = item.id === step;
           const locked = !selectedCourse && item.id !== 'course';
@@ -646,7 +646,7 @@ export default function InstructorStudio() {
                   </h2>
 
                   {aiStatus && !aiStatus.configured ? (
-                    <p className="mt-3 text-xs leading-relaxed text-slate-400">
+                    <p className="mt-3 text-xs leading-relaxed text-fg-muted">
                       {aiStatus.unreachable
                         ? 'The AI status endpoint is unreachable - is the API running?'
                         : 'Add GROQ_API_KEY to questlearn-backend/.env and restart the API to draft a whole quest from one sentence.'}
