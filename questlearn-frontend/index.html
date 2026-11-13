@@ -11,12 +11,8 @@
     />
     <title>QuestLearn — A clearer way to learn</title>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <!-- No font CDN: the app ships with system stacks, so a page cannot hang on a
+         third-party request and the Content-Security-Policy can stay 'self'. -->
 
     <script>
       // Paint the right theme before React mounts. Light is the product default;

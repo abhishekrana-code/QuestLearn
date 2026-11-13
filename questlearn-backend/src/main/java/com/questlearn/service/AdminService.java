@@ -1,6 +1,7 @@
 package com.questlearn.service;
 
 import com.questlearn.dto.AdminStatsDto;
+import com.questlearn.dto.AdminUserPage;
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.AuditEntryDto;
 import com.questlearn.dto.TempPasswordResponse;
@@ -17,6 +18,10 @@ import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
 import com.questlearn.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,15 +51,28 @@ public class AdminService {
      *              usable at classroom size without a page envelope.
      */
     @Transactional(readOnly = true)
-    public List<UserDto> listUsers(String query) {
+    /**
+     * One page of accounts, newest id order kept stable so paging does not shuffle.
+     *
+     * @param size clamped here rather than trusted from the query string, so one
+     *             request cannot ask for the whole school
+     */
+    public AdminUserPage listUsers(String query, int page, int size) {
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize, Sort.by(Sort.Direction.ASC, "id"));
         String term = query == null ? "" : query.trim();
-        List<User> users = term.isEmpty()
-                ? userRepository.findAllByOrderByIdAsc()
-                : userRepository
-                        .findByNameContainingIgnoreCaseOrEmailContainingIgnoreCaseOrderByIdAsc(term, term);
-        return users.stream()
-                .map(DtoMapper::toUserDto)
-                .toList();
+
+        Page<User> found = term.isEmpty()
+                ? userRepository.findAll(pageable)
+                : userRepository.findByNameContainingIgnoreCaseOrEmailContainingIgnoreCase(
+                        term, term, pageable);
+
+        return new AdminUserPage(
+                found.getContent().stream().map(DtoMapper::toUserDto).toList(),
+                found.getTotalElements(),
+                found.getNumber(),
+                found.getSize(),
+                found.getTotalPages());
     }
 
     @Transactional

@@ -474,14 +474,40 @@ class QuestLearnApiIntegrationTest {
         mvc.perform(get("/api/v1/admin/users").param("query", "learn")
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].email").value("learner@it.test"));
+                .andExpect(jsonPath("$.users.length()").value(1))
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.users[0].email").value("learner@it.test"));
 
         mvc.perform(get("/api/v1/admin/users").param("query", "TEACHER@")
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].email").value("teacher@it.test"));
+                .andExpect(jsonPath("$.users.length()").value(1))
+                .andExpect(jsonPath("$.users[0].email").value("teacher@it.test"));
+    }
+
+    @Test
+    void theAccountListIsPagedRatherThanWhole() throws Exception {
+        String adminToken = login("admin@it.test");
+        // Three fixture accounts: registrar, teacher, learner.
+        mvc.perform(get("/api/v1/admin/users").param("page", "0").param("size", "2")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.users.length()").value(2))
+                .andExpect(jsonPath("$.total").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.users[0].email").value("teacher@it.test"));
+
+        mvc.perform(get("/api/v1/admin/users").param("page", "1").param("size", "2")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.users.length()").value(1))
+                .andExpect(jsonPath("$.users[0].email").value("admin@it.test"));
+
+        // An absurd size is clamped instead of honoured.
+        mvc.perform(get("/api/v1/admin/users").param("size", "100000")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(100));
     }
 
     @Test

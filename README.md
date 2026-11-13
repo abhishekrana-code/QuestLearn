@@ -232,7 +232,7 @@ when Groq itself fails. A per-account hourly quota (`AI_HOURLY_LIMIT`, default 3
 
 | Method | Path | Access | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/admin/users?query=` | Admin | All accounts, optionally filtered by name or email |
+| `GET` | `/admin/users?query=&page=&size=` | Admin | One page of accounts (default 25, capped at 100), optionally filtered by name or email |
 | `PATCH` | `/admin/users/{id}/role` | Admin | Change a role (not your own); effective on the target's next request |
 | `POST` | `/admin/users/{id}/reset-password` | Admin | One-time temporary password; revokes that account's live sessions |
 | `DELETE` | `/admin/users/{id}/modules/{moduleId}/progress` | Admin | Reset one node so a learner can retry it |
@@ -322,7 +322,7 @@ Submission body for `POST /modules/{id}/complete`:
    Closing IntelliJ/VS Code frees roughly 1–2.5 GB.
 4. **Keep the frontend production-built** for the demo (`npm run build`, then `npm run preview`);
    Vite's dev server with React StrictMode is convenient but heavier.
-5. **Everything is offline.** Fonts are system fonts, icons come from the bundled `lucide-react`
+5. **Everything is offline.** No font CDN: headings and body use system stacks. Icons come from the bundled `lucide-react`
    package and the Lottie JSON files live in `src/assets/animations/`.
 
 ---

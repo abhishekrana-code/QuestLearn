@@ -58,7 +58,7 @@ export default {
           'sans-serif',
         ],
         display: [
-          'Poppins',
+          
           '"Segoe UI Variable Display"',
           '"Segoe UI"',
           'system-ui',

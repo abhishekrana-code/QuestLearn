@@ -35,9 +35,12 @@ public class AdminController {
     private final AdminService adminService;
 
     @GetMapping("/users")
-    @Operation(summary = "List every account, optionally filtered by name or email")
-    public List<UserDto> users(@RequestParam(required = false) String query) {
-        return adminService.listUsers(query);
+    @Operation(summary = "One page of accounts, optionally filtered by name or email")
+    public com.questlearn.dto.AdminUserPage users(
+            @RequestParam(required = false) String query,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size) {
+        return adminService.listUsers(query, page, size);
     }
 
     @PatchMapping("/users/{userId}/role")

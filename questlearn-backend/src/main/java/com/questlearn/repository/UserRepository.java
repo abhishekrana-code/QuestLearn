@@ -2,6 +2,8 @@ package com.questlearn.repository;
 
 import com.questlearn.model.Role;
 import com.questlearn.model.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -19,6 +21,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findByNameContainingIgnoreCaseOrEmailContainingIgnoreCaseOrderByIdAsc(
             String name, String email);
+
+    Page<User> findByNameContainingIgnoreCaseOrEmailContainingIgnoreCase(
+            String name, String email, Pageable pageable);
 
     List<User> findTop10ByRoleOrderByTotalXpDesc(Role role);
 

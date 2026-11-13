@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, Eye, EyeOff, History, KeyRound, Search, ShieldCheck, Users } from 'lucide-react';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
@@ -7,6 +7,8 @@ import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import api, { apiError } from '../services/api.js';
 
 const ROLE_OPTIONS = ['STUDENT', 'INSTRUCTOR', 'ADMIN'];
+// A page small enough to be quick on a slow link, large enough to scroll once.
+const PAGE_SIZE = 25;
 
 /** Reads as a sentence on the page; the raw action key stays stable for machines. */
 const ACTION_LABELS = {
@@ -35,6 +37,8 @@ export default function AdminPanel() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
+  const [page, setPage] = useState(0);
+  const [pageInfo, setPageInfo] = useState({ total: 0, totalPages: 1, size: PAGE_SIZE });
   const [courses, setCourses] = useState([]);
   const [audit, setAudit] = useState([]);
   const [query, setQuery] = useState('');
@@ -44,7 +48,6 @@ export default function AdminPanel() {
   const [loadError, setLoadError] = useState(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [busyId, setBusyId] = useState(null);
-  const firstSearchRender = useRef(true);
 
   const { paused: retryPaused, reset: resetAutoRetry, retryNow: retryLoadNow } = useAutoRetry({
     active: Boolean(loadError) && !loading,
@@ -55,14 +58,12 @@ export default function AdminPanel() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [statsResponse, usersResponse, coursesResponse, auditResponse] = await Promise.all([
+      const [statsResponse, coursesResponse, auditResponse] = await Promise.all([
         api.get('/admin/stats'),
-        api.get('/admin/users'),
         api.get('/courses'),
         api.get('/admin/audit'),
       ]);
       setStats(statsResponse.data);
-      setUsers(usersResponse.data);
       setCourses(coursesResponse.data);
       setAudit(auditResponse.data);
       resetAutoRetry();
@@ -77,22 +78,21 @@ export default function AdminPanel() {
     load();
   }, [load, loadAttempt]);
 
-  // Typing filters on the server after a short pause, so a school-sized roster
-  // never has to be shipped to the browser just to be searched.
+  // One page at a time: a school-sized account list must never be shipped to the
+  // browser whole. Typing goes to the server after a short pause.
   useEffect(() => {
-    if (firstSearchRender.current) {
-      firstSearchRender.current = false;
-      return undefined;
-    }
     let cancelled = false;
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
         const trimmed = query.trim();
         const { data } = await api.get('/admin/users', {
-          params: trimmed ? { query: trimmed } : undefined,
+          params: { page, size: PAGE_SIZE, ...(trimmed ? { query: trimmed } : {}) },
         });
-        if (!cancelled) setUsers(data);
+        if (!cancelled) {
+          setUsers(data.users);
+          setPageInfo({ total: data.total, totalPages: data.totalPages, size: data.size });
+        }
       } catch (error) {
         if (!cancelled) {
           setMessage({ type: 'error', text: apiError(error, 'Could not search accounts.') });
@@ -105,7 +105,13 @@ export default function AdminPanel() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, page]);
+
+  // A new search always starts from the first page of the new result set.
+  const searchQuery = (value) => {
+    setQuery(value);
+    setPage(0);
+  };
 
   const refreshAudit = async () => {
     try {
@@ -240,7 +246,7 @@ export default function AdminPanel() {
               aria-live="polite"
               className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle tabular-nums"
             >
-              {query.trim() ? `${users.length} matching` : `${users.length} total`}
+              {query.trim() ? `${pageInfo.total} matching` : `${pageInfo.total} total`}
             </span>
           </div>
           <div className="border-b border-line px-5 py-3">
@@ -259,7 +265,7 @@ export default function AdminPanel() {
                 className="field h-9 pl-8 text-xs"
                 placeholder="Search name or email"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => searchQuery(event.target.value)}
               />
               {searching && (
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-fg-subtle">
@@ -374,6 +380,36 @@ export default function AdminPanel() {
               </tbody>
             </table>
           </div>
+
+          {pageInfo.total > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-5 py-3 text-[11px] text-fg-subtle">
+              <span className="tabular-nums">
+                {page * pageInfo.size + 1}–
+                {Math.min((page + 1) * pageInfo.size, pageInfo.total)} of {pageInfo.total}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={page === 0}
+                  onClick={() => setPage((previous) => Math.max(previous - 1, 0))}
+                  className="btn-ghost px-2.5 py-1.5 text-[11px]"
+                >
+                  Previous
+                </button>
+                <span className="tabular-nums">
+                  Page {page + 1} of {Math.max(pageInfo.totalPages, 1)}
+                </span>
+                <button
+                  type="button"
+                  disabled={page + 1 >= pageInfo.totalPages}
+                  onClick={() => setPage((previous) => previous + 1)}
+                  className="btn-ghost px-2.5 py-1.5 text-[11px]"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="panel-raised overflow-hidden">
