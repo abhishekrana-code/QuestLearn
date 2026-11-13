@@ -551,6 +551,51 @@ class QuestLearnApiIntegrationTest {
     }
 
     @Test
+    void theRosterShowsWhoJoinedWithTheirPerNodeProgress() throws Exception {
+        String teacherToken = login("teacher@it.test");
+
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+
+        // Opening the tree creates the progress rows; clearing the root gives the
+        // roster a completed node and an unlocked child to report.
+        skillTree();
+        complete(studentToken, root.getId(), 1);
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.moduleCount").value(2))
+                .andExpect(jsonPath("$.learners.length()").value(1))
+                .andExpect(jsonPath("$.learners[0].email").value("learner@it.test"))
+                .andExpect(jsonPath("$.learners[0].clearedNodes").value(1))
+                .andExpect(jsonPath("$.learners[0].enrolledAt").exists())
+                .andExpect(jsonPath("$.learners[0].lastActivity").exists())
+                .andExpect(jsonPath("$.learners[0].nodes.length()").value(2))
+                .andExpect(jsonPath("$.learners[0].nodes[0].title").value("Root node"))
+                .andExpect(jsonPath("$.learners[0].nodes[0].status").value("COMPLETED"))
+                .andExpect(jsonPath("$.learners[0].nodes[0].score").value(100))
+                .andExpect(jsonPath("$.learners[0].nodes[1].status").value("UNLOCKED"));
+
+        // Other people's work is not a student's to read.
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void aRosterWithNobodyJoinedIsEmptyRatherThanMissing() throws Exception {
+        String teacherToken = login("teacher@it.test");
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.moduleCount").value(2))
+                .andExpect(jsonPath("$.learners.length()").value(0));
+    }
+
+    @Test
     void onlyStudentsJoinAndOnlyLiveCoursesCanBeJoined() throws Exception {
         String teacherToken = login("teacher@it.test");
 

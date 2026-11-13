@@ -180,6 +180,7 @@ All routes are under `/api/v1`. Protected routes need `Authorization: Bearer <to
 | `POST` | `/courses/{id}/enroll` | Student | Join a published course; idempotent |
 | `DELETE` | `/courses/{id}/enroll` | Student | Leave a course; progress and XP are kept |
 | `GET` | `/courses/{id}` | authenticated | Course summary |
+| `GET` | `/courses/{id}/roster` | Instructor (owner), Admin | Who joined, with each learner's per-node status |
 | `POST` | `/courses` | Instructor, Admin | Create a draft course |
 | `PATCH` | `/courses/{id}/publish?published=true` | Instructor (owner), Admin | Publish / unpublish |
 | `POST` | `/courses/{id}/modules` | Instructor (owner), Admin | Add a skill node |

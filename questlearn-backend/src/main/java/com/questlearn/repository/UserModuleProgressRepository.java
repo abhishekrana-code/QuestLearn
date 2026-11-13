@@ -4,6 +4,7 @@ import com.questlearn.model.ProgressStatus;
 import com.questlearn.model.UserModuleProgress;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,4 +21,10 @@ public interface UserModuleProgressRepository extends JpaRepository<UserModulePr
     long countByUserIdAndModuleCourseIdAndStatus(Long userId, Long courseId, ProgressStatus status);
 
     long countByModuleCourseId(Long courseId);
+
+    /**
+     * Every progress row a set of learners has in one course, so a roster loads in
+     * a single query instead of one per learner.
+     */
+    List<UserModuleProgress> findByModuleCourseIdAndUserIdIn(Long courseId, Collection<Long> userIds);
 }

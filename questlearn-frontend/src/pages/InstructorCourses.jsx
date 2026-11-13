@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Search,
   Trash2,
+  Users,
 } from 'lucide-react';
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
@@ -349,6 +350,14 @@ export default function InstructorCourses() {
                   >
                     <Eye size={13} /> Preview
                   </Link>
+                  {owned && (
+                    <Link
+                      to={`/studio/courses/${course.id}/roster`}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-fg-muted hover:text-foreground"
+                    >
+                      <Users size={13} /> Roster
+                    </Link>
+                  )}
 
                   {owned && (
                     <div className="ml-auto flex items-center gap-1">

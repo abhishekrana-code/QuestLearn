@@ -3,7 +3,10 @@ package com.questlearn.service;
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.CourseDto;
 import com.questlearn.dto.CourseRequest;
+import com.questlearn.dto.CourseRosterDto;
 import com.questlearn.dto.CourseUpdateRequest;
+import com.questlearn.dto.RosterLearnerDto;
+import com.questlearn.dto.RosterNodeDto;
 import com.questlearn.dto.ModuleRequest;
 import com.questlearn.dto.ModuleUpdateRequest;
 import com.questlearn.dto.QuizRequest;
@@ -15,6 +18,7 @@ import com.questlearn.model.ProgressStatus;
 import com.questlearn.model.Quiz;
 import com.questlearn.model.Role;
 import com.questlearn.model.User;
+import com.questlearn.model.UserModuleProgress;
 import com.questlearn.repository.CourseRepository;
 import com.questlearn.repository.EnrollmentRepository;
 import com.questlearn.repository.ModuleAttemptRepository;
@@ -131,6 +135,78 @@ public class CourseService {
             throw ApiException.forbidden("Only students join courses");
         }
         enrollmentRepository.deleteByUserIdAndCourseId(principal.id(), courseId);
+    }
+
+    /**
+     * Who joined a course and how far each of them got.
+     *
+     * <p>Only the course's own instructor or an admin may read it: the roster is
+     * other people's work, not something a student can ask for.</p>
+     */
+    @Transactional(readOnly = true)
+    public CourseRosterDto roster(Long courseId, AppUserPrincipal principal) {
+        Course course = loadCourse(courseId);
+        assertCanManage(course, principal);
+
+        List<Module> modules = moduleRepository.findByCourseIdOrderByOrderIndexAsc(courseId);
+        List<Enrollment> enrollments = enrollmentRepository.findByCourseIdOrderByEnrolledAtAsc(courseId);
+        if (enrollments.isEmpty()) {
+            return new CourseRosterDto(course.getId(), course.getTitle(), modules.size(), List.of());
+        }
+
+        List<Long> learnerIds = enrollments.stream().map(Enrollment::getUserId).toList();
+        Map<Long, User> learners = userRepository.findAllById(learnerIds).stream()
+                .collect(Collectors.toMap(User::getId, user -> user));
+
+        Map<Long, Map<Long, UserModuleProgress>> progressByLearner = new HashMap<>();
+        if (!modules.isEmpty()) {
+            for (UserModuleProgress row : progressRepository.findByModuleCourseIdAndUserIdIn(courseId, learnerIds)) {
+                progressByLearner
+                        .computeIfAbsent(row.getUser().getId(), key -> new HashMap<>())
+                        .put(row.getModule().getId(), row);
+            }
+        }
+
+        List<RosterLearnerDto> roster = new ArrayList<>();
+        for (Enrollment enrollment : enrollments) {
+            User learner = learners.get(enrollment.getUserId());
+            if (learner == null) {
+                continue;
+            }
+            Map<Long, UserModuleProgress> progress = progressByLearner.getOrDefault(learner.getId(), Map.of());
+            List<RosterNodeDto> nodes = new ArrayList<>(modules.size());
+            Instant lastActivity = enrollment.getEnrolledAt();
+            long cleared = 0;
+            for (Module module : modules) {
+                UserModuleProgress row = progress.get(module.getId());
+                if (row != null && row.getStatus() == ProgressStatus.COMPLETED) {
+                    cleared++;
+                    if (row.getCompletedAt() != null && row.getCompletedAt().isAfter(lastActivity)) {
+                        lastActivity = row.getCompletedAt();
+                    }
+                }
+                nodes.add(new RosterNodeDto(
+                        module.getId(),
+                        module.getTitle(),
+                        row == null ? ProgressStatus.LOCKED.name() : row.getStatus().name(),
+                        row == null ? 0 : row.getScore(),
+                        row == null ? 0 : row.getAttempts(),
+                        row == null ? null : row.getCompletedAt()));
+            }
+            roster.add(new RosterLearnerDto(
+                    learner.getId(),
+                    learner.getName(),
+                    learner.getEmail(),
+                    learner.getTotalXp(),
+                    learner.getCurrentLevel(),
+                    learner.getStreakDays(),
+                    cleared,
+                    modules.size(),
+                    enrollment.getEnrolledAt(),
+                    lastActivity,
+                    nodes));
+        }
+        return new CourseRosterDto(course.getId(), course.getTitle(), modules.size(), roster);
     }
 
     /**

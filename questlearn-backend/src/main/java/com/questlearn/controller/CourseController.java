@@ -3,6 +3,7 @@ package com.questlearn.controller;
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.CourseDto;
 import com.questlearn.dto.CourseRequest;
+import com.questlearn.dto.CourseRosterDto;
 import com.questlearn.dto.CourseUpdateRequest;
 import com.questlearn.dto.ModuleRequest;
 import com.questlearn.dto.ModuleUpdateRequest;
@@ -65,6 +66,14 @@ public class CourseController {
     public void unenroll(@PathVariable Long courseId,
                          @AuthenticationPrincipal AppUserPrincipal principal) {
         courseService.unenroll(courseId, principal);
+    }
+
+    @GetMapping("/courses/{courseId}/roster")
+    @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
+    @Operation(summary = "Who joined this course, with each learner's per-node progress")
+    public CourseRosterDto roster(@PathVariable Long courseId,
+                                  @AuthenticationPrincipal AppUserPrincipal principal) {
+        return courseService.roster(courseId, principal);
     }
 
     @GetMapping("/courses/{courseId}")
