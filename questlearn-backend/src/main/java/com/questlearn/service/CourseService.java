@@ -67,6 +67,9 @@ public class CourseService {
     private final MediaStorageService mediaStorageService;
     private final AuditService auditService;
     private final EnrollmentRepository enrollmentRepository;
+
+    /** Big enough for any real class list, small enough to stay one quick request. */
+    private static final int MAX_ROSTER_IMPORT = 500;
     private final com.questlearn.repository.CohortRepository cohortRepository;
     private final com.questlearn.repository.CohortMembershipRepository cohortMembershipRepository;
 
@@ -171,25 +174,14 @@ public class CourseService {
         return toCourseDto(courseRepository.save(course), principal);
     }
 
-    @Transactional(readOnly = true)
-    public CourseRosterDto roster(Long courseId, AppUserPrincipal principal) {
-        return roster(courseId, null, principal);
-    }
-
     /**
-     * @param cohortId when set, the roster narrows to that class; the full roster
-     *                 still answers "who is in this course at all"
-     */
-    @Transactional(readOnly = true)
-    public CourseRosterDto roster(Long courseId, Long cohortId, AppUserPrincipal principal) {
-        return roster(courseId, cohortId, null, null, principal);
-    }
-
-    /**
+     * @param cohortId    when set, the roster narrows to that class; without it the
+     *                    roster answers "who is in this course at all"
      * @param nodeId      when set with {@code nodeCleared}, the roster answers "who has
      *                    cleared, or not cleared, this one node"
      * @param nodeCleared false keeps the learners still stuck on that node
      */
+    @Transactional(readOnly = true)
     public CourseRosterDto roster(Long courseId, Long cohortId, Long nodeId, Boolean nodeCleared,
                                   AppUserPrincipal principal) {
         Course course = loadCourse(courseId);
@@ -317,7 +309,16 @@ public class CourseService {
         List<String> unknown = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
 
-        for (String raw : emails == null ? List.<String>of() : emails) {
+        if (emails == null || emails.isEmpty()) {
+            throw ApiException.badRequest("That list had no email addresses in it");
+        }
+        // A pasted spreadsheet is fine; a 10,000-row file belongs in a script, not in
+        // one request that holds a transaction open for every lookup.
+        if (emails.size() > MAX_ROSTER_IMPORT) {
+            throw ApiException.badRequest("Import at most " + MAX_ROSTER_IMPORT + " addresses at a time");
+        }
+
+        for (String raw : emails) {
             if (raw == null) {
                 continue;
             }
@@ -347,6 +348,12 @@ public class CourseService {
                         .build());
             }
             (enrolled ? alreadyMember : imported).add(email);
+        }
+
+        // A list of blanks passes the size check and then matches nothing: say so
+        // rather than report a successful import of zero.
+        if (seen.isEmpty()) {
+            throw ApiException.badRequest("No email addresses found in that list");
         }
 
         auditService.record(principal, "course.roster_imported", course.getTitle(),

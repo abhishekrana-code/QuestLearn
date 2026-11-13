@@ -395,7 +395,7 @@ export default function CourseRoster() {
           </div>
 
           {importOpen && (
-            <form onSubmit={submitImport} className="panel mb-4 px-4 py-3">
+            <form onSubmit={submitImport} className="no-print panel mb-4 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-[12px] font-semibold text-foreground">Import a class list</p>
                 <button

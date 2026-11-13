@@ -17,11 +17,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findAllByOrderByTotalXpDesc();
 
-    List<User> findAllByOrderByIdAsc();
-
-    List<User> findByNameContainingIgnoreCaseOrEmailContainingIgnoreCaseOrderByIdAsc(
-            String name, String email);
-
     Page<User> findByNameContainingIgnoreCaseOrEmailContainingIgnoreCase(
             String name, String email, Pageable pageable);
 

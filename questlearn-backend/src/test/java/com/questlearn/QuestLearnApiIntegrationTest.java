@@ -1022,6 +1022,35 @@ class QuestLearnApiIntegrationTest {
     }
 
     @Test
+    void anImportWithNothingUsefulInItIsRejected() throws Exception {
+        String teacherToken = login("teacher@it.test");
+
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/roster/import")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/roster/import")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(
+                                java.util.Map.of("emails", java.util.List.of("  ", "")))))
+                .andExpect(status().isBadRequest());
+
+        // A whole year group in one paste is refused rather than held open.
+        java.util.List<String> tooMany = new java.util.ArrayList<>();
+        for (int index = 0; index < 501; index += 1) {
+            tooMany.add("student" + index + "@it.test");
+        }
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/roster/import")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("emails", tooMany))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void theRosterCanShowWhoIsStuckOnOneNode() throws Exception {
         String teacherToken = login("teacher@it.test");
         mvc.perform(post("/api/v1/courses/" + course.getId() + "/enroll")

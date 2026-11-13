@@ -431,10 +431,6 @@ public class ProgressService {
      * lifetime total, so a transfer student does not arrive at the top of the board
      * and someone who finished three courses elsewhere does not swamp their class.</p>
      */
-    public List<CourseLeaderboardEntry> courseLeaderboard(Long courseId, AppUserPrincipal principal) {
-        return courseLeaderboard(courseId, null, principal);
-    }
-
     /**
      * @param cohortId when set, the board ranks only that class, which is what a
      *                 teacher means by "how is 10B doing?"
