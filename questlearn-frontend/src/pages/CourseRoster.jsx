@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Clock, Lock, Unlock, Users } from 'lucide-react';
+import { ArrowLeft, Check, Clock, Download, Lock, Unlock, Users } from 'lucide-react';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import api, { apiError } from '../services/api.js';
+import { rosterFileName, rosterToRows, toCsv } from '../services/rosterCsv.js';
 
 const STATUS = {
   COMPLETED: { label: 'Cleared', chip: 'border-success/30 bg-success/[0.08] text-success', Icon: Check },
@@ -19,6 +20,24 @@ function initials(name = '') {
     .join('')
     .slice(0, 2)
     .toUpperCase();
+}
+
+/**
+ * Hands a CSV to the browser as a download. The byte-order mark keeps Excel from
+ * guessing the wrong encoding on a Windows machine.
+ */
+function downloadCsv(roster) {
+  const blob = new Blob([`\uFEFF${toCsv(rosterToRows(roster))}`], {
+    type: 'text/csv;charset=utf-8;',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = rosterFileName(roster);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function shortDate(iso) {
@@ -196,6 +215,13 @@ export default function CourseRoster() {
             </span>
             <span className="tabular-nums">{roster.moduleCount} nodes</span>
             <span className="tabular-nums">Average {averageCleared} nodes cleared</span>
+            <button
+              type="button"
+              onClick={() => downloadCsv(roster)}
+              className="btn-ghost ml-auto text-[11px]"
+            >
+              <Download size={13} /> Download CSV
+            </button>
           </div>
 
           <div className="space-y-3">
