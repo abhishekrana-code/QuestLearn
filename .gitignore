@@ -52,3 +52,7 @@ uploads/
 questlearn-frontend/test-results/
 questlearn-frontend/playwright-report/
 questlearn-frontend/.playwright/
+
+# Scratch files from polling the Actions API
+ci-runs.json
+ci-jobs.json
