@@ -44,12 +44,17 @@ jobs:
         run: |
           report=questlearn-backend/target/surefire-reports/TEST-com.questlearn.QuestLearnApiIntegrationTest.xml
           test -f "$report"
-          grep -q 'tests="10"' "$report"
           if grep -q 'skipped="[1-9]' "$report"; then
             echo "Integration tests were skipped - the database was not reachable."
             exit 1
           fi
-          echo "PostgreSQL integration suite ran: 10 tests, 0 skipped."
+          # Guard a floor, not an exact count, so adding a test does not break CI.
+          tests=$(grep -o 'tests="[0-9]*"' "$report" | head -1 | grep -o '[0-9]*')
+          if [ "$tests" -lt 10 ]; then
+            echo "Expected at least 10 integration tests, found $tests."
+            exit 1
+          fi
+          echo "PostgreSQL integration suite ran: $tests tests, 0 skipped."
 
   frontend:
     runs-on: ubuntu-latest
