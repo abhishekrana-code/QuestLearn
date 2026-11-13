@@ -33,6 +33,9 @@ public class JwtUtil {
                 .claim("userId", user.getId())
                 .claim("role", user.getRole().name())
                 .claim("name", user.getName())
+                // Session generation. The filter rejects a token whose value no
+                // longer matches the account, so a password reset revokes it.
+                .claim("tv", user.getTokenVersion())
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(key)

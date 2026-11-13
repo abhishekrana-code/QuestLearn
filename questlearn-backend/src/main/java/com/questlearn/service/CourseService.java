@@ -47,6 +47,7 @@ public class CourseService {
     private final ModuleAttemptRepository attemptRepository;
     private final QuizService quizService;
     private final MediaStorageService mediaStorageService;
+    private final AuditService auditService;
 
     @Transactional(readOnly = true)
     public List<CourseDto> listCourses(AppUserPrincipal principal) {
@@ -195,7 +196,10 @@ public class CourseService {
             throw ApiException.badRequest("Restore the course before publishing it");
         }
         course.setPublished(published);
-        return toCourseDto(courseRepository.save(course), principal);
+        Course saved = courseRepository.save(course);
+        auditService.record(principal, published ? "course.published" : "course.unpublished",
+                course.getTitle(), "Course id " + course.getId());
+        return toCourseDto(saved, principal);
     }
 
     /**
@@ -218,7 +222,11 @@ public class CourseService {
             course.setArchivedAt(null);
         }
 
-        return toCourseDto(courseRepository.save(course), principal);
+        Course saved = courseRepository.save(course);
+        auditService.record(principal, archived ? "course.archived" : "course.restored",
+                course.getTitle(), "Course id " + course.getId()
+                        + (archived ? "; also unpublished" : "; left as a draft"));
+        return toCourseDto(saved, principal);
     }
 
     /**
@@ -260,6 +268,9 @@ public class CourseService {
 
         courseRepository.delete(course);
         courseRepository.flush();
+
+        auditService.record(principal, "course.deleted", course.getTitle(),
+                "Course id " + courseId + " deleted");
 
         videos.forEach(mediaStorageService::deleteStored);
     }

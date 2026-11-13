@@ -2,6 +2,8 @@ package com.questlearn.security;
 
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.model.Role;
+import com.questlearn.model.User;
+import com.questlearn.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -24,7 +26,15 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
+    /**
+     * Resolves the account on every authenticated request instead of trusting the
+     * claims alone. That one lookup buys two things a stateless token cannot give:
+     * a password change or admin reset revokes existing sessions (the {@code tv}
+     * claim must match the stored token version), and a role change takes effect
+     * on the next request rather than the next sign-in.
+     */
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                     @NonNull HttpServletResponse response,
@@ -35,26 +45,33 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
 
             Claims claims = jwtUtil.parse(header.substring(7).trim());
-            if (claims != null) {
-                Long userId = claims.get("userId", Number.class) == null
-                        ? null
-                        : claims.get("userId", Number.class).longValue();
-                String email = claims.getSubject();
-                Role role = jwtUtil.roleOf(claims);
-
-                if (userId != null && email != null && role != null) {
-                    AppUserPrincipal principal = new AppUserPrincipal(userId, email, role);
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    principal, null,
-                                    List.of(new SimpleGrantedAuthority("ROLE_" + role.name())));
-                    authentication.setDetails(
-                            new WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                }
+            Long userId = claims == null ? null : userIdOf(claims);
+            if (userId != null) {
+                int tokenVersion = claims.get("tv", Number.class) == null
+                        ? 0
+                        : claims.get("tv", Number.class).intValue();
+                userRepository.findById(userId)
+                        .filter(user -> user.getTokenVersion() == tokenVersion)
+                        .ifPresent(user -> authenticate(request, user));
             }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private Long userIdOf(Claims claims) {
+        Number id = claims.get("userId", Number.class);
+        return id == null ? null : id.longValue();
+    }
+
+    private void authenticate(HttpServletRequest request, User user) {
+        Role role = user.getRole();
+        AppUserPrincipal principal = new AppUserPrincipal(user.getId(), user.getEmail(), role);
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(
+                        principal, null,
+                        List.of(new SimpleGrantedAuthority("ROLE_" + role.name())));
+        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 }

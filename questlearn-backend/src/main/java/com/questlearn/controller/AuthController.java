@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
@@ -49,10 +48,9 @@ public class AuthController {
     }
 
     @PatchMapping("/password")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Change your own password")
-    public void changePassword(@Valid @RequestBody ChangePasswordRequest request,
-                               @AuthenticationPrincipal AppUserPrincipal principal) {
-        authService.changePassword(principal, request);
+    @Operation(summary = "Change your own password and receive a fresh token")
+    public AuthResponse changePassword(@Valid @RequestBody ChangePasswordRequest request,
+                                       @AuthenticationPrincipal AppUserPrincipal principal) {
+        return authService.changePassword(principal, request);
     }
 }

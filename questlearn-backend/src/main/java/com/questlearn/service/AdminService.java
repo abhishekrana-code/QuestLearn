@@ -2,6 +2,7 @@ package com.questlearn.service;
 
 import com.questlearn.dto.AdminStatsDto;
 import com.questlearn.dto.AppUserPrincipal;
+import com.questlearn.dto.AuditEntryDto;
 import com.questlearn.dto.TempPasswordResponse;
 import com.questlearn.dto.UserDto;
 import com.questlearn.exception.ApiException;
@@ -37,10 +38,21 @@ public class AdminService {
     private final ModuleRepository moduleRepository;
     private final UserModuleProgressRepository progressRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditService auditService;
 
+    /**
+     * @param query optional case-insensitive fragment of a name or email. Every
+     *              row is returned when it is blank, which keeps the endpoint
+     *              usable at classroom size without a page envelope.
+     */
     @Transactional(readOnly = true)
-    public List<UserDto> listUsers() {
-        return userRepository.findAll().stream()
+    public List<UserDto> listUsers(String query) {
+        String term = query == null ? "" : query.trim();
+        List<User> users = term.isEmpty()
+                ? userRepository.findAllByOrderByIdAsc()
+                : userRepository
+                        .findByNameContainingIgnoreCaseOrEmailContainingIgnoreCaseOrderByIdAsc(term, term);
+        return users.stream()
                 .map(DtoMapper::toUserDto)
                 .toList();
     }
@@ -52,22 +64,36 @@ public class AdminService {
         }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> ApiException.notFound("User not found"));
+        Role previous = user.getRole();
         user.setRole(role);
-        return DtoMapper.toUserDto(userRepository.save(user));
+        User saved = userRepository.save(user);
+        if (previous != role) {
+            // The JWT filter reads the role from this row, so the change is live
+            // on the target's next request without forcing them to sign in again.
+            auditService.record(principal, "user.role_changed", user.getEmail(),
+                    "Role changed from " + previous + " to " + role);
+        }
+        return DtoMapper.toUserDto(saved);
     }
 
     /**
      * Support path for a forgotten password: an admin issues a one-time temporary
      * password and hands it over out of band. The value is returned exactly once
      * and is never logged or stored in plain text.
+     *
+     * <p>Any session the account already had is revoked, so a reset always means
+     * "the old credentials and the old browser are out".</p>
      */
     @Transactional
-    public TempPasswordResponse resetPassword(Long userId) {
+    public TempPasswordResponse resetPassword(Long userId, AppUserPrincipal principal) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> ApiException.notFound("User not found"));
         String temporaryPassword = randomPassword();
         user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
+        user.setTokenVersion(user.getTokenVersion() + 1);
         userRepository.save(user);
+        auditService.record(principal, "user.password_reset", user.getEmail(),
+                "One-time temporary password issued; existing sessions revoked");
         return new TempPasswordResponse(user.getId(), user.getEmail(), temporaryPassword);
     }
 
@@ -76,7 +102,7 @@ public class AdminService {
      * that node is removed and the level is recomputed; other nodes are untouched.
      */
     @Transactional
-    public UserDto resetProgress(Long userId, Long moduleId) {
+    public UserDto resetProgress(Long userId, Long moduleId, AppUserPrincipal principal) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> ApiException.notFound("User not found"));
         Module module = moduleRepository.findById(moduleId)
@@ -99,7 +125,16 @@ public class AdminService {
         progress.setCompletedAt(null);
         progressRepository.save(progress);
 
+        auditService.record(principal, "user.progress_reset", user.getEmail(),
+                "Node '" + module.getTitle() + "' (id " + moduleId + ") reset to "
+                        + progress.getStatus());
+
         return DtoMapper.toUserDto(user);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AuditEntryDto> auditTrail() {
+        return auditService.recent();
     }
 
     @Transactional(readOnly = true)

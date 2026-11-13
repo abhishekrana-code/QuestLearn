@@ -96,9 +96,12 @@ public class AuthService {
     /**
      * Lets a signed-in learner or instructor rotate their own password without
      * an email round-trip (there is no mail transport on this deployment yet).
+     *
+     * <p>Every other session is revoked by bumping the token version. The caller
+     * is handed a fresh token so the browser that made the change stays signed in.</p>
      */
     @Transactional
-    public void changePassword(AppUserPrincipal principal, ChangePasswordRequest request) {
+    public AuthResponse changePassword(AppUserPrincipal principal, ChangePasswordRequest request) {
         User user = loadUser(principal.id());
         if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
             throw ApiException.badRequest("Current password is incorrect");
@@ -107,7 +110,9 @@ public class AuthService {
             throw ApiException.badRequest("New password must be different from the current one");
         }
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.setTokenVersion(user.getTokenVersion() + 1);
         userRepository.save(user);
+        return toAuthResponse(user);
     }
 
     @Transactional(readOnly = true)

@@ -15,6 +15,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findAllByOrderByTotalXpDesc();
 
+    List<User> findAllByOrderByIdAsc();
+
+    List<User> findByNameContainingIgnoreCaseOrEmailContainingIgnoreCaseOrderByIdAsc(
+            String name, String email);
+
     List<User> findTop10ByRoleOrderByTotalXpDesc(Role role);
 
     long countByRole(Role role);

@@ -2,6 +2,7 @@ package com.questlearn.controller;
 
 import com.questlearn.dto.AdminStatsDto;
 import com.questlearn.dto.AppUserPrincipal;
+import com.questlearn.dto.AuditEntryDto;
 import com.questlearn.dto.TempPasswordResponse;
 import com.questlearn.dto.UpdateRoleRequest;
 import com.questlearn.dto.UserDto;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -33,9 +35,9 @@ public class AdminController {
     private final AdminService adminService;
 
     @GetMapping("/users")
-    @Operation(summary = "List every account")
-    public List<UserDto> users() {
-        return adminService.listUsers();
+    @Operation(summary = "List every account, optionally filtered by name or email")
+    public List<UserDto> users(@RequestParam(required = false) String query) {
+        return adminService.listUsers(query);
     }
 
     @PatchMapping("/users/{userId}/role")
@@ -48,14 +50,23 @@ public class AdminController {
 
     @PostMapping("/users/{userId}/reset-password")
     @Operation(summary = "Issue a one-time temporary password for a locked-out account")
-    public TempPasswordResponse resetPassword(@PathVariable Long userId) {
-        return adminService.resetPassword(userId);
+    public TempPasswordResponse resetPassword(@PathVariable Long userId,
+                                              @AuthenticationPrincipal AppUserPrincipal principal) {
+        return adminService.resetPassword(userId, principal);
     }
 
     @DeleteMapping("/users/{userId}/modules/{moduleId}/progress")
     @Operation(summary = "Reset one learner's progress on one node so they can retry it")
-    public UserDto resetProgress(@PathVariable Long userId, @PathVariable Long moduleId) {
-        return adminService.resetProgress(userId, moduleId);
+    public UserDto resetProgress(@PathVariable Long userId,
+                                 @PathVariable Long moduleId,
+                                 @AuthenticationPrincipal AppUserPrincipal principal) {
+        return adminService.resetProgress(userId, moduleId, principal);
+    }
+
+    @GetMapping("/audit")
+    @Operation(summary = "Recent privileged actions, newest first")
+    public List<AuditEntryDto> audit() {
+        return adminService.auditTrail();
     }
 
     @GetMapping("/stats")

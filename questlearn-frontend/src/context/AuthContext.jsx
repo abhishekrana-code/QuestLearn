@@ -74,8 +74,7 @@ export function AuthProvider({ children }) {
     [persistSession],
   );
 
-  const updateUser = useCallback((partial) => {
-    setUserState((previous) => {
+  const updateUser = useCallback((partial) => {    setUserState((previous) => {
       if (!previous) return previous;
       const next = { ...previous, ...partial };
       userCache.write(next);
@@ -90,6 +89,19 @@ export function AuthProvider({ children }) {
     return data;
   }, []);
 
+  /**
+   * Rotating the password revokes every other session, so the backend returns a
+   * replacement token for this browser. Swapping it in keeps the user signed in.
+   */
+  const changePassword = useCallback(
+    async (currentPassword, newPassword) => {
+      const { data } = await api.patch('/auth/password', { currentPassword, newPassword });
+      persistSession(data);
+      return data.user;
+    },
+    [persistSession],
+  );
+
   const value = useMemo(
     () => ({
       token,
@@ -101,8 +113,9 @@ export function AuthProvider({ children }) {
       logout,
       updateUser,
       refreshProfile,
+      changePassword,
     }),
-    [token, user, booting, login, register, logout, updateUser, refreshProfile],
+    [token, user, booting, login, register, logout, updateUser, refreshProfile, changePassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

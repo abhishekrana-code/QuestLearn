@@ -53,6 +53,14 @@ public class User {
     @Column(nullable = false)
     private int streakDays;
 
+    /**
+     * Incremented when existing sessions must stop working (password change or
+     * an admin-issued reset). Tokens carry the value they were issued with, so
+     * an increment invalidates every token issued before it.
+     */
+    @Column(nullable = false)
+    private int tokenVersion;
+
     private LocalDate lastActivityDate;
 
     @Column(nullable = false)

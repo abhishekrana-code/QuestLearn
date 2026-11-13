@@ -193,7 +193,7 @@ fails, the old jar plus the previous dump gets you back.
 
 | Request | How to handle it |
 |---|---|
-| Student forgot their password | War room → **Reset** next to the account → read the one-time temporary password to them. They can change it from the API (`PATCH /api/v1/auth/password`) or ask you again. |
+| Student forgot their password | War room → **Reset** next to the account → read the one-time temporary password to them. The reset revokes every session that account had. They can change it themselves from the account menu once they are back in. |
 | Student wants to retake a node | Nothing to do — completed nodes are replayable and keep the best score, with no extra XP. |
 | A node shows as completed but the score is wrong | `DELETE /api/v1/admin/users/{userId}/modules/{moduleId}/progress` as admin; XP for that node is removed and the node becomes playable again. |
 | New instructor needs an account | Give them `INSTRUCTOR_INVITE_CODE`, or create the account and change its role in War room. |
@@ -211,8 +211,12 @@ These are deliberate trade-offs, not bugs:
   needs a shared store or edge limiter.
 - **No class/cohort model.** Every published course is visible to every student and
   the leaderboard is global.
-- **24-hour tokens, no refresh.** A session expires a day after sign-in; the user
-  signs in again.
+- **24-hour tokens, no refresh, but they can be revoked.** A session expires a day
+  after sign-in; the user signs in again. A password change or an admin reset bumps
+  `users.token_version`, which invalidates every earlier token immediately.
+- **The audit feed keeps the last 50 actions and has no export.** Role changes,
+  password resets, progress resets and course moderation are recorded; retention is
+  whatever is in `admin_audit_log`.
 - **Files live on one server.** No object storage; uploads are not a feature yet.
   Viva recordings are not an exception: they are graded and discarded.
 - **AI output is a draft.** Generated courses are always created unpublished and

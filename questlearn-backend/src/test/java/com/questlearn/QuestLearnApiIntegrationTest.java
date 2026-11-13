@@ -77,6 +77,7 @@ class QuestLearnApiIntegrationTest {
 
     private User instructor;
     private User student;
+    private User admin;
     private Course course;
     private Course draft;
     private Module root;
@@ -86,8 +87,8 @@ class QuestLearnApiIntegrationTest {
     @BeforeEach
     void seed() throws Exception {
         // The suite owns the whole database, so start from nothing every time.
-        jdbc.execute("TRUNCATE TABLE module_attempts, user_module_progress, quizzes, modules, "
-                + "courses, users RESTART IDENTITY CASCADE");
+        jdbc.execute("TRUNCATE TABLE admin_audit_log, module_attempts, user_module_progress, "
+                + "quizzes, modules, courses, users RESTART IDENTITY CASCADE");
 
         instructor = users.save(User.builder()
                 .name("Teacher")
@@ -104,6 +105,16 @@ class QuestLearnApiIntegrationTest {
                 .email("learner@it.test")
                 .passwordHash(passwordEncoder.encode(PASSWORD))
                 .role(Role.STUDENT)
+                .totalXp(0)
+                .currentLevel(1)
+                .streakDays(0)
+                .build());
+
+        admin = users.save(User.builder()
+                .name("Registrar")
+                .email("admin@it.test")
+                .passwordHash(passwordEncoder.encode(PASSWORD))
+                .role(Role.ADMIN)
                 .totalXp(0)
                 .currentLevel(1)
                 .streakDays(0)
@@ -364,6 +375,107 @@ class QuestLearnApiIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Required parameter 'published' is missing"));
+    }
+
+    // --------------------------------------------------- sessions and auditing
+
+    @Test
+    void changingYourPasswordKeepsThisBrowserAndRevokesTheOthers() throws Exception {
+        String oldToken = login("learner@it.test");
+
+        MvcResult result = mvc.perform(patch("/api/v1/auth/password")
+                        .header("Authorization", "Bearer " + oldToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of(
+                                "currentPassword", PASSWORD,
+                                "newPassword", "a-different-password"))))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String freshToken = json.readTree(result.getResponse().getContentAsString())
+                .path("token").asText();
+
+        // The token that made the change is replaced by the response token.
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + oldToken))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + freshToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("learner@it.test"));
+    }
+
+    @Test
+    void anAdminPasswordResetRevokesLiveSessions() throws Exception {
+        String adminToken = login("admin@it.test");
+        String liveToken = login("learner@it.test");
+
+        mvc.perform(post("/api/v1/admin/users/" + student.getId() + "/reset-password")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + liveToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void roleChangesTakeEffectOnTheNextRequest() throws Exception {
+        String adminToken = login("admin@it.test");
+        String studentLiveToken = login("learner@it.test");
+
+        mvc.perform(patch("/api/v1/admin/users/" + student.getId() + "/role")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("role", "INSTRUCTOR"))))
+                .andExpect(status().isOk());
+
+        // The token still says STUDENT; the server reads the live role instead.
+        mvc.perform(get("/api/v1/admin/users")
+                        .header("Authorization", "Bearer " + studentLiveToken))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(post("/api/v1/courses")
+                        .header("Authorization", "Bearer " + studentLiveToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of(
+                                "title", "Promoted", "description", "Now a teacher."))))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void privilegedActionsAreRecordedInTheAuditTrail() throws Exception {
+        String adminToken = login("admin@it.test");
+
+        mvc.perform(patch("/api/v1/admin/users/" + student.getId() + "/role")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("role", "INSTRUCTOR"))))
+                .andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/admin/users/" + student.getId() + "/reset-password")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/admin/audit").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.action == 'user.role_changed')]").exists())
+                .andExpect(jsonPath("$[?(@.action == 'user.password_reset')]").exists())
+                .andExpect(jsonPath("$[?(@.actorEmail == 'admin@it.test')]").exists());
+    }
+
+    @Test
+    void adminUserSearchMatchesNameOrEmail() throws Exception {
+        String adminToken = login("admin@it.test");
+
+        mvc.perform(get("/api/v1/admin/users").param("query", "learn")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].email").value("learner@it.test"));
+
+        mvc.perform(get("/api/v1/admin/users").param("query", "TEACHER@")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].email").value("teacher@it.test"));
     }
 
     @Test

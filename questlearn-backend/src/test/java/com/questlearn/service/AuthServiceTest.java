@@ -165,12 +165,16 @@ class AuthServiceTest {
     @Test
     void changingPasswordStoresTheNewHash() {
         User user = existingUser(3L, "leo@questlearn.dev", Role.STUDENT, "secret123");
+        user.setTokenVersion(4);
         when(userRepository.findById(3L)).thenReturn(Optional.of(user));
 
-        authService.changePassword(principal(3L),
+        AuthResponse response = authService.changePassword(principal(3L),
                 new ChangePasswordRequest("secret123", "brand-new-pass"));
 
         assertTrue(passwordEncoder.matches("brand-new-pass", user.getPasswordHash()));
+        // Bumping the version is what signs every other browser out.
+        assertEquals(5, user.getTokenVersion());
+        assertEquals("signed-token", response.token());
         verify(userRepository).save(user);
     }
 

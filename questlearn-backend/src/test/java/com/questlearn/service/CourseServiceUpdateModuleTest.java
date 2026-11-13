@@ -55,7 +55,8 @@ class CourseServiceUpdateModuleTest {
                 mock(UserModuleProgressRepository.class),
                 mock(ModuleAttemptRepository.class),
                 mock(QuizService.class),
-                mock(MediaStorageService.class));
+                mock(MediaStorageService.class),
+                mock(AuditService.class));
 
         User instructor = User.builder().id(7L).email("owner@questlearn.dev").role(Role.INSTRUCTOR).build();
         Course course = Course.builder().id(1L).instructor(instructor).build();

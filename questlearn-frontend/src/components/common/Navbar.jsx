@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, LayoutDashboard, LogOut, Menu, X } from 'lucide-react';
+import { ChevronDown, KeyRound, LayoutDashboard, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
+import ChangePasswordDialog from './ChangePasswordDialog.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 import Logo from './Logo.jsx';
 import XPBar from '../gamification/XPBar.jsx';
@@ -38,6 +39,7 @@ export default function Navbar() {
   const location = useLocation();
   const [accountOpen, setAccountOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const accountRef = useRef(null);
   const mobileRef = useRef(null);
 
@@ -184,6 +186,18 @@ export default function Navbar() {
                   <button
                     type="button"
                     role="menuitem"
+                    onClick={() => {
+                      setAccountOpen(false);
+                      setPasswordOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-fg-muted transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <KeyRound size={15} />
+                    Change password
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
                     onClick={handleLogout}
                     className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-fg-muted transition-colors hover:bg-danger/[0.08] hover:text-danger"
                   >
@@ -251,6 +265,17 @@ export default function Navbar() {
             </div>
             <button
               type="button"
+              onClick={() => {
+                setMobileOpen(false);
+                setPasswordOpen(true);
+              }}
+              className="grid h-9 w-9 place-items-center rounded-xl border border-line text-fg-muted transition-colors hover:border-line-strong hover:text-foreground"
+              aria-label="Change password"
+            >
+              <KeyRound size={15} />
+            </button>
+            <button
+              type="button"
               onClick={handleLogout}
               className="grid h-9 w-9 place-items-center rounded-xl border border-line text-fg-muted transition-colors hover:border-danger/40 hover:text-danger"
               aria-label="Sign out"
@@ -260,6 +285,8 @@ export default function Navbar() {
           </div>
         </div>
       )}
+
+      {passwordOpen && <ChangePasswordDialog onClose={() => setPasswordOpen(false)} />}
     </header>
   );
 }

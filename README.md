@@ -8,6 +8,9 @@ course curricula into visual RPG-style **skill trees**. Students unlock modules 
 
 Built with a focus on fluid animations, clean modular architecture, and low-memory local execution.
 
+For an administrator's assessment of what is production-ready and what a real classroom
+still needs, see [`AUDIT.md`](AUDIT.md).
+
 ---
 
 ## Key Features
@@ -211,9 +214,15 @@ when Groq itself fails. A per-account hourly quota (`AI_HOURLY_LIMIT`, default 3
 
 | Method | Path | Access | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/admin/users` | Admin | All accounts |
-| `PATCH` | `/admin/users/{id}/role` | Admin | Change a role (not your own) |
+| `GET` | `/admin/users?query=` | Admin | All accounts, optionally filtered by name or email |
+| `PATCH` | `/admin/users/{id}/role` | Admin | Change a role (not your own); effective on the target's next request |
+| `POST` | `/admin/users/{id}/reset-password` | Admin | One-time temporary password; revokes that account's live sessions |
+| `DELETE` | `/admin/users/{id}/modules/{moduleId}/progress` | Admin | Reset one node so a learner can retry it |
 | `GET` | `/admin/stats` | Admin | Platform counters |
+| `GET` | `/admin/audit` | Admin | Last 50 privileged actions, newest first |
+
+Password changes (`PATCH /auth/password`) return a fresh token: the caller stays signed
+in while every other session for that account is revoked.
 
 ---
 
