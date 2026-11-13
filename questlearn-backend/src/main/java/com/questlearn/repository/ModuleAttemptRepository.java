@@ -13,4 +13,7 @@ public interface ModuleAttemptRepository extends JpaRepository<ModuleAttempt, Lo
     List<ModuleAttempt> findByUserIdAndModuleIdOrderByCreatedAtAsc(Long userId, Long moduleId);
 
     long countByModuleCourseId(Long courseId);
+
+    /** One learner's whole trail in a course, oldest first, for the roster drill-down. */
+    List<ModuleAttempt> findByUserIdAndModuleCourseIdOrderByCreatedAtAsc(Long userId, Long courseId);
 }

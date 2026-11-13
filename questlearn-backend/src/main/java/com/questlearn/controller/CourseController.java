@@ -5,6 +5,7 @@ import com.questlearn.dto.CourseDto;
 import com.questlearn.dto.CourseRequest;
 import com.questlearn.dto.CourseRosterDto;
 import com.questlearn.dto.CourseUpdateRequest;
+import com.questlearn.dto.RosterLearnerDetailDto;
 import com.questlearn.dto.ModuleRequest;
 import com.questlearn.dto.ModuleUpdateRequest;
 import com.questlearn.dto.QuizRequest;
@@ -74,6 +75,15 @@ public class CourseController {
     public CourseRosterDto roster(@PathVariable Long courseId,
                                   @AuthenticationPrincipal AppUserPrincipal principal) {
         return courseService.roster(courseId, principal);
+    }
+
+    @GetMapping("/courses/{courseId}/roster/{userId}")
+    @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
+    @Operation(summary = "One learner's nodes and attempt history in this course")
+    public RosterLearnerDetailDto rosterLearner(@PathVariable Long courseId,
+                                                @PathVariable Long userId,
+                                                @AuthenticationPrincipal AppUserPrincipal principal) {
+        return courseService.rosterLearner(courseId, userId, principal);
     }
 
     @GetMapping("/courses/{courseId}")

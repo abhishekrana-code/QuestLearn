@@ -585,6 +585,40 @@ class QuestLearnApiIntegrationTest {
     }
 
     @Test
+    void aLearnerDetailShowsTheirAttemptTrail() throws Exception {
+        String teacherToken = login("teacher@it.test");
+
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+
+        skillTree();
+        complete(studentToken, root.getId(), 0); // wrong answer, then the right one
+        complete(studentToken, root.getId(), 1);
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster/" + student.getId())
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("learner@it.test"))
+                .andExpect(jsonPath("$.clearedNodes").value(1))
+                .andExpect(jsonPath("$.nodes[0].status").value("COMPLETED"))
+                .andExpect(jsonPath("$.nodes[0].history.length()").value(2))
+                .andExpect(jsonPath("$.nodes[0].history[0].passed").value(false))
+                .andExpect(jsonPath("$.nodes[0].history[1].passed").value(true))
+                .andExpect(jsonPath("$.nodes[0].history[1].source").value("QUIZ"));
+
+        // A teacher cannot read someone who never joined this course.
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster/" + admin.getId())
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isNotFound());
+
+        // Nor can a learner read anyone's history, including their own.
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster/" + student.getId())
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void aRosterWithNobodyJoinedIsEmptyRatherThanMissing() throws Exception {
         String teacherToken = login("teacher@it.test");
 

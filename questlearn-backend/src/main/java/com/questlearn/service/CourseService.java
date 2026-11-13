@@ -3,8 +3,11 @@ package com.questlearn.service;
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.CourseDto;
 import com.questlearn.dto.CourseRequest;
+import com.questlearn.dto.AttemptDto;
 import com.questlearn.dto.CourseRosterDto;
 import com.questlearn.dto.CourseUpdateRequest;
+import com.questlearn.dto.LearnerNodeDto;
+import com.questlearn.dto.RosterLearnerDetailDto;
 import com.questlearn.dto.RosterLearnerDto;
 import com.questlearn.dto.RosterNodeDto;
 import com.questlearn.dto.ModuleRequest;
@@ -14,6 +17,7 @@ import com.questlearn.exception.ApiException;
 import com.questlearn.model.Course;
 import com.questlearn.model.Enrollment;
 import com.questlearn.model.Module;
+import com.questlearn.model.ModuleAttempt;
 import com.questlearn.model.ProgressStatus;
 import com.questlearn.model.Quiz;
 import com.questlearn.model.Role;
@@ -207,6 +211,77 @@ public class CourseService {
                     nodes));
         }
         return new CourseRosterDto(course.getId(), course.getTitle(), modules.size(), roster);
+    }
+
+    /**
+     * One learner's history in one course: their standing, then every node with
+     * the attempts behind it.
+     *
+     * <p>Refuses a learner who is not on this roster, so a teacher cannot read an
+     * unrelated student's work by guessing an id.</p>
+     */
+    @Transactional(readOnly = true)
+    public RosterLearnerDetailDto rosterLearner(Long courseId, Long userId, AppUserPrincipal principal) {
+        Course course = loadCourse(courseId);
+        assertCanManage(course, principal);
+
+        Enrollment enrollment = enrollmentRepository.findByUserIdAndCourseId(userId, courseId)
+                .orElseThrow(() -> ApiException.notFound("That learner is not on this roster"));
+        User learner = userRepository.findById(userId)
+                .orElseThrow(() -> ApiException.notFound("Learner not found"));
+
+        List<Module> modules = moduleRepository.findByCourseIdOrderByOrderIndexAsc(courseId);
+        Map<Long, UserModuleProgress> progress = progressRepository
+                .findByUserIdAndModuleCourseId(userId, courseId)
+                .stream()
+                .collect(Collectors.toMap(row -> row.getModule().getId(), row -> row, (first, second) -> first));
+
+        Map<Long, List<AttemptDto>> history = new HashMap<>();
+        for (ModuleAttempt attempt : attemptRepository
+                .findByUserIdAndModuleCourseIdOrderByCreatedAtAsc(userId, courseId)) {
+            history.computeIfAbsent(attempt.getModule().getId(), key -> new ArrayList<>())
+                    .add(new AttemptDto(
+                            attempt.getScore(),
+                            attempt.isPassed(),
+                            attempt.getSource(),
+                            attempt.getCreatedAt()));
+        }
+
+        List<LearnerNodeDto> nodes = new ArrayList<>(modules.size());
+        Instant lastActivity = enrollment.getEnrolledAt();
+        long cleared = 0;
+        for (Module module : modules) {
+            UserModuleProgress row = progress.get(module.getId());
+            if (row != null && row.getStatus() == ProgressStatus.COMPLETED) {
+                cleared++;
+                if (row.getCompletedAt() != null && row.getCompletedAt().isAfter(lastActivity)) {
+                    lastActivity = row.getCompletedAt();
+                }
+            }
+            nodes.add(new LearnerNodeDto(
+                    module.getId(),
+                    module.getTitle(),
+                    row == null ? ProgressStatus.LOCKED.name() : row.getStatus().name(),
+                    row == null ? 0 : row.getScore(),
+                    row == null ? 0 : row.getAttempts(),
+                    row == null ? null : row.getCompletedAt(),
+                    history.getOrDefault(module.getId(), List.of())));
+        }
+
+        return new RosterLearnerDetailDto(
+                course.getId(),
+                course.getTitle(),
+                learner.getId(),
+                learner.getName(),
+                learner.getEmail(),
+                learner.getTotalXp(),
+                learner.getCurrentLevel(),
+                learner.getStreakDays(),
+                cleared,
+                modules.size(),
+                enrollment.getEnrolledAt(),
+                lastActivity,
+                nodes);
     }
 
     /**

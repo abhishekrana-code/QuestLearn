@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Clock, Download, Lock, Unlock, Users } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Clock, Download, Lock, Unlock, Users } from 'lucide-react';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import api, { apiError } from '../services/api.js';
@@ -74,7 +74,7 @@ function NodePill({ node }) {
   );
 }
 
-function LearnerRow({ learner }) {
+function LearnerRow({ learner, courseId }) {
   const percent =
     learner.moduleCount > 0 ? Math.round((learner.clearedNodes / learner.moduleCount) * 100) : 0;
   return (
@@ -84,7 +84,15 @@ function LearnerRow({ learner }) {
           {initials(learner.name)}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold text-foreground">{learner.name}</h2>
+          <h2 className="truncate text-sm font-semibold text-foreground">
+            <Link
+              to={`/studio/courses/${courseId}/roster/${learner.userId}`}
+              className="inline-flex items-center gap-1 hover:text-gold-text hover:underline"
+            >
+              {learner.name}
+              <ChevronRight size={12} className="shrink-0 opacity-50" />
+            </Link>
+          </h2>
           <p className="truncate text-[11px] text-fg-subtle">{learner.email}</p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-fg-muted">
@@ -226,7 +234,7 @@ export default function CourseRoster() {
 
           <div className="space-y-3">
             {learners.map((learner) => (
-              <LearnerRow key={learner.userId} learner={learner} />
+              <LearnerRow key={learner.userId} learner={learner} courseId={roster.courseId} />
             ))}
           </div>
         </>

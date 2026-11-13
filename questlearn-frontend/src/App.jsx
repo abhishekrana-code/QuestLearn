@@ -17,6 +17,7 @@ const Leaderboard = lazy(() => import('./pages/Leaderboard.jsx'));
 const InstructorStudio = lazy(() => import('./pages/InstructorStudio.jsx'));
 const InstructorCourses = lazy(() => import('./pages/InstructorCourses.jsx'));
 const CourseRoster = lazy(() => import('./pages/CourseRoster.jsx'));
+const LearnerDetail = lazy(() => import('./pages/LearnerDetail.jsx'));
 const ExploreCourses = lazy(() => import('./pages/ExploreCourses.jsx'));
 const StudentPerformance = lazy(() => import('./pages/StudentPerformance.jsx'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel.jsx'));
@@ -117,6 +118,14 @@ export default function App() {
               element={
                 <ProtectedRoute roles={['INSTRUCTOR', 'ADMIN']}>
                   <CourseRoster />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/studio/courses/:courseId/roster/:userId"
+              element={
+                <ProtectedRoute roles={['INSTRUCTOR', 'ADMIN']}>
+                  <LearnerDetail />
                 </ProtectedRoute>
               }
             />
