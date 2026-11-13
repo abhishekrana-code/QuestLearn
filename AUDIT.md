@@ -30,8 +30,8 @@ After the hardening release described below: the same routes plus
 `GET /admin/audit`, 94 backend tests (16 PostgreSQL integration tests), and 24
 frontend tests across 5 files.
 
-After the enrollment release (also 13 November 2026): 42 API routes, 103 backend
-tests (25 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
+After the enrollment release (also 13 November 2026): 43 API routes, 105 backend
+tests (27 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
 "my courses" split, per-course rosters, a CSV export, per-learner attempt history and
 a course-scoped leaderboard are all live and covered by tests.
 
@@ -122,16 +122,14 @@ gating, email and deadlines.
 
 ### P0 — blocks a real term
 
-**1. Cohort gating and per-class views (the last part of the enrollment item).**
-Enrollment, rosters, per-learner history, the CSV export, a course-scoped board and
-now **cohorts with join codes** all exist and are tested: a teacher creates "10B",
-reads out its eight-character code, and a student who types it is put on the class
-list and enrolled in the course in one step. What is still missing is what a cohort
-*restricts*: every published course is still visible in the catalogue to every
-student, and the roster and board are still course-wide rather than per class.
-*Fix shape:* a per-course "members only" flag so the catalogue hides it from
-non-members, a cohort filter on the roster (and the CSV), and a cohort scope option
-on the class board.
+**1. Per-class competition and administration (the tail of the enrollment item).**
+This item is now substantially closed. A teacher can create a class with a join
+code, mark the course **members only** so it leaves the catalogue until a code adds
+a student, narrow the roster (and therefore the CSV) to one class, open any
+learner's attempt trail, and rank the course on its own board. What is left is the
+class-sized view of competition and import: the board still ranks the whole course
+rather than one cohort, and a class list cannot be imported from a spreadsheet.
+*Fix shape:* a `cohortId` scope on the course board and a roster CSV import.
 
 **2. No email transport at all.**
 Consequences: no address verification, no self-service password recovery, no
@@ -184,7 +182,7 @@ below), so the order starts from what a graded term still needs.
 
 | Order | Work | Effort | Why first |
 |---|---|---|---|
-| 1 | Course gating + per-cohort roster filter and board scope | 3–5 days | Cohorts exist, but nothing is restricted by them yet |
+| 1 | Cohort-scoped class board + roster CSV import | 2–3 days | The last pieces of "run my class inside the product" |
 | 2 | Email transport: verification + self-service reset | 3–5 days | Removes the most embarrassing support path |
 | 3 | Deadlines and notifications | 1–2 weeks | Turns self-paced study into schedulable coursework |
 | 4 | Object storage for lesson video | 3–5 days | Protects the single server and slow connections |
@@ -204,7 +202,8 @@ below), so the order starts from what a graded term still needs.
 | `a5bf9f3` | CSV export of the roster, one column per node, BOM for Excel | 7 unit tests on the builder; live blob captured from the button |
 | `3bc1b2b` | `GET /courses/{id}/roster/{userId}`: per-learner attempt trail, 404 for anyone not on that roster, 403 for students | Integration test covering the trail, the 404 and the 403; live page reviewed |
 | `76a253d` | `GET /courses/{id}/leaderboard`: class ranking by XP earned inside one course, plus a scope picker on the leaderboard page | Integration test (rank, course XP, modules cleared, draft 403); live scope switch on the page |
-| `_pending commit_` | Cohorts (V7): create/list/delete a class, eight-character join codes without ambiguous characters, and `POST /cohorts/join` which enrolls and joins in one step | 2 integration tests (code join, idempotency, case-insensitivity, 404, role refusals, delete keeps enrollment); live: instructor created "10B Demo", the student joined with a lower-case code, roster showed 1 member, deleting the class left Leo enrolled |
+| `c40bcb5` | Cohorts (V7): create/list/delete a class, eight-character join codes without ambiguous characters, and `POST /cohorts/join` which enrolls and joins in one step | 2 integration tests (code join, idempotency, case-insensitivity, 404, role refusals, delete keeps enrollment); live: instructor created "10B Demo", the student joined with a lower-case code, roster showed 1 member, deleting the class left Leo enrolled |
+| `_pending commit_` | Course gating (V8 `membership_required`): a members-only course leaves the catalogue and refuses non-members, while a class code still works; plus `?cohortId=` on the roster and the class picker, and a members-only switch on the classes page | 2 integration tests (gated course hidden + 403 + code still joins + owner-only toggle; roster narrowing 2 → 1 and a foreign class 404); live: switch on → "Members only", switch off restored, roster picker 4 → 1 learner |
 
 ---
 

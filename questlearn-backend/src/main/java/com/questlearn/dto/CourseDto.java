@@ -15,6 +15,7 @@ public record CourseDto(
         long completedModules,
         long enrolledCount,
         boolean enrolled,
+        boolean membershipRequired,
         Instant createdAt,
         Instant archivedAt
 ) {

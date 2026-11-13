@@ -54,6 +54,13 @@ public class Course {
     @Column(name = "archived_at")
     private Instant archivedAt;
 
+    /**
+     * When true the course is only listed and open to learners already enrolled in
+     * it; a class code is how a student gets in. Off by default.
+     */
+    @Column(name = "membership_required", nullable = false)
+    private boolean membershipRequired;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "instructor_id")
     private User instructor;

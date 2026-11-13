@@ -63,6 +63,8 @@ public class CourseService {
     private final MediaStorageService mediaStorageService;
     private final AuditService auditService;
     private final EnrollmentRepository enrollmentRepository;
+    private final com.questlearn.repository.CohortRepository cohortRepository;
+    private final com.questlearn.repository.CohortMembershipRepository cohortMembershipRepository;
 
     @Transactional(readOnly = true)
     public List<CourseDto> listCourses(AppUserPrincipal principal) {
@@ -74,7 +76,13 @@ public class CourseService {
             courseRepository.findByInstructorIdOrderByIdAsc(principal.id())
                     .forEach(c -> visible.put(c.getId(), c));
         } else {
-            courseRepository.findByPublishedTrueOrderByIdAsc().forEach(c -> visible.put(c.getId(), c));
+            Set<Long> mine = enrollmentRepository.findByUserIdOrderByEnrolledAtDesc(principal.id()).stream()
+                    .map(Enrollment::getCourseId)
+                    .collect(Collectors.toSet());
+            courseRepository.findByPublishedTrueOrderByIdAsc().stream()
+                    // A gated course is invisible until its class code lets them in.
+                    .filter(c -> !c.isMembershipRequired() || mine.contains(c.getId()))
+                    .forEach(c -> visible.put(c.getId(), c));
         }
 
         List<Course> ordered = visible.values().stream()
@@ -147,13 +155,50 @@ public class CourseService {
      * <p>Only the course's own instructor or an admin may read it: the roster is
      * other people's work, not something a student can ask for.</p>
      */
+    /**
+     * Gating toggle. A members-only course leaves the catalogue and stops accepting
+     * plain joins; a class code is the way in.
+     */
+    @Transactional
+    public CourseDto setMembershipRequired(Long courseId, boolean membersOnly, AppUserPrincipal principal) {
+        Course course = loadCourse(courseId);
+        assertCanManage(course, principal);
+        course.setMembershipRequired(membersOnly);
+        return toCourseDto(courseRepository.save(course), principal);
+    }
+
     @Transactional(readOnly = true)
     public CourseRosterDto roster(Long courseId, AppUserPrincipal principal) {
+        return roster(courseId, null, principal);
+    }
+
+    /**
+     * @param cohortId when set, the roster narrows to that class; the full roster
+     *                 still answers "who is in this course at all"
+     */
+    @Transactional(readOnly = true)
+    public CourseRosterDto roster(Long courseId, Long cohortId, AppUserPrincipal principal) {
         Course course = loadCourse(courseId);
         assertCanManage(course, principal);
 
         List<Module> modules = moduleRepository.findByCourseIdOrderByOrderIndexAsc(courseId);
         List<Enrollment> enrollments = enrollmentRepository.findByCourseIdOrderByEnrolledAtAsc(courseId);
+
+        if (cohortId != null) {
+            var cohort = cohortRepository.findById(cohortId)
+                    .orElseThrow(() -> ApiException.notFound("Class not found"));
+            if (!cohort.getCourseId().equals(courseId)) {
+                throw ApiException.notFound("That class is not part of this course");
+            }
+            Set<Long> members = cohortMembershipRepository.findByCohortIdOrderByJoinedAtAsc(cohortId)
+                    .stream()
+                    .map(membership -> membership.getUserId())
+                    .collect(Collectors.toSet());
+            enrollments = enrollments.stream()
+                    .filter(enrollment -> members.contains(enrollment.getUserId()))
+                    .toList();
+        }
+
         if (enrollments.isEmpty()) {
             return new CourseRosterDto(course.getId(), course.getTitle(), modules.size(), List.of());
         }
@@ -625,7 +670,15 @@ public class CourseService {
     }
 
     public void assertCanView(Course course, AppUserPrincipal principal) {
-        if (course.isPublished() || principal.role() == Role.ADMIN) {
+        if (principal.role() == Role.ADMIN) {
+            return;
+        }
+        if (course.isPublished() && course.isMembershipRequired()
+                && principal.role() == Role.STUDENT
+                && !enrollmentRepository.existsByUserIdAndCourseId(principal.id(), course.getId())) {
+            throw ApiException.forbidden("This course is only open to the class it was created for");
+        }
+        if (course.isPublished()) {
             return;
         }
         if (principal.role() == Role.INSTRUCTOR
@@ -686,6 +739,7 @@ public class CourseService {
                 completed,
                 enrolledCount,
                 enrolled,
+                course.isMembershipRequired(),
                 course.getCreatedAt(),
                 course.getArchivedAt()
         );

@@ -136,22 +136,42 @@ function LearnerRow({ learner, courseId }) {
 export default function CourseRoster() {
   const { courseId } = useParams();
   const [roster, setRoster] = useState(null);
+  const [cohorts, setCohorts] = useState([]);
+  const [cohortFilter, setCohortFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
+
+  // The class picker only matters once the course has classes.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get(`/courses/${courseId}/cohorts`)
+      .then(({ data }) => {
+        if (!cancelled) setCohorts(data);
+      })
+      .catch(() => {
+        /* the roster still works without the picker */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { data } = await api.get(`/courses/${courseId}/roster`);
+      const { data } = await api.get(`/courses/${courseId}/roster`, {
+        params: cohortFilter ? { cohortId: cohortFilter } : {},
+      });
       setRoster(data);
     } catch (loadError) {
       setError(apiError(loadError, 'Could not load this roster.'));
     } finally {
       setLoading(false);
     }
-  }, [courseId]);
+  }, [courseId, cohortFilter]);
 
   const { paused: retryPaused, reset: resetAutoRetry, retryNow: retryLoadNow } = useAutoRetry({
     active: Boolean(error) && !loading,
@@ -223,10 +243,28 @@ export default function CourseRoster() {
             </span>
             <span className="tabular-nums">{roster.moduleCount} nodes</span>
             <span className="tabular-nums">Average {averageCleared} nodes cleared</span>
+            {cohorts.length > 0 && (
+              <label className="ml-auto flex items-center gap-2 text-[11px] font-semibold">
+                Class
+                <select
+                  className="field w-auto min-w-[10rem] text-[11px]"
+                  value={cohortFilter}
+                  onChange={(event) => setCohortFilter(event.target.value)}
+                  aria-label="Filter the roster by class"
+                >
+                  <option value="">All classes</option>
+                  {cohorts.map((cohort) => (
+                    <option key={cohort.id} value={cohort.id}>
+                      {cohort.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button
               type="button"
               onClick={() => downloadCsv(roster)}
-              className="btn-ghost ml-auto text-[11px]"
+              className={`btn-ghost text-[11px] ${cohorts.length === 0 ? 'ml-auto' : ''}`}
             >
               <Download size={13} /> Download CSV
             </button>

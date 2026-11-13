@@ -16,7 +16,8 @@ import api, { apiError } from '../services/api.js';
 export default function InstructorCohorts() {
   const { courseId } = useParams();
   const [cohorts, setCohorts] = useState([]);
-  const [courseTitle, setCourseTitle] = useState('');
+  const [course, setCourse] = useState(null);
+  const [gatingBusy, setGatingBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [name, setName] = useState('');
@@ -37,7 +38,7 @@ export default function InstructorCohorts() {
         api.get(`/courses/${courseId}`),
       ]);
       setCohorts(cohortResponse.data);
-      setCourseTitle(courseResponse.data.title);
+      setCourse(courseResponse.data);
     } catch (loadError) {
       setError(apiError(loadError, 'Could not load the classes for this course.'));
     } finally {
@@ -76,6 +77,29 @@ export default function InstructorCohorts() {
       setNotice({ type: 'error', text: apiError(createError, 'Could not create that class.') });
     } finally {
       setCreating(false);
+    }
+  };
+
+  const toggleGating = async () => {
+    if (!course) return;
+    const next = !course.membershipRequired;
+    setGatingBusy(true);
+    setNotice(null);
+    try {
+      const { data } = await api.patch(`/courses/${courseId}/members-only`, null, {
+        params: { membersOnly: next },
+      });
+      setCourse(data);
+      setNotice({
+        type: 'success',
+        text: next
+          ? 'Members only: the course left the catalogue. Only a class code gets a student in now.'
+          : 'Open to everyone: the course is back in the catalogue for any student to browse and join.',
+      });
+    } catch (gatingError) {
+      setNotice({ type: 'error', text: apiError(gatingError, 'Could not change who can see this course.') });
+    } finally {
+      setGatingBusy(false);
     }
   };
 
@@ -119,7 +143,7 @@ export default function InstructorCohorts() {
 
       <header className="mb-6">
         <p className="eyebrow">Classes</p>
-        <h1 className="page-title mt-2">{courseTitle || 'Classes'}</h1>
+        <h1 className="page-title mt-2">{course?.title || 'Classes'}</h1>
         <p className="page-subtitle mt-1.5 max-w-2xl">
           One code per class. A student who types it is added to the list and enrolled in the
           course in the same step.
@@ -152,6 +176,41 @@ export default function InstructorCohorts() {
         paused={retryPaused}
         onRetry={retryLoadNow}
       />
+
+      {course && (
+        <div className="panel mb-3 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">
+              {course.membershipRequired ? 'Members only' : 'Open to the catalogue'}
+            </p>
+            <p className="mt-0.5 max-w-xl text-[11px] leading-relaxed text-fg-subtle">
+              {course.membershipRequired
+                ? 'Students only see this course after their class code adds them to it.'
+                : 'Any student can find this course in the catalogue and join it without a code.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={course.membershipRequired}
+            aria-label="Only let invited classes open this course"
+            onClick={toggleGating}
+            disabled={gatingBusy}
+            className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors ${
+              course.membershipRequired
+                ? 'border-gold/40 bg-gold/70'
+                : 'border-line bg-muted'
+            } ${gatingBusy ? 'opacity-60' : ''}`}
+          >
+            <span
+              className={`absolute top-0.5 h-4.5 w-4.5 rounded-full bg-card shadow transition-all ${
+                course.membershipRequired ? 'left-[1.45rem]' : 'left-0.5'
+              }`}
+              style={{ height: '1.1rem', width: '1.1rem' }}
+            />
+          </button>
+        </div>
+      )}
 
       <form onSubmit={create} className="panel mb-4 flex flex-wrap items-end gap-3 px-4 py-3">
         <label className="min-w-0 flex-1">

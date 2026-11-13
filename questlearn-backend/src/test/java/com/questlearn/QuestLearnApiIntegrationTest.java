@@ -737,6 +737,100 @@ class QuestLearnApiIntegrationTest {
     }
 
     @Test
+    void aGatedCourseStaysHiddenUntilItsClassCodeIsUsed() throws Exception {
+        String teacherToken = login("teacher@it.test");
+
+        MvcResult created = mvc.perform(post("/api/v1/courses/" + course.getId() + "/cohorts")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("name", "10B"))))
+                .andExpect(status().isOk())
+                .andReturn();
+        String code = json.readTree(created.getResponse().getContentAsString()).path("joinCode").asText();
+
+        mvc.perform(patch("/api/v1/courses/" + course.getId() + "/members-only?membersOnly=true")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.membershipRequired").value(true));
+
+        // Gone from the catalogue and refused on a direct link.
+        mvc.perform(get("/api/v1/courses").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == " + course.getId() + ")]").doesNotExist());
+        mvc.perform(get("/api/v1/courses/" + course.getId())
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+
+        // The class code is the invitation, so it still works while gated.
+        mvc.perform(post("/api/v1/cohorts/join")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("code", code))))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/courses").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == " + course.getId() + ")]").exists());
+        mvc.perform(get("/api/v1/courses/" + course.getId())
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+
+        // Only the owner may flip the switch.
+        mvc.perform(patch("/api/v1/courses/" + course.getId() + "/members-only?membersOnly=false")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void theRosterCanNarrowToOneClass() throws Exception {
+        String teacherToken = login("teacher@it.test");
+
+        // A second learner in the course who never typed a class code.
+        User other = users.save(User.builder()
+                .name("Other Learner")
+                .email("other@it.test")
+                .passwordHash(passwordEncoder.encode(PASSWORD))
+                .role(Role.STUDENT)
+                .totalXp(0)
+                .currentLevel(1)
+                .streakDays(0)
+                .build());
+        jdbc.update("INSERT INTO enrollments (user_id, course_id, enrolled_at) VALUES (?, ?, now())",
+                other.getId(), course.getId());
+
+        MvcResult created = mvc.perform(post("/api/v1/courses/" + course.getId() + "/cohorts")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("name", "10B"))))
+                .andExpect(status().isOk())
+                .andReturn();
+        long cohortId = json.readTree(created.getResponse().getContentAsString()).path("id").asLong();
+        String code = json.readTree(created.getResponse().getContentAsString()).path("joinCode").asText();
+
+        mvc.perform(post("/api/v1/cohorts/join")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("code", code))))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.learners.length()").value(2));
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster?cohortId=" + cohortId)
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.learners.length()").value(1))
+                .andExpect(jsonPath("$.learners[0].email").value("learner@it.test"));
+
+        // A class from another course is not a valid filter for this one.
+        mvc.perform(get("/api/v1/courses/" + draft.getId() + "/roster?cohortId=" + cohortId)
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void aRosterWithNobodyJoinedIsEmptyRatherThanMissing() throws Exception {
         String teacherToken = login("teacher@it.test");
 

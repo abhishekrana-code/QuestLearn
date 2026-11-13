@@ -73,8 +73,18 @@ public class CourseController {
     @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
     @Operation(summary = "Who joined this course, with each learner's per-node progress")
     public CourseRosterDto roster(@PathVariable Long courseId,
+                                  @RequestParam(required = false) Long cohortId,
                                   @AuthenticationPrincipal AppUserPrincipal principal) {
-        return courseService.roster(courseId, principal);
+        return courseService.roster(courseId, cohortId, principal);
+    }
+
+    @PatchMapping("/courses/{courseId}/members-only")
+    @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
+    @Operation(summary = "Open the course to everyone, or only to the classes invited to it")
+    public CourseDto setMembersOnly(@PathVariable Long courseId,
+                                     @RequestParam boolean membersOnly,
+                                     @AuthenticationPrincipal AppUserPrincipal principal) {
+        return courseService.setMembershipRequired(courseId, membersOnly, principal);
     }
 
     @GetMapping("/courses/{courseId}/roster/{userId}")

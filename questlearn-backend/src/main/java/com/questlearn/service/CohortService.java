@@ -98,8 +98,15 @@ public class CohortService {
         Cohort cohort = cohortRepository.findByJoinCodeIgnoreCase(cleaned)
                 .orElseThrow(() -> ApiException.notFound("No class matches that code"));
         Course course = courseService.loadCourse(cohort.getCourseId());
-        // A code for an unpublished or archived course must not become a back door.
-        courseService.assertCanView(course, principal);
+        // A valid code is the invitation, which is exactly why it still works on a
+        // members-only course. It must not, however, open an unpublished or archived
+        // one, so those are checked directly instead of through assertCanView.
+        if (course.getArchivedAt() != null) {
+            throw ApiException.forbidden("This course is no longer available");
+        }
+        if (!course.isPublished()) {
+            throw ApiException.forbidden("This course is not open yet");
+        }
 
         boolean alreadyMember = membershipRepository
                 .existsByCohortIdAndUserId(cohort.getId(), principal.id());

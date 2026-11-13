@@ -180,11 +180,12 @@ All routes are under `/api/v1`. Protected routes need `Authorization: Bearer <to
 | `POST` | `/courses/{id}/enroll` | Student | Join a published course; idempotent |
 | `DELETE` | `/courses/{id}/enroll` | Student | Leave a course; progress and XP are kept |
 | `GET` | `/courses/{id}` | authenticated | Course summary |
-| `GET` | `/courses/{id}/roster` | Instructor (owner), Admin | Who joined, with each learner's per-node status |
+| `GET` | `/courses/{id}/roster?cohortId=` | Instructor (owner), Admin | Who joined, with each learner's per-node status; narrowed to one class when given |
 | `GET` | `/courses/{id}/cohorts` | Instructor (owner), Admin | Classes in the course, with codes and sizes |
 | `POST` | `/courses/{id}/cohorts` | Instructor (owner), Admin | Create a class; returns its join code |
 | `DELETE` | `/cohorts/{cohortId}` | Instructor (owner), Admin | Delete a class; members keep the course and their progress |
 | `POST` | `/cohorts/join` | Student | Join a class by code, which also enrolls in its course |
+| `PATCH` | `/courses/{id}/members-only?membersOnly=` | Instructor (owner), Admin | Hide a course from the catalogue so only its class codes let students in |
 | `GET` | `/courses/{id}/roster/{userId}` | Instructor (owner), Admin | One learner's nodes and graded attempt trail |
 | `POST` | `/courses` | Instructor, Admin | Create a draft course |
 | `PATCH` | `/courses/{id}/publish?published=true` | Instructor (owner), Admin | Publish / unpublish |
