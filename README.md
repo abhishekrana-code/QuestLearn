@@ -100,8 +100,11 @@ cd questlearn-backend
 mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Xms256m -Xmx768m"
 ```
 
-- API: <http://localhost:8080/api/v1>
-- Swagger UI: <http://localhost:8080/swagger-ui.html>
+- API: <http://localhost:8091/api/v1>
+- Swagger UI: <http://localhost:8091/swagger-ui.html>
+
+The port comes from `SERVER_PORT` in `questlearn-backend/.env` (8091 by default here; `application.properties`
+falls back to 8080 only when that variable is unset).
 
 ### 3. Frontend
 
@@ -111,7 +114,8 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:5173>. Vite proxies `/api` to `http://localhost:8080`.
+Open <http://localhost:5173>. Vite reads `SERVER_PORT` from the backend `.env` and proxies `/api` to
+`http://localhost:8091`.
 
 ### Demo accounts (seeded on first start)
 
@@ -310,7 +314,7 @@ cd questlearn-frontend && npm run build
 
 | Symptom | Fix |
 | :--- | :--- |
-| `Cannot reach the QuestLearn API` | Start the backend on port 8080 and check CORS origins |
+| `Cannot reach the QuestLearn API` | Start the backend on the port in `SERVER_PORT` (8091 locally) and check CORS origins |
 | `401` on every request | Token expired or cleared — sign in again |
 | `403 Course is not published yet` | The instructor must publish the draft first |
 | PostgreSQL `password authentication failed` | Set `DB_PASSWORD` (or use the `h2` profile) |
