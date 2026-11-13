@@ -2,6 +2,7 @@ package com.questlearn.controller;
 
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.CompleteModuleRequest;
+import com.questlearn.dto.CourseLeaderboardEntry;
 import com.questlearn.dto.LeaderboardEntry;
 import com.questlearn.dto.ModuleDetailDto;
 import com.questlearn.dto.SkillTreeDto;
@@ -60,5 +61,13 @@ public class ProgressController {
     @Operation(summary = "Top students by total XP")
     public List<LeaderboardEntry> leaderboard(@AuthenticationPrincipal AppUserPrincipal principal) {
         return progressService.leaderboard(principal);
+    }
+
+    @GetMapping("/courses/{courseId}/leaderboard")
+    @PreAuthorize("hasAnyRole('STUDENT','ADMIN')")
+    @Operation(summary = "Top students in one course, ranked by XP earned in it")
+    public List<CourseLeaderboardEntry> courseLeaderboard(@PathVariable Long courseId,
+                                                          @AuthenticationPrincipal AppUserPrincipal principal) {
+        return progressService.courseLeaderboard(courseId, principal);
     }
 }

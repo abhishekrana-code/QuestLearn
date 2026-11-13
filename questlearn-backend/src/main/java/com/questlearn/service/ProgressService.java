@@ -3,6 +3,7 @@ package com.questlearn.service;
 import com.questlearn.dto.AnswerRequest;
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.AttemptDto;
+import com.questlearn.dto.CourseLeaderboardEntry;
 import com.questlearn.dto.LeaderboardEntry;
 import com.questlearn.dto.ModuleDetailDto;
 import com.questlearn.dto.SkillNodeDto;
@@ -30,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -355,6 +357,72 @@ public class ProgressService {
             ));
         }
         return entries;
+    }
+
+    /**
+     * A class ranking instead of a building one: XP earned inside this course only.
+     *
+     * <p>XP is read from the course's own completed nodes rather than the learner's
+     * lifetime total, so a transfer student does not arrive at the top of the board
+     * and someone who finished three courses elsewhere does not swamp their class.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<CourseLeaderboardEntry> courseLeaderboard(Long courseId, AppUserPrincipal principal) {
+        Course course = requireCourse(courseId);
+        courseService.assertCanView(course, principal);
+
+        Map<Long, Integer> xpByLearner = new HashMap<>();
+        Map<Long, Integer> clearedByLearner = new HashMap<>();
+        for (UserModuleProgress row : progressRepository
+                .findByModuleCourseIdAndStatus(courseId, ProgressStatus.COMPLETED)) {
+            Long learnerId = row.getUser().getId();
+            xpByLearner.merge(learnerId, row.getModule().getXpReward(), Integer::sum);
+            clearedByLearner.merge(learnerId, 1, Integer::sum);
+        }
+        if (xpByLearner.isEmpty()) {
+            return List.of();
+        }
+
+        int moduleCount = (int) moduleRepository.countByCourseId(courseId);
+        Map<Long, User> learners = new HashMap<>();
+        for (User learner : userRepository.findAllById(xpByLearner.keySet())) {
+            learners.put(learner.getId(), learner);
+        }
+
+        List<CourseLeaderboardEntry> board = learners.values().stream()
+                .filter(learner -> learner.getRole() == Role.STUDENT)
+                .sorted(Comparator
+                        .comparingInt((User learner) -> xpByLearner.getOrDefault(learner.getId(), 0))
+                        .reversed()
+                        .thenComparing(User::getName, String.CASE_INSENSITIVE_ORDER))
+                .limit(10)
+                .map(learner -> new CourseLeaderboardEntry(
+                        0,
+                        learner.getId(),
+                        learner.getName(),
+                        xpByLearner.getOrDefault(learner.getId(), 0),
+                        learner.getCurrentLevel(),
+                        learner.getStreakDays(),
+                        clearedByLearner.getOrDefault(learner.getId(), 0),
+                        moduleCount,
+                        learner.getId().equals(principal.id())))
+                .toList();
+
+        List<CourseLeaderboardEntry> ranked = new ArrayList<>(board.size());
+        for (int index = 0; index < board.size(); index++) {
+            CourseLeaderboardEntry entry = board.get(index);
+            ranked.add(new CourseLeaderboardEntry(
+                    index + 1,
+                    entry.userId(),
+                    entry.name(),
+                    entry.courseXp(),
+                    entry.currentLevel(),
+                    entry.streakDays(),
+                    entry.modulesCleared(),
+                    entry.moduleCount(),
+                    entry.currentUser()));
+        }
+        return ranked;
     }
 
     @Transactional(readOnly = true)

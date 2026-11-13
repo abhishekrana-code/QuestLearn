@@ -619,6 +619,28 @@ class QuestLearnApiIntegrationTest {
     }
 
     @Test
+    void theCourseBoardRanksByXpEarnedInThatCourse() throws Exception {
+        skillTree();
+        complete(studentToken, root.getId(), 1);
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/leaderboard")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].rank").value(1))
+                .andExpect(jsonPath("$[0].name").value("Learner"))
+                .andExpect(jsonPath("$[0].courseXp").value(100))
+                .andExpect(jsonPath("$[0].modulesCleared").value(1))
+                .andExpect(jsonPath("$[0].moduleCount").value(2))
+                .andExpect(jsonPath("$[0].currentUser").value(true));
+
+        // A draft course stays out of a student's reach, board included.
+        mvc.perform(get("/api/v1/courses/" + draft.getId() + "/leaderboard")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void aRosterWithNobodyJoinedIsEmptyRatherThanMissing() throws Exception {
         String teacherToken = login("teacher@it.test");
 

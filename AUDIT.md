@@ -30,6 +30,11 @@ After the hardening release described below: the same routes plus
 `GET /admin/audit`, 94 backend tests (16 PostgreSQL integration tests), and 24
 frontend tests across 5 files.
 
+After the enrollment release (also 13 November 2026): 38 API routes, 101 backend
+tests (23 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
+"my courses" split, per-course rosters, a CSV export, per-learner attempt history and
+a course-scoped leaderboard are all live and covered by tests.
+
 ---
 
 ## Scorecard
@@ -40,16 +45,17 @@ frontend tests across 5 files.
 | Accessibility | 9/10 | Lighthouse 100 / 100 / 100 on the landing page (a11y, best practices, SEO); visible focus rings; reduced-motion support |
 | Student learning flow | 8/10 | Skill tree → lesson → quiz → viva, with XP and a progress page that reads well |
 | Instructor authoring | 8/10 | Five-step studio, AI draft builder, quiz and video editors |
-| Admin and account management | 7/10 | Moderation, search and an audit feed work; rosters still missing |
+| Admin and account management | 8/10 | Moderation, account search, the audit feed and course rosters work; no pagination |
 | Authentication and security | 8/10 | Role enforcement, throttling and revocable sessions; no email verification |
-| Classroom operations | 2/10 | No enrollment, cohorts, deadlines or gradebook export |
+| Classroom operations | 6/10 | Enrollment, rosters, per-learner history, CSV export and a class leaderboard; still no cohorts, join codes or deadlines |
 | Reliability and observability | 5/10 | Health endpoint only; no metrics, tracing or error aggregation |
 | Tests and CI | 8/10 | Real PostgreSQL in CI, guards against silently skipped tests, both halves gated |
 | Deployment and documentation | 8/10 | `DEPLOY.md` covers TLS, backups, upgrades and known limits |
 | Responsive and mobile | 8/10 | Verified at 375 px; no horizontal scroll or clipped controls |
 
-**Overall: about 7/10 as a single-class pilot, about 4/10 as a school-wide system.**
-The craft is high; the operations layer is what is missing.
+**Overall: about 8/10 as a single-class pilot, about 5/10 as a school-wide system.**
+The classroom layer now exists (join, roster, report, per-learner history); what is
+still missing is the institution above it - cohorts, email and deadlines.
 
 ---
 
@@ -115,13 +121,16 @@ The craft is high; the operations layer is what is missing.
 
 ### P0 — blocks a real term
 
-**1. No enrollment or cohort model.**
-Every published course is visible to every student, and the leaderboard is global.
-A teacher cannot roster a class, cannot see "my students", and cannot stop one
-cohort from seeing another cohort's course.
-*Fix shape:* `enrollments(user_id, course_id, enrolled_at)`, join codes per course or
-cohort, catalogue vs. "my courses" split, leaderboard scoped by course or class.
-Backfill from `user_module_progress` during the migration.
+**1. Cohorts and join codes (the rest of the enrollment item).**
+Enrollment itself now exists: `enrollments(user_id, course_id, enrolled_at)`, a
+catalogue vs. "my courses" split, per-course rosters, per-learner attempt history, a
+CSV export and a course-scoped leaderboard, all with tests. What is still missing is
+the **class** as an object: there is no cohort or join code, so a teacher cannot say
+"these 30 students are 10B", and every published course is still visible to every
+student in the catalogue.
+*Fix shape:* `cohorts(id, course_id, name, join_code)` with membership, a catalogue
+that can be limited to a learner's cohorts for institution courses, and roster plus
+leaderboard scoped by cohort rather than by course alone.
 
 **2. No email transport at all.**
 Consequences: no address verification, no self-service password recovery, no
@@ -130,11 +139,13 @@ notifications. The only reset path is an admin reading a temporary password alou
 reset-token flow with single use and expiry, and a mail outbox so delivery failures
 are visible.
 
-**3. No class-level reporting or gradebook export.**
-Per-student progress is good. A teacher needs "who in 10B has not finished node 3"
-and a CSV for the school's gradebook.
-*Fix shape:* a roster view per course with last activity, node status and quiz
-scores; `GET /courses/{id}/report.csv`; a printable summary.
+**3. Class reporting: acting on the data (mostly closed).**
+The roster lists every enrolled learner with their per-node status, attempts, XP and
+last activity; each name opens their full attempt trail; `Download CSV` exports the
+same grid (a column per node) for a gradebook. What is missing is acting on it inside
+the product: there is no "show me everyone who has not cleared node 3" filter, no
+printable summary, and no CSV import of a class list.
+*Fix shape:* a node filter on the roster, a print stylesheet, and roster import.
 
 ### P1 — needed in the first month of use
 
@@ -167,17 +178,31 @@ scores; `GET /courses/{id}/report.csv`; a printable summary.
 
 ## Roadmap
 
+Items 1 and 3 of the previous roadmap are shipped (see "The enrollment release"
+below), so the order starts from what a graded term still needs.
+
 | Order | Work | Effort | Why first |
 |---|---|---|---|
-| 1 | Enrollment/cohorts + scoped leaderboard + rosters | 2–3 weeks | Without it this is a public catalogue, not a classroom |
+| 1 | Cohorts + join codes + cohort-scoped roster and board | 1–2 weeks | A class is still a set of people a teacher recognises, not a row in the system |
 | 2 | Email transport: verification + self-service reset | 3–5 days | Removes the most embarrassing support path |
-| 3 | Teacher gradebook view + CSV export | 1 week | The screen teachers open every week |
-| 4 | Deadlines and notifications | 1–2 weeks | Turns self-paced study into schedulable coursework |
-| 5 | Object storage for lesson video | 3–5 days | Protects the single server and slow connections |
+| 3 | Deadlines and notifications | 1–2 weeks | Turns self-paced study into schedulable coursework |
+| 4 | Object storage for lesson video | 3–5 days | Protects the single server and slow connections |
+| 5 | `/admin/users` pagination | 1 day | Prevents a bad day at 500 accounts |
 | 6 | Dependency majors + CSP | 3–5 days | Clears two critical advisories; hardens the edge |
-| 7 | `/admin/users` pagination | 1 day | Prevents a bad day at 500 accounts |
+| 7 | Roster node filter, print summary, roster import | 2–3 days | Finishes the gradebook workflow the CSV started |
 | 8 | E2E smoke suite (signup → enroll → complete → report) | 3–5 days | Catches wiring regressions the unit tests cannot |
 | 9 | Admin progress-reset UI | Half a day | Closes a support workflow that already exists in the API |
+
+### The enrollment release (13 November 2026)
+
+| Commit | What it added | How it was verified |
+|---|---|---|
+| `df687bf` | `enrollments` table with V6 backfill, `GET /courses/mine`, `POST`/`DELETE /courses/{id}/enroll`, `enrolled` and `enrolledCount` on every course | 3 integration tests (idempotent join, roster count, refusals); live join → leave → re-join round trip in the browser |
+| `5bb8a53` | Roster count on each instructor course card | Live: `6 nodes · 4 learners joined` |
+| `df643b7` | `GET /courses/{id}/roster`: every learner with per-node status, XP, streak, enrolled and last-activity dates | 2 integration tests; live against the demo course |
+| `a5bf9f3` | CSV export of the roster, one column per node, BOM for Excel | 7 unit tests on the builder; live blob captured from the button |
+| `3bc1b2b` | `GET /courses/{id}/roster/{userId}`: per-learner attempt trail, 404 for anyone not on that roster, 403 for students | Integration test covering the trail, the 404 and the 403; live page reviewed |
+| `_pending commit_` | `GET /courses/{id}/leaderboard`: class ranking by XP earned inside one course, plus a scope picker on the leaderboard page | Integration test (rank, course XP, modules cleared, draft 403); live scope switch on the page |
 
 ---
 
@@ -207,6 +232,11 @@ Lighthouse was run through the in-app browser against `http://localhost:5173/`.
 
 For a pilot with one teacher and one class, onboarded by hand, this is ready now: it is
 more polished, more accessible and better tested than the average internal LMS, and its
-failure modes are contained. For a department running a graded term, ship roadmap items
-1–3 first — until enrollment exists, every student in the building can see every course,
-and the leaderboard ranks people who have never met.
+failure modes are contained. A teacher can now run a class inside the product - students
+join, the roster shows who is stuck, a click shows why, and the CSV lands in a
+gradebook - and can rank that class on its own board.
+
+For a department running a graded term, two things still block it: without email there
+is no self-service reset or address verification, and without cohorts a course is a
+public listing rather than a class. Ship roadmap items 1 and 2 first; neither is large,
+and between them they turn this from a good pilot into something a school can operate.

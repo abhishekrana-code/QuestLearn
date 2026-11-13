@@ -40,21 +40,48 @@ const PODIUM_STYLE = {
 export default function Leaderboard() {
   const { user } = useAuth();
   const [entries, setEntries] = useState([]);
+  const [courses, setCourses] = useState([]);
+  // 'all' ranks lifetime XP across the building; a course id ranks one class.
+  const [scope, setScope] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
+
+  const scopedCourse = courses.find((course) => String(course.id) === String(scope));
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { data } = await api.get('/leaderboard');
-      setEntries(data);
+      if (scope === 'all') {
+        const { data } = await api.get('/leaderboard');
+        setEntries(data);
+      } else {
+        // The course board ranks XP earned in that course, so it arrives as its
+        // own shape and is mapped onto the card the page already draws.
+        const { data } = await api.get(`/courses/${scope}/leaderboard`);
+        setEntries(data.map((entry) => ({ ...entry, totalXp: entry.courseXp })));
+      }
     } catch (loadError) {
       setError(apiError(loadError, 'Could not load the leaderboard.'));
     } finally {
       setLoading(false);
     }
+  }, [scope]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get('/courses')
+      .then(({ data }) => {
+        if (!cancelled) setCourses(data.filter((course) => course.published));
+      })
+      .catch(() => {
+        /* the picker just stays on "all learners" */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const { paused: retryPaused, reset: resetAutoRetry, retryNow: retryLoadNow } = useAutoRetry({
@@ -93,9 +120,30 @@ export default function Leaderboard() {
         <p className="eyebrow">Standings</p>
         <h1 className="page-title mt-3">Leaderboard</h1>
         <p className="page-subtitle mt-2">
-          Ranked by total XP earned across every completed node. Consistency beats cramming.
+          {scopedCourse
+            ? `Ranked by XP earned inside ${scopedCourse.title}, so a class compares with itself.`
+            : 'Ranked by total XP earned across every completed node. Consistency beats cramming.'}
         </p>
       </header>
+
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-[11px] font-semibold text-fg-muted">
+          Ranking
+          <select
+            className="field w-auto min-w-[13rem] text-[12px]"
+            value={scope}
+            onChange={(event) => setScope(event.target.value)}
+            aria-label="Choose what this leaderboard ranks"
+          >
+            <option value="all">All learners</option>
+            {courses.map((course) => (
+              <option key={course.id} value={course.id}>
+                {course.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       <LoadErrorBanner
         className="mb-5"
@@ -220,7 +268,9 @@ export default function Leaderboard() {
           )}
 
           <p className="mt-6 text-center text-[11px] text-fg-subtle">
-            Your current rank is based on {user.role === 'STUDENT' ? 'student' : 'account'} XP.
+            {scopedCourse
+              ? `Only XP earned in ${scopedCourse.title} counts on this board.`
+              : `Your current rank is based on ${user.role === 'STUDENT' ? 'student' : 'account'} XP.`}
           </p>
         </>
       )}

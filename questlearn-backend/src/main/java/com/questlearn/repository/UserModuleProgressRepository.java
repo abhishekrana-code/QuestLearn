@@ -22,6 +22,9 @@ public interface UserModuleProgressRepository extends JpaRepository<UserModulePr
 
     long countByModuleCourseId(Long courseId);
 
+    /** Every completed row in a course, for the course-scoped leaderboard. */
+    List<UserModuleProgress> findByModuleCourseIdAndStatus(Long courseId, ProgressStatus status);
+
     /**
      * Every progress row a set of learners has in one course, so a roster loads in
      * a single query instead of one per learner.
