@@ -74,8 +74,20 @@ public class CourseController {
     @Operation(summary = "Who joined this course, with each learner's per-node progress")
     public CourseRosterDto roster(@PathVariable Long courseId,
                                   @RequestParam(required = false) Long cohortId,
+                                  @RequestParam(required = false) Long nodeId,
+                                  @RequestParam(required = false) Boolean nodeCleared,
                                   @AuthenticationPrincipal AppUserPrincipal principal) {
-        return courseService.roster(courseId, cohortId, principal);
+        return courseService.roster(courseId, cohortId, nodeId, nodeCleared, principal);
+    }
+
+    @PostMapping("/courses/{courseId}/roster/import")
+    @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
+    @Operation(summary = "Enrol a pasted class list, optionally into one class, reporting unknown addresses")
+    public com.questlearn.dto.RosterImportResult importRoster(
+            @PathVariable Long courseId,
+            @RequestBody com.questlearn.dto.ImportRosterRequest request,
+            @AuthenticationPrincipal AppUserPrincipal principal) {
+        return courseService.importRoster(courseId, request.emails(), request.cohortId(), principal);
     }
 
     @PatchMapping("/courses/{courseId}/members-only")

@@ -917,6 +917,90 @@ class QuestLearnApiIntegrationTest {
     }
 
     @Test
+    void aPastedClassListEnrolsItsStudentsAndReportsStrangers() throws Exception {
+        String teacherToken = login("teacher@it.test");
+
+        MvcResult created = mvc.perform(post("/api/v1/courses/" + course.getId() + "/cohorts")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("name", "10B"))))
+                .andExpect(status().isOk())
+                .andReturn();
+        long cohortId = json.readTree(created.getResponse().getContentAsString()).path("id").asLong();
+
+        String body = json.writeValueAsString(java.util.Map.of(
+                "emails", java.util.List.of("learner@it.test", "ghost@it.test", "Learner@IT.test"),
+                "cohortId", cohortId));
+
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/roster/import")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imported.length()").value(1))
+                .andExpect(jsonPath("$.imported[0]").value("learner@it.test"))
+                // The same address twice in different case counts once.
+                .andExpect(jsonPath("$.unknown.length()").value(1))
+                .andExpect(jsonPath("$.unknown[0]").value("ghost@it.test"));
+
+        // Running it again adds nobody and says so.
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/roster/import")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imported.length()").value(0))
+                .andExpect(jsonPath("$.alreadyMember.length()").value(1))
+                .andExpect(jsonPath("$.unknown.length()").value(1));
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster?cohortId=" + cohortId)
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.learners.length()").value(1))
+                .andExpect(jsonPath("$.learners[0].email").value("learner@it.test"));
+
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/roster/import")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void theRosterCanShowWhoIsStuckOnOneNode() throws Exception {
+        String teacherToken = login("teacher@it.test");
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+        skillTree();
+        complete(studentToken, root.getId(), 1);
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster?nodeId=" + root.getId()
+                        + "&nodeCleared=true")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.learners.length()").value(1));
+
+        // The child is still open, so the "stuck here" view names them.
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster?nodeId=" + child.getId()
+                        + "&nodeCleared=false")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.learners.length()").value(1));
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster?nodeId=" + root.getId()
+                        + "&nodeCleared=false")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.learners.length()").value(0));
+
+        // A node from another course is not a valid filter.
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/roster?nodeId=999999")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void aRosterWithNobodyJoinedIsEmptyRatherThanMissing() throws Exception {
         String teacherToken = login("teacher@it.test");
 

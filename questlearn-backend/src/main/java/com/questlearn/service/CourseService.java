@@ -4,16 +4,19 @@ import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.CourseDto;
 import com.questlearn.dto.CourseRequest;
 import com.questlearn.dto.AttemptDto;
+import com.questlearn.dto.CourseNodeRef;
 import com.questlearn.dto.CourseRosterDto;
 import com.questlearn.dto.CourseUpdateRequest;
 import com.questlearn.dto.LearnerNodeDto;
 import com.questlearn.dto.RosterLearnerDetailDto;
 import com.questlearn.dto.RosterLearnerDto;
 import com.questlearn.dto.RosterNodeDto;
+import com.questlearn.dto.RosterImportResult;
 import com.questlearn.dto.ModuleRequest;
 import com.questlearn.dto.ModuleUpdateRequest;
 import com.questlearn.dto.QuizRequest;
 import com.questlearn.exception.ApiException;
+import com.questlearn.model.CohortMembership;
 import com.questlearn.model.Course;
 import com.questlearn.model.Enrollment;
 import com.questlearn.model.Module;
@@ -44,6 +47,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -178,6 +182,16 @@ public class CourseService {
      */
     @Transactional(readOnly = true)
     public CourseRosterDto roster(Long courseId, Long cohortId, AppUserPrincipal principal) {
+        return roster(courseId, cohortId, null, null, principal);
+    }
+
+    /**
+     * @param nodeId      when set with {@code nodeCleared}, the roster answers "who has
+     *                    cleared, or not cleared, this one node"
+     * @param nodeCleared false keeps the learners still stuck on that node
+     */
+    public CourseRosterDto roster(Long courseId, Long cohortId, Long nodeId, Boolean nodeCleared,
+                                  AppUserPrincipal principal) {
         Course course = loadCourse(courseId);
         assertCanManage(course, principal);
 
@@ -199,8 +213,12 @@ public class CourseService {
                     .toList();
         }
 
+        List<CourseNodeRef> nodeRefs = modules.stream()
+                .map(module -> new CourseNodeRef(module.getId(), module.getTitle()))
+                .toList();
+
         if (enrollments.isEmpty()) {
-            return new CourseRosterDto(course.getId(), course.getTitle(), modules.size(), List.of());
+            return new CourseRosterDto(course.getId(), course.getTitle(), modules.size(), nodeRefs, List.of());
         }
 
         List<Long> learnerIds = enrollments.stream().map(Enrollment::getUserId).toList();
@@ -255,7 +273,86 @@ public class CourseService {
                     lastActivity,
                     nodes));
         }
-        return new CourseRosterDto(course.getId(), course.getTitle(), modules.size(), roster);
+
+        if (nodeId != null) {
+            boolean nodeExists = modules.stream().anyMatch(module -> module.getId().equals(nodeId));
+            if (!nodeExists) {
+                throw ApiException.notFound("That node is not part of this course");
+            }
+            boolean wantCleared = nodeCleared == null || nodeCleared;
+            roster = roster.stream()
+                    .filter(learner -> learner.nodes().stream()
+                            .filter(node -> node.moduleId().equals(nodeId))
+                            .anyMatch(node -> "COMPLETED".equals(node.status()) == wantCleared))
+                    .toList();
+        }
+        return new CourseRosterDto(course.getId(), course.getTitle(), modules.size(), nodeRefs, roster);
+    }
+
+    /**
+     * Adds a pasted class list to the course, and optionally to one of its classes.
+     *
+     * <p>It reuses the enrollment path rather than writing roster rows directly, so an
+     * imported student is in exactly the state a code would have left them in. An
+     * address with no student account is reported instead of created: there is no way
+     * to deliver a password yet, and inventing accounts for typos is worse than a
+     * visible leftover.</p>
+     */
+    @Transactional
+    public RosterImportResult importRoster(Long courseId, List<String> emails, Long cohortId,
+                                           AppUserPrincipal principal) {
+        Course course = loadCourse(courseId);
+        assertCanManage(course, principal);
+
+        if (cohortId != null) {
+            var cohort = cohortRepository.findById(cohortId)
+                    .orElseThrow(() -> ApiException.notFound("Class not found"));
+            if (!cohort.getCourseId().equals(courseId)) {
+                throw ApiException.notFound("That class is not part of this course");
+            }
+        }
+
+        List<String> imported = new ArrayList<>();
+        List<String> alreadyMember = new ArrayList<>();
+        List<String> unknown = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+
+        for (String raw : emails == null ? List.<String>of() : emails) {
+            if (raw == null) {
+                continue;
+            }
+            String email = raw.trim().toLowerCase(Locale.ROOT);
+            if (email.isEmpty() || !seen.add(email)) {
+                continue;
+            }
+
+            var student = userRepository.findByEmailIgnoreCase(email).orElse(null);
+            if (student == null || student.getRole() != Role.STUDENT) {
+                unknown.add(email);
+                continue;
+            }
+
+            boolean enrolled = enrollmentRepository.existsByUserIdAndCourseId(student.getId(), courseId);
+            if (!enrolled) {
+                enrollmentRepository.save(Enrollment.builder()
+                        .userId(student.getId())
+                        .courseId(courseId)
+                        .build());
+            }
+            if (cohortId != null
+                    && !cohortMembershipRepository.existsByCohortIdAndUserId(cohortId, student.getId())) {
+                cohortMembershipRepository.save(CohortMembership.builder()
+                        .cohortId(cohortId)
+                        .userId(student.getId())
+                        .build());
+            }
+            (enrolled ? alreadyMember : imported).add(email);
+        }
+
+        auditService.record(principal, "course.roster_imported", course.getTitle(),
+                imported.size() + " added, " + alreadyMember.size() + " already enrolled, "
+                        + unknown.size() + " unknown");
+        return new RosterImportResult(imported, alreadyMember, unknown);
     }
 
     /**

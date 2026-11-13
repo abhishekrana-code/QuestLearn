@@ -182,7 +182,8 @@ All routes are under `/api/v1`. Protected routes need `Authorization: Bearer <to
 | `POST` | `/courses/{id}/enroll` | Student | Join a published course; idempotent |
 | `DELETE` | `/courses/{id}/enroll` | Student | Leave a course; progress and XP are kept |
 | `GET` | `/courses/{id}` | authenticated | Course summary |
-| `GET` | `/courses/{id}/roster?cohortId=` | Instructor (owner), Admin | Who joined, with each learner's per-node status; narrowed to one class when given |
+| `GET` | `/courses/{id}/roster?cohortId=&nodeId=&nodeCleared=` | Instructor (owner), Admin | Who joined, with each learner's per-node status; narrow by class, or to who has/hasn't cleared one node |
+| `POST` | `/courses/{id}/roster/import` | Instructor (owner), Admin | Enrol a pasted class list (addresses only), reporting which addresses have no student account |
 | `GET` | `/courses/{id}/cohorts` | Instructor (owner), Admin | Classes in the course, with codes and sizes |
 | `POST` | `/courses/{id}/cohorts` | Instructor (owner), Admin | Create a class; returns its join code |
 | `DELETE` | `/cohorts/{cohortId}` | Instructor (owner), Admin | Delete a class; members keep the course and their progress |

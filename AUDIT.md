@@ -30,8 +30,8 @@ After the hardening release described below: the same routes plus
 `GET /admin/audit`, 94 backend tests (16 PostgreSQL integration tests), and 24
 frontend tests across 5 files.
 
-After the enrollment release (also 13 November 2026): 44 API routes, 107 backend
-tests (29 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
+After the enrollment release (also 13 November 2026): 45 API routes, 109 backend
+tests (31 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
 "my courses" split, per-course rosters, a CSV export, per-learner attempt history and
 a course-scoped leaderboard are all live and covered by tests.
 
@@ -122,15 +122,14 @@ gating, email and deadlines.
 
 ### P0 — blocks a real term
 
-**1. Per-class competition and administration (the tail of the enrollment item).**
+**1. Per-class competition and administration — CLOSED.**
 This item is now substantially closed. A teacher can create a class with a join
 code, mark the course **members only** so it leaves the catalogue until a code adds
 a student, narrow the roster (and therefore the CSV) to one class, open any
-learner's attempt trail, rank the course on its own board, and **rank a single
-class** on that board. What is left is bulk setup: a class list cannot be imported
-from a spreadsheet.
-*Fix shape:* a roster CSV import, which should reuse the join path so imported
-students land in the same class list as a code would put them.
+learner's attempt trail, rank the course on its own board, **rank a single class** on
+that board, and **enrol a pasted class list** (CSV or a column of addresses) with
+unknown addresses reported back rather than silently created. Nothing in this
+finding is still open.
 
 **2. No email transport at all.**
 Consequences: no address verification, no self-service password recovery, no
@@ -139,13 +138,14 @@ notifications. The only reset path is an admin reading a temporary password alou
 reset-token flow with single use and expiry, and a mail outbox so delivery failures
 are visible.
 
-**3. Class reporting: acting on the data (mostly closed).**
+**3. Class reporting: acting on the data — CLOSED.**
 The roster lists every enrolled learner with their per-node status, attempts, XP and
-last activity; each name opens their full attempt trail; `Download CSV` exports the
-same grid (a column per node) for a gradebook. What is missing is acting on it inside
-the product: there is no "show me everyone who has not cleared node 3" filter, no
-printable summary, and no CSV import of a class list.
-*Fix shape:* a node filter on the roster, a print stylesheet, and roster import.
+last activity; each name opens their full attempt trail; the CSV exports the same grid
+for a gradebook. It can now also be narrowed to **one node, cleared or not**, which is
+the "who is stuck on node 3" question, and printed: a print stylesheet drops the
+navigation and buttons and keeps the rows. Class lists import, so the whole loop runs
+inside the product. **Three of the four P0 findings are now closed; the open one is
+email.**
 
 ### P1 — needed in the first month of use
 
@@ -183,13 +183,13 @@ below), so the order starts from what a graded term still needs.
 
 | Order | Work | Effort | Why first |
 |---|---|---|---|
-| 1 | Roster CSV import + a teacher's own view of a class board | 1–2 days | The last piece of "set my class up from the register" |
+| 1 | `/admin/users` pagination + CSP/HSTS (the two bounded P1 items) | 1–2 days | Cheap, and both are visible at 500 accounts or on the open internet |
 | 2 | Email transport: verification + self-service reset | 3–5 days | Removes the most embarrassing support path |
 | 3 | Deadlines and notifications | 1–2 weeks | Turns self-paced study into schedulable coursework |
 | 4 | Object storage for lesson video | 3–5 days | Protects the single server and slow connections |
 | 5 | `/admin/users` pagination | 1 day | Prevents a bad day at 500 accounts |
 | 6 | Dependency majors + CSP | 3–5 days | Clears two critical advisories; hardens the edge |
-| 7 | Roster node filter, print summary, roster import | 2–3 days | Finishes the gradebook workflow the CSV started |
+| 7 | Dependency majors (Vite 8, Vitest 5, react-router 7) | 2–4 days | Clears two critical advisories; needs its own quiet week |
 | 8 | E2E smoke suite (signup → enroll → complete → report) | 3–5 days | Catches wiring regressions the unit tests cannot |
 | 9 | Admin progress-reset UI | Half a day | Closes a support workflow that already exists in the API |
 
@@ -204,7 +204,8 @@ below), so the order starts from what a graded term still needs.
 | `3bc1b2b` | `GET /courses/{id}/roster/{userId}`: per-learner attempt trail, 404 for anyone not on that roster, 403 for students | Integration test covering the trail, the 404 and the 403; live page reviewed |
 | `76a253d` | `GET /courses/{id}/leaderboard`: class ranking by XP earned inside one course, plus a scope picker on the leaderboard page | Integration test (rank, course XP, modules cleared, draft 403); live scope switch on the page |
 | `c40bcb5` | Cohorts (V7): create/list/delete a class, eight-character join codes without ambiguous characters, and `POST /cohorts/join` which enrolls and joins in one step | 2 integration tests (code join, idempotency, case-insensitivity, 404, role refusals, delete keeps enrollment); live: instructor created "10B Demo", the student joined with a lower-case code, roster showed 1 member, deleting the class left Leo enrolled |
-| `_pending commit_` | Demo data: a second course, "Data Structures Detour" (3 nodes, a quiz on the last), with two nodes cleared for the demo student, an enrollment row and an account total recomputed from the work; written to apply to an existing database, not just a fresh one | 107 tests still pass (the seeder is excluded from the `it` profile); live: Leo 420 XP across 2 courses, level 3, `mine` shows 2/6 and 2/3, per-course board 200 XP and the combined board 420 |
+| `_pending commit_` | Roster import + node filter + print: `POST /courses/{id}/roster/import` (addresses only, duplicates collapsed, unknown accounts reported), `?nodeId=&nodeCleared=` on the roster, `nodes` on the roster payload so the picker survives an empty result, and a print stylesheet | 2 integration tests (import idempotency, case-folded duplicates, unknown address, student refused; node filter cleared/not-cleared and a foreign node 404); live: import via the UI reported 1 enrolled and 1 unknown, repeat returned "already in", node filter narrowed to Leo then emptied the list with the picker still present |
+| `55b4b6c` | Demo data: a second course, "Data Structures Detour" (3 nodes, a quiz on the last), with two nodes cleared for the demo student, an enrollment row and an account total recomputed from the work; written to apply to an existing database, not just a fresh one | 107 tests still pass (the seeder is excluded from the `it` profile); live: Leo 420 XP across 2 courses, level 3, `mine` shows 2/6 and 2/3, per-course board 200 XP and the combined board 420 |
 | `df5e268` | Overall board: `GET /leaderboard/overall` sums the XP of every cleared node across every course per learner, with a node count, a course count and the top three contributing courses; the standings page opens on it ("All courses combined") and keeps lifetime XP as a second option | 1 integration test (combined 100 from one node, one course, the course named, teacher refused); live: Mira 520/4 nodes, Leo 220/2, Sam 100/1, each attributed to the one course |
 | `97fea6d` | Class board: `?cohortId=` on `/courses/{id}/leaderboard`, the board opens to the owning instructor, and the standings page gains a class picker under the course one | 1 integration test (whole course 2 → one class 1, rank restarts at 1, unknown class 404, teacher may read own board); live: instructor's board auto-opened on their course, picking "10B Board" left Leo alone on it |
 | `09f4b4c` | Course gating (V8 `membership_required`): a members-only course leaves the catalogue and refuses non-members, while a class code still works; plus `?cohortId=` on the roster and the class picker, and a members-only switch on the classes page | 2 integration tests (gated course hidden + 403 + code still joins + owner-only toggle; roster narrowing 2 → 1 and a foreign class 404); live: switch on → "Members only", switch off restored, roster picker 4 → 1 learner |

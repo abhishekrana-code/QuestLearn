@@ -1,6 +1,18 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ChevronRight, Clock, Download, Lock, Unlock, Users } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  ChevronRight,
+  Clock,
+  Download,
+  Lock,
+  Printer,
+  Unlock,
+  Upload,
+  Users,
+  X,
+} from 'lucide-react';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import api, { apiError } from '../services/api.js';
@@ -38,6 +50,20 @@ function downloadCsv(roster) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Pulls addresses out of whatever a teacher pasted or exported.
+ *
+ * <p>A register export usually has a name column and an email column, so the cell
+ * holding an "@" is the one wanted; a header row and blank lines fall out for free.
+ */
+function emailsFromCsv(text) {
+  return text
+    .split(/\r?\n/)
+    .flatMap((line) => line.split(/[;,\t]/))
+    .map((cell) => cell.replace(/["']/g, '').trim().toLowerCase())
+    .filter((cell) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cell));
 }
 
 function shortDate(iso) {
@@ -138,6 +164,15 @@ export default function CourseRoster() {
   const [roster, setRoster] = useState(null);
   const [cohorts, setCohorts] = useState([]);
   const [cohortFilter, setCohortFilter] = useState('');
+  const [nodeFilter, setNodeFilter] = useState('');
+  // Stuck first: "who has not cleared this node" is the question worth asking.
+  const [nodeState, setNodeState] = useState('NOT_CLEARED');
+  const [importOpen, setImportOpen] = useState(false);
+  const [importEmails, setImportEmails] = useState('');
+  const [importBusy, setImportBusy] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [importError, setImportError] = useState(null);
+  const fileInput = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -163,7 +198,10 @@ export default function CourseRoster() {
     setError(null);
     try {
       const { data } = await api.get(`/courses/${courseId}/roster`, {
-        params: cohortFilter ? { cohortId: cohortFilter } : {},
+        params: {
+          ...(cohortFilter ? { cohortId: cohortFilter } : {}),
+          ...(nodeFilter ? { nodeId: nodeFilter, nodeCleared: nodeState === 'CLEARED' } : {}),
+        },
       });
       setRoster(data);
     } catch (loadError) {
@@ -171,7 +209,7 @@ export default function CourseRoster() {
     } finally {
       setLoading(false);
     }
-  }, [courseId, cohortFilter]);
+  }, [courseId, cohortFilter, nodeFilter, nodeState]);
 
   const { paused: retryPaused, reset: resetAutoRetry, retryNow: retryLoadNow } = useAutoRetry({
     active: Boolean(error) && !loading,
@@ -186,7 +224,45 @@ export default function CourseRoster() {
     if (!error && !loading) resetAutoRetry();
   }, [error, loading, resetAutoRetry]);
 
+  const submitImport = async (event) => {
+    event.preventDefault();
+    const emails = emailsFromCsv(importEmails);
+    setImportError(null);
+    if (emails.length === 0) {
+      setImportError('No email addresses found in that text.');
+      return;
+    }
+    setImportBusy(true);
+    try {
+      const { data } = await api.post(`/courses/${courseId}/roster/import`, {
+        emails,
+        cohortId: cohortFilter ? Number(cohortFilter) : null,
+      });
+      setImportResult(data);
+      setImportEmails('');
+      // Show what just arrived: a node filter left over from before the import can
+      // hide every new row and make a successful import look like a no-op.
+      setNodeFilter('');
+      setLoadAttempt((previous) => previous + 1);
+    } catch (importFailure) {
+      setImportError(apiError(importFailure, 'Could not import that list.'));
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const readFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImportEmails(await file.text());
+    event.target.value = '';
+  };
+
   const learners = roster?.learners ?? [];
+  // The nodes come from the roster itself, so the picker survives a filter that
+  // matches nobody — otherwise the only control that could undo it would vanish.
+  const nodes = roster?.nodes ?? [];
+  const filtered = Boolean(nodeFilter || cohortFilter);
   const averageCleared =
     learners.length > 0
       ? Math.round(
@@ -198,7 +274,7 @@ export default function CourseRoster() {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <Link
         to="/studio/courses"
-        className="mb-4 inline-flex items-center gap-1.5 text-[11px] font-semibold text-fg-muted hover:text-foreground"
+        className="no-print mb-4 inline-flex items-center gap-1.5 text-[11px] font-semibold text-fg-muted hover:text-foreground"
       >
         <ArrowLeft size={13} /> Course library
       </Link>
@@ -223,7 +299,7 @@ export default function CourseRoster() {
         <div className="panel grid min-h-[220px] place-items-center text-sm text-fg-muted">
           Loading the roster…
         </div>
-      ) : !roster ? null : learners.length === 0 ? (
+      ) : !roster ? null : learners.length === 0 && !filtered ? (
         <div className="panel grid min-h-[240px] place-items-center p-8 text-center">
           <div>
             <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-brand-tint text-gold-text">
@@ -237,17 +313,18 @@ export default function CourseRoster() {
         </div>
       ) : (
         <>
-          <div className="panel mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 text-[11px] text-fg-muted">
-            <span className="inline-flex items-center gap-1.5 font-semibold text-foreground">
+          <div className="panel mb-4 flex flex-wrap items-end gap-x-4 gap-y-3 px-4 py-3 text-[11px] text-fg-muted">
+            <span className="inline-flex items-center gap-1.5 self-center font-semibold text-foreground">
               <Users size={13} /> {learners.length} {learners.length === 1 ? 'learner' : 'learners'}
             </span>
-            <span className="tabular-nums">{roster.moduleCount} nodes</span>
-            <span className="tabular-nums">Average {averageCleared} nodes cleared</span>
+            <span className="tabular-nums self-center">{roster.moduleCount} nodes</span>
+            <span className="tabular-nums self-center">Average {averageCleared} cleared</span>
+
             {cohorts.length > 0 && (
-              <label className="ml-auto flex items-center gap-2 text-[11px] font-semibold">
+              <label className="flex items-center gap-2 font-semibold">
                 Class
                 <select
-                  className="field w-auto min-w-[10rem] text-[11px]"
+                  className="field w-auto min-w-[9rem] text-[11px]"
                   value={cohortFilter}
                   onChange={(event) => setCohortFilter(event.target.value)}
                   aria-label="Filter the roster by class"
@@ -261,16 +338,140 @@ export default function CourseRoster() {
                 </select>
               </label>
             )}
-            <button
-              type="button"
-              onClick={() => downloadCsv(roster)}
-              className={`btn-ghost text-[11px] ${cohorts.length === 0 ? 'ml-auto' : ''}`}
-            >
-              <Download size={13} /> Download CSV
-            </button>
+
+            {nodes.length > 0 && (
+              <label className="flex items-center gap-2 font-semibold">
+                Node
+                <select
+                  className="field w-auto min-w-[9rem] text-[11px]"
+                  value={nodeFilter}
+                  onChange={(event) => setNodeFilter(event.target.value)}
+                  aria-label="Show only learners on one node"
+                >
+                  <option value="">Any node</option>
+                  {nodes.map((node) => (
+                    <option key={node.id} value={node.id}>
+                      {node.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {nodeFilter && (
+              <label className="flex items-center gap-2 font-semibold">
+                Standing
+                <select
+                  className="field w-auto text-[11px]"
+                  value={nodeState}
+                  onChange={(event) => setNodeState(event.target.value)}
+                  aria-label="Show learners who have cleared the node, or have not"
+                >
+                  <option value="NOT_CLEARED">Not cleared</option>
+                  <option value="CLEARED">Cleared</option>
+                </select>
+              </label>
+            )}
+
+            <div className="no-print ml-auto flex flex-wrap items-center gap-1.5 self-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setImportOpen((open) => !open);
+                  setImportResult(null);
+                  setImportError(null);
+                }}
+                className="btn-ghost text-[11px]"
+              >
+                <Upload size={13} /> Import list
+              </button>
+              <button type="button" onClick={() => window.print()} className="btn-ghost text-[11px]">
+                <Printer size={13} /> Print
+              </button>
+              <button type="button" onClick={() => downloadCsv(roster)} className="btn-ghost text-[11px]">
+                <Download size={13} /> CSV
+              </button>
+            </div>
           </div>
 
+          {importOpen && (
+            <form onSubmit={submitImport} className="panel mb-4 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[12px] font-semibold text-foreground">Import a class list</p>
+                <button
+                  type="button"
+                  onClick={() => setImportOpen(false)}
+                  className="btn-ghost text-[11px]"
+                  aria-label="Close the import panel"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+              <p className="mt-1 text-[11px] leading-5 text-fg-subtle">
+                Paste a column of email addresses, or a spreadsheet export with a name and an email
+                column. Only existing student accounts are enrolled; addresses that belong to nobody
+                are listed back so you can chase them
+                {cohortFilter ? ' — they join the selected class too' : ''}.
+              </p>
+              <textarea
+                className="field mt-2 h-28 w-full font-mono text-[11px]"
+                value={importEmails}
+                onChange={(event) => setImportEmails(event.target.value)}
+                placeholder={'name,email\nAsha Rao,asha@college.edu\nleo@college.edu'}
+                aria-label="Email addresses to import"
+              />
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept=".csv,text/csv,text/plain"
+                  onChange={readFile}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInput.current?.click()}
+                  className="btn-ghost text-[11px]"
+                >
+                  <Upload size={13} /> Choose a CSV
+                </button>
+                <button type="submit" disabled={importBusy} className="btn-primary text-[11px]">
+                  {importBusy ? 'Importing…' : 'Import and enrol'}
+                </button>
+                {importError && <span className="text-[11px] text-danger">{importError}</span>}
+              </div>
+              {importResult && (
+                <div className="mt-3 rounded-lg border border-line bg-muted/40 px-3 py-2 text-[11px]">
+                  <p className="font-semibold text-foreground">
+                    {importResult.imported.length} enrolled · {importResult.alreadyMember.length} already
+                    in · {importResult.unknown.length} unknown
+                  </p>
+                  {importResult.unknown.length > 0 && (
+                    <p className="mt-1 break-all text-fg-subtle">
+                      No account for: {importResult.unknown.join(', ')}
+                    </p>
+                  )}
+                </div>
+              )}
+            </form>
+          )}
+
           <div className="space-y-3">
+            {learners.length === 0 && filtered && (
+              <div className="panel px-4 py-6 text-center text-[12px] text-fg-muted">
+                Nobody matches these filters.
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNodeFilter('');
+                    setCohortFilter('');
+                  }}
+                  className="ml-2 font-semibold text-gold-text underline"
+                >
+                  Clear them
+                </button>
+              </div>
+            )}
             {learners.map((learner) => (
               <LearnerRow key={learner.userId} learner={learner} courseId={roster.courseId} />
             ))}

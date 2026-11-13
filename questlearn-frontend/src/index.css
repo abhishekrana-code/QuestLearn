@@ -463,6 +463,35 @@ button,
   transition-duration: 180ms;
 }
 
+@media print {
+  /* A roster is printed for a staff meeting: the chrome goes, the rows stay. */
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .panel,
+  .panel-raised {
+    box-shadow: none !important;
+    border-color: #d4d4d4 !important;
+    background: #fff !important;
+    break-inside: avoid;
+  }
+
+  article {
+    break-inside: avoid;
+  }
+
+  a {
+    text-decoration: none !important;
+    color: #000 !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

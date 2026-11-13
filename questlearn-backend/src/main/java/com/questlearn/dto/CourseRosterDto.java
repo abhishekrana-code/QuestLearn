@@ -13,6 +13,7 @@ public record CourseRosterDto(
         Long courseId,
         String title,
         int moduleCount,
+        List<CourseNodeRef> nodes,
         List<RosterLearnerDto> learners
 ) {
 }

@@ -92,7 +92,7 @@ export default function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line/80 bg-background/85 backdrop-blur-md">
+    <header className="no-print sticky top-0 z-40 border-b border-line/80 bg-background/85 backdrop-blur-md">
       <div className="shell flex h-16 items-center gap-2">
         <Link to="/" className="shrink-0" aria-label="QuestLearn home">
           <Logo />
