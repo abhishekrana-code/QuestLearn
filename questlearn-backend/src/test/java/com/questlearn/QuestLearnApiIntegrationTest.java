@@ -88,8 +88,9 @@ class QuestLearnApiIntegrationTest {
     @BeforeEach
     void seed() throws Exception {
         // The suite owns the whole database, so start from nothing every time.
-        jdbc.execute("TRUNCATE TABLE admin_audit_log, enrollments, module_attempts, "
-                + "user_module_progress, quizzes, modules, courses, users RESTART IDENTITY CASCADE");
+        jdbc.execute("TRUNCATE TABLE admin_audit_log, cohort_memberships, cohorts, enrollments, "
+                + "module_attempts, user_module_progress, quizzes, modules, courses, users "
+                + "RESTART IDENTITY CASCADE");
 
         instructor = users.save(User.builder()
                 .name("Teacher")
@@ -638,6 +639,101 @@ class QuestLearnApiIntegrationTest {
         mvc.perform(get("/api/v1/courses/" + draft.getId() + "/leaderboard")
                         .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void aClassCodeEnrollsTheStudentAndListsThemInTheClass() throws Exception {
+        String teacherToken = login("teacher@it.test");
+
+        MvcResult created = mvc.perform(post("/api/v1/courses/" + course.getId() + "/cohorts")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("name", "10B"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("10B"))
+                .andExpect(jsonPath("$.memberCount").value(0))
+                .andReturn();
+        String code = json.readTree(created.getResponse().getContentAsString()).path("joinCode").asText();
+        assertThat(code).hasSize(8);
+
+        // One code does both jobs: class list and course enrollment.
+        mvc.perform(post("/api/v1/cohorts/join")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("code", code))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.courseId").value(course.getId().intValue()))
+                .andExpect(jsonPath("$.cohortName").value("10B"))
+                .andExpect(jsonPath("$.alreadyMember").value(false));
+
+        // Typing the code twice is not an error and does not duplicate the row.
+        mvc.perform(post("/api/v1/cohorts/join")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("code", code))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alreadyMember").value(true));
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/cohorts")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].memberCount").value(1));
+
+        mvc.perform(get("/api/v1/courses/mine").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+
+        // Codes are case-insensitive, unknown codes are 404, and roles are enforced.
+        mvc.perform(post("/api/v1/cohorts/join")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("code", code.toLowerCase()))))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/cohorts/join")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("code", "NOPENOPE"))))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/cohorts/join")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("code", code))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void deletingAClassKeepsItsMembersEnrolled() throws Exception {
+        String teacherToken = login("teacher@it.test");
+
+        MvcResult created = mvc.perform(post("/api/v1/courses/" + course.getId() + "/cohorts")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("name", "10C"))))
+                .andExpect(status().isOk())
+                .andReturn();
+        long cohortId = json.readTree(created.getResponse().getContentAsString()).path("id").asLong();
+        String code = json.readTree(created.getResponse().getContentAsString()).path("joinCode").asText();
+
+        mvc.perform(post("/api/v1/cohorts/join")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("code", code))))
+                .andExpect(status().isOk());
+
+        mvc.perform(delete("/api/v1/cohorts/" + cohortId)
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/cohorts")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        // Tidying up a term must not cost a student their course.
+        mvc.perform(get("/api/v1/courses/mine").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
     }
 
     @Test

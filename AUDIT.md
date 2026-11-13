@@ -30,8 +30,8 @@ After the hardening release described below: the same routes plus
 `GET /admin/audit`, 94 backend tests (16 PostgreSQL integration tests), and 24
 frontend tests across 5 files.
 
-After the enrollment release (also 13 November 2026): 38 API routes, 101 backend
-tests (23 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
+After the enrollment release (also 13 November 2026): 42 API routes, 103 backend
+tests (25 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
 "my courses" split, per-course rosters, a CSV export, per-learner attempt history and
 a course-scoped leaderboard are all live and covered by tests.
 
@@ -47,15 +47,16 @@ a course-scoped leaderboard are all live and covered by tests.
 | Instructor authoring | 8/10 | Five-step studio, AI draft builder, quiz and video editors |
 | Admin and account management | 8/10 | Moderation, account search, the audit feed and course rosters work; no pagination |
 | Authentication and security | 8/10 | Role enforcement, throttling and revocable sessions; no email verification |
-| Classroom operations | 6/10 | Enrollment, rosters, per-learner history, CSV export and a class leaderboard; still no cohorts, join codes or deadlines |
+| Classroom operations | 7/10 | Enrollment, cohorts with join codes, rosters, per-learner history, CSV export and a class leaderboard; no gating or deadlines |
 | Reliability and observability | 5/10 | Health endpoint only; no metrics, tracing or error aggregation |
 | Tests and CI | 8/10 | Real PostgreSQL in CI, guards against silently skipped tests, both halves gated |
 | Deployment and documentation | 8/10 | `DEPLOY.md` covers TLS, backups, upgrades and known limits |
 | Responsive and mobile | 8/10 | Verified at 375 px; no horizontal scroll or clipped controls |
 
-**Overall: about 8/10 as a single-class pilot, about 5/10 as a school-wide system.**
-The classroom layer now exists (join, roster, report, per-learner history); what is
-still missing is the institution above it - cohorts, email and deadlines.
+**Overall: about 8/10 as a single-class pilot, about 6/10 as a school-wide system.**
+The classroom layer now exists (join by code, class, roster, report, per-learner
+history, class board); what is still missing is the institution above it - course
+gating, email and deadlines.
 
 ---
 
@@ -121,16 +122,16 @@ still missing is the institution above it - cohorts, email and deadlines.
 
 ### P0 — blocks a real term
 
-**1. Cohorts and join codes (the rest of the enrollment item).**
-Enrollment itself now exists: `enrollments(user_id, course_id, enrolled_at)`, a
-catalogue vs. "my courses" split, per-course rosters, per-learner attempt history, a
-CSV export and a course-scoped leaderboard, all with tests. What is still missing is
-the **class** as an object: there is no cohort or join code, so a teacher cannot say
-"these 30 students are 10B", and every published course is still visible to every
-student in the catalogue.
-*Fix shape:* `cohorts(id, course_id, name, join_code)` with membership, a catalogue
-that can be limited to a learner's cohorts for institution courses, and roster plus
-leaderboard scoped by cohort rather than by course alone.
+**1. Cohort gating and per-class views (the last part of the enrollment item).**
+Enrollment, rosters, per-learner history, the CSV export, a course-scoped board and
+now **cohorts with join codes** all exist and are tested: a teacher creates "10B",
+reads out its eight-character code, and a student who types it is put on the class
+list and enrolled in the course in one step. What is still missing is what a cohort
+*restricts*: every published course is still visible in the catalogue to every
+student, and the roster and board are still course-wide rather than per class.
+*Fix shape:* a per-course "members only" flag so the catalogue hides it from
+non-members, a cohort filter on the roster (and the CSV), and a cohort scope option
+on the class board.
 
 **2. No email transport at all.**
 Consequences: no address verification, no self-service password recovery, no
@@ -183,7 +184,7 @@ below), so the order starts from what a graded term still needs.
 
 | Order | Work | Effort | Why first |
 |---|---|---|---|
-| 1 | Cohorts + join codes + cohort-scoped roster and board | 1–2 weeks | A class is still a set of people a teacher recognises, not a row in the system |
+| 1 | Course gating + per-cohort roster filter and board scope | 3–5 days | Cohorts exist, but nothing is restricted by them yet |
 | 2 | Email transport: verification + self-service reset | 3–5 days | Removes the most embarrassing support path |
 | 3 | Deadlines and notifications | 1–2 weeks | Turns self-paced study into schedulable coursework |
 | 4 | Object storage for lesson video | 3–5 days | Protects the single server and slow connections |
@@ -202,7 +203,8 @@ below), so the order starts from what a graded term still needs.
 | `df643b7` | `GET /courses/{id}/roster`: every learner with per-node status, XP, streak, enrolled and last-activity dates | 2 integration tests; live against the demo course |
 | `a5bf9f3` | CSV export of the roster, one column per node, BOM for Excel | 7 unit tests on the builder; live blob captured from the button |
 | `3bc1b2b` | `GET /courses/{id}/roster/{userId}`: per-learner attempt trail, 404 for anyone not on that roster, 403 for students | Integration test covering the trail, the 404 and the 403; live page reviewed |
-| `_pending commit_` | `GET /courses/{id}/leaderboard`: class ranking by XP earned inside one course, plus a scope picker on the leaderboard page | Integration test (rank, course XP, modules cleared, draft 403); live scope switch on the page |
+| `76a253d` | `GET /courses/{id}/leaderboard`: class ranking by XP earned inside one course, plus a scope picker on the leaderboard page | Integration test (rank, course XP, modules cleared, draft 403); live scope switch on the page |
+| `_pending commit_` | Cohorts (V7): create/list/delete a class, eight-character join codes without ambiguous characters, and `POST /cohorts/join` which enrolls and joins in one step | 2 integration tests (code join, idempotency, case-insensitivity, 404, role refusals, delete keeps enrollment); live: instructor created "10B Demo", the student joined with a lower-case code, roster showed 1 member, deleting the class left Leo enrolled |
 
 ---
 

@@ -5,6 +5,7 @@ import {
   Copy,
   Eye,
   FolderOpen,
+  GraduationCap,
   Layers,
   Loader2,
   PencilLine,
@@ -356,6 +357,14 @@ export default function InstructorCourses() {
                       className="inline-flex items-center gap-1 text-[11px] font-semibold text-fg-muted hover:text-foreground"
                     >
                       <Users size={13} /> Roster
+                    </Link>
+                  )}
+                  {owned && (
+                    <Link
+                      to={`/studio/courses/${course.id}/cohorts`}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-fg-muted hover:text-foreground"
+                    >
+                      <GraduationCap size={13} /> Classes
                     </Link>
                   )}
 

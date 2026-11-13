@@ -88,6 +88,8 @@ export default function ExploreCourses() {
   const [openTree, setOpenTree] = useState(null);
   const [trees, setTrees] = useState({});
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [classCode, setClassCode] = useState('');
+  const [classBusy, setClassBusy] = useState(false);
   const [joinBusy, setJoinBusy] = useState(null);
   const [leaveTarget, setLeaveTarget] = useState(null);
   const [leaveBusy, setLeaveBusy] = useState(false);
@@ -267,6 +269,33 @@ export default function ExploreCourses() {
     }
   };
 
+  /**
+   * A class code does both jobs server-side: it puts the learner on the class
+   * list and enrolls them, so the catalogue reloads to show the new course.
+   */
+  const joinClass = async (event) => {
+    event.preventDefault();
+    const code = classCode.trim();
+    if (!code) return;
+    setClassBusy(true);
+    setNotice(null);
+    try {
+      const { data } = await api.post('/cohorts/join', { code });
+      setClassCode('');
+      setNotice({
+        type: 'success',
+        text: data.alreadyMember
+          ? `You are already in ${data.cohortName}.`
+          : `You joined ${data.cohortName} - ${data.courseTitle} is now on your dashboard.`,
+      });
+      setLoadAttempt((previous) => previous + 1);
+    } catch (classError) {
+      setNotice({ type: 'error', text: apiError(classError, 'Could not join that class.') });
+    } finally {
+      setClassBusy(false);
+    }
+  };
+
   const joinCourse = async (course) => {
     setJoinBusy(course.id);
     setNotice(null);
@@ -346,6 +375,31 @@ export default function ExploreCourses() {
             <X size={13} />
           </button>
         </div>
+      )}
+
+      {isStudent && (
+        <form onSubmit={joinClass} className="panel mb-4 flex flex-wrap items-end gap-3 px-4 py-3">
+          <label className="min-w-0 flex-1">
+            <span className="mb-1 block text-[11px] font-semibold text-fg-muted">
+              Have a class code?
+            </span>
+            <input
+              className="field font-mono uppercase tracking-[0.12em]"
+              value={classCode}
+              onChange={(event) => setClassCode(event.target.value.toUpperCase())}
+              placeholder="e.g. K7MQP2XR"
+              aria-label="Class code"
+              maxLength={12}
+            />
+          </label>
+          <button
+            type="submit"
+            className="btn-primary text-xs"
+            disabled={classBusy || !classCode.trim()}
+          >
+            {classBusy ? 'Joining…' : 'Join class'}
+          </button>
+        </form>
       )}
 
       <div className="panel mb-4 space-y-3 p-4">
