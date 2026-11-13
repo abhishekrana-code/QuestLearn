@@ -1117,7 +1117,7 @@ function Footer() {
 
         <div className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
           <p className="text-[11px] text-fg-subtle">
-            © {new Date().getFullYear()} QuestLearn. Built for better learning.
+            © 2026 Group 28, Inc. All rights reserved.
           </p>
           <p className="text-[11px] text-fg-subtle">
             Designed to be read on a phone, a tablet, or a projector.
