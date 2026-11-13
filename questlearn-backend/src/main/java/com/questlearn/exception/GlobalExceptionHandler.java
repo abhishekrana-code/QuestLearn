@@ -12,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -111,6 +112,15 @@ public class GlobalExceptionHandler {
                                                                  HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST,
                 "Invalid value for '" + ex.getName() + "'", request.getRequestURI());
+    }
+
+    /** A missing required query parameter (e.g. /publish without ?published=) is a bad request. */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingParameter(
+            MissingServletRequestParameterException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST,
+                "Required parameter '" + ex.getParameterName() + "' is missing",
+                request.getRequestURI());
     }
 
     @ExceptionHandler(AccessDeniedException.class)

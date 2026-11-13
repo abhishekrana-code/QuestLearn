@@ -899,7 +899,7 @@ export default function Landing() {
                       ) : node.state === 'edit' ? (
                         <span className="shrink-0 text-[9px] font-semibold text-[#FF9A73]">Editing</span>
                       ) : (
-                        <span className="shrink-0 text-[9px] text-[#8C847E]">+ Add</span>
+                        <span className="shrink-0 text-[9px] text-[#A9A09A]">+ Add</span>
                       )}
                     </div>
                   ))}

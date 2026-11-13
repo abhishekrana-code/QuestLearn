@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /$
+Allow: /login
+Allow: /register
+
+# Signed-in workspaces are not useful to crawlers and should not be indexed.
+Disallow: /dashboard
+Disallow: /explore
+Disallow: /performance
+Disallow: /leaderboard
+Disallow: /courses/
+Disallow: /studio
+Disallow: /admin

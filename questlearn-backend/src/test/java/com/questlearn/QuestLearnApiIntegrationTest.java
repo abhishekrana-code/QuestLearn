@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -353,6 +354,16 @@ class QuestLearnApiIntegrationTest {
         mvc.perform(get("/api/v1/admin/users")
                         .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void aMissingRequiredQueryParameterIsABadRequest() throws Exception {
+        String token = login("teacher@it.test");
+
+        mvc.perform(patch("/api/v1/courses/" + course.getId() + "/publish")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Required parameter 'published' is missing"));
     }
 
     @Test
