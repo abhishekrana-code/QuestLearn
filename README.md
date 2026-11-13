@@ -172,6 +172,31 @@ All routes are under `/api/v1`. Protected routes need `Authorization: Bearer <to
 | `POST` | `/auth/register` | public | Register a `STUDENT` or `INSTRUCTOR` |
 | `POST` | `/auth/login` | public | Returns JWT + profile |
 | `GET` | `/auth/me` | authenticated | Live XP / level / streak |
+| `POST` | `/auth/password-reset/request` | public | Start a reset; always the same 202 answer |
+| `POST` | `/auth/password-reset/confirm` | public | Redeem a reset token and set the new password |
+| `PATCH` | `/auth/password` | authenticated | Change your own password (returns a fresh token) |
+
+### Password recovery
+
+A student who forgets their password does not need an admin: **Forgot your password?** on the
+sign-in page posts the address to `/auth/password-reset/request`. The reply is always the same
+(`202`, "if that email belongs to an account…"), so the endpoint cannot be used to discover who is
+registered. For a real account the backend mints a 32-byte token, stores only its SHA-256 hash in
+`password_reset_tokens`, and emails a link to `/reset-password?token=…`.
+
+- The link **expires after 30 minutes** (`RESET_TOKEN_MINUTES`) and is **single-use**: the
+  confirming transaction claims the row with a conditional `UPDATE`, so a double submit cannot
+  both succeed.
+- Requesting a new link kills every earlier unused link for that account, so a forwarded email
+  stops working.
+- Redeeming one bumps the account's token version, which signs out every session opened before
+  the reset. XP, progress and streaks are untouched, and the account's login lockout is cleared.
+- Requests are capped at 3 per address per rolling hour (`RESET_MAX_PER_HOUR`).
+
+Mail is optional. With `MAIL_HOST` blank nothing is sent and the link is written to the server log
+at `WARN`, which is how a local demo or a school without SMTP can hand it over; set `MAIL_HOST`,
+`MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` and `APP_BASE_URL` (the browser origin
+the link should point at) to send real email.
 
 ### Courses & nodes
 

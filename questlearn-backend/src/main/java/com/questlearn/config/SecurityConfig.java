@@ -51,7 +51,9 @@ public class SecurityConfig {
             .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login").permitAll()
+                .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login",
+                        "/api/v1/auth/password-reset/request",
+                        "/api/v1/auth/password-reset/confirm").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/h2-console/**", "/actuator/health").permitAll()
                 // Lesson videos: a <video src> request cannot send a bearer token, and the

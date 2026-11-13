@@ -12,6 +12,7 @@ import com.questlearn.repository.CourseRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.QuizRepository;
 import com.questlearn.repository.UserRepository;
+import com.questlearn.service.PasswordResetMailer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -22,10 +23,15 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.mockito.ArgumentCaptor;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -76,6 +82,10 @@ class QuestLearnApiIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    /** Captures the raw reset token instead of sending mail during the suite. */
+    @MockitoBean
+    private PasswordResetMailer passwordResetMailer;
+
     private User instructor;
     private User student;
     private User admin;
@@ -89,8 +99,8 @@ class QuestLearnApiIntegrationTest {
     void seed() throws Exception {
         // The suite owns the whole database, so start from nothing every time.
         jdbc.execute("TRUNCATE TABLE admin_audit_log, cohort_memberships, cohorts, enrollments, "
-                + "module_attempts, user_module_progress, quizzes, modules, courses, users "
-                + "RESTART IDENTITY CASCADE");
+                + "password_reset_tokens, module_attempts, user_module_progress, quizzes, modules, "
+                + "courses, users RESTART IDENTITY CASCADE");
 
         instructor = users.save(User.builder()
                 .name("Teacher")
@@ -182,13 +192,61 @@ class QuestLearnApiIntegrationTest {
     // ---------------------------------------------------------------- helpers
 
     private String login(String email) throws Exception {
+        return login(email, PASSWORD);
+    }
+
+    private String login(String email, String password) throws Exception {
         MvcResult result = mvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(
-                                java.util.Map.of("email", email, "password", PASSWORD))))
+                                java.util.Map.of("email", email, "password", password))))
                 .andExpect(status().isOk())
                 .andReturn();
         return json.readTree(result.getResponse().getContentAsString()).path("token").asText();
+    }
+
+    /** Requests a reset and returns the raw token the mailer was handed. */
+    private String requestReset(String email) throws Exception {
+        mvc.perform(post("/api/v1/auth/password-reset/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("email", email))))
+                .andExpect(status().isAccepted());
+
+        ArgumentCaptor<String> token = ArgumentCaptor.forClass(String.class);
+        verify(passwordResetMailer, org.mockito.Mockito.atLeastOnce())
+                .send(any(User.class), token.capture(), any());
+        // A test may request more than once; the newest link is the live one.
+        return token.getAllValues().get(token.getAllValues().size() - 1);
+    }
+
+    private MvcResult confirmReset(String token, String password) throws Exception {
+        return mvc.perform(post("/api/v1/auth/password-reset/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(
+                                java.util.Map.of("token", token, "password", password))))
+                .andReturn();
+    }
+
+    /**
+     * Recovery tests each need their own address: the per-email request throttle is
+     * in memory and outlives a single test method.
+     */
+    private User learnerWithEmail(String email) {
+        return users.save(User.builder()
+                .name("Recovery Learner")
+                .email(email)
+                .passwordHash(passwordEncoder.encode(PASSWORD))
+                .role(Role.STUDENT)
+                .totalXp(0)
+                .currentLevel(1)
+                .streakDays(0)
+                .build());
+    }
+
+    private static String sha256(String raw) throws Exception {
+        return java.util.HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
     private MvcResult complete(String token, long moduleId, int selectedIndex) throws Exception {
@@ -1110,5 +1168,116 @@ class QuestLearnApiIntegrationTest {
         mvc.perform(post("/api/v1/courses/999999/enroll")
                         .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isNotFound());
+    }
+
+    // ------------------------------------------------- password recovery
+
+    @Test
+    void aResetLinkIsSentOnceAndOnlyItsHashIsStored() throws Exception {
+        learnerWithEmail("reset.hash@it.test");
+        String rawToken = requestReset("reset.hash@it.test");
+
+        assertThat(rawToken).isNotBlank();
+        String stored = jdbc.queryForObject(
+                "SELECT token_hash FROM password_reset_tokens ORDER BY id DESC LIMIT 1", String.class);
+        assertThat(stored).hasSize(64).isNotEqualTo(rawToken);
+        assertThat(stored).isEqualTo(sha256(rawToken));
+
+        Long minutes = jdbc.queryForObject("""
+                SELECT round(extract(epoch FROM (expires_at - created_at)) / 60)
+                FROM password_reset_tokens ORDER BY id DESC LIMIT 1""", Long.class);
+        assertThat(minutes).isEqualTo(30L);
+    }
+
+    @Test
+    void anUnknownAddressGetsTheSameAnswerAndNoEmail() throws Exception {
+        mvc.perform(post("/api/v1/auth/password-reset/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(
+                                java.util.Map.of("email", "nobody@it.test"))))
+                .andExpect(status().isAccepted());
+
+        verifyNoInteractions(passwordResetMailer);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM password_reset_tokens", Integer.class))
+                .isZero();
+    }
+
+    @Test
+    void aResetTokenWorksOnceAndSignsOtherSessionsOut() throws Exception {
+        String email = "reset.once@it.test";
+        learnerWithEmail(email);
+        String sessionBeforeReset = login(email);
+
+        String rawToken = requestReset(email);
+        String newPassword = "recovered-password-1";
+
+        assertThat(confirmReset(rawToken, newPassword).getResponse().getStatus()).isEqualTo(204);
+
+        // The session opened before the reset no longer works.
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + sessionBeforeReset))
+                .andExpect(status().isUnauthorized());
+
+        // The old password is gone, the new one works.
+        mvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(
+                                java.util.Map.of("email", email, "password", PASSWORD))))
+                .andExpect(status().isUnauthorized());
+        assertThat(login(email, newPassword)).isNotBlank();
+
+        // The same link cannot be used a second time.
+        assertThat(confirmReset(rawToken, "another-password-2").getResponse().getStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void anExpiredTokenIsRefused() throws Exception {
+        learnerWithEmail("reset.expired@it.test");
+        String rawToken = requestReset("reset.expired@it.test");
+        jdbc.update("UPDATE password_reset_tokens SET expires_at = now() - interval '1 second'");
+
+        assertThat(confirmReset(rawToken, "too-late-password-1").getResponse().getStatus())
+                .isEqualTo(400);
+    }
+
+    @Test
+    void aNewerLinkSupersedesTheOlderOne() throws Exception {
+        learnerWithEmail("reset.supersede@it.test");
+        String first = requestReset("reset.supersede@it.test");
+        String second = requestReset("reset.supersede@it.test");
+        assertThat(second).isNotEqualTo(first);
+
+        assertThat(confirmReset(first, "first-link-password-1").getResponse().getStatus())
+                .isEqualTo(400);
+        assertThat(confirmReset(second, "second-link-password-1").getResponse().getStatus())
+                .isEqualTo(204);
+    }
+
+    @Test
+    void theCurrentPasswordIsRejectedWithoutBurningTheToken() throws Exception {
+        learnerWithEmail("reset.same@it.test");
+        String rawToken = requestReset("reset.same@it.test");
+
+        assertThat(confirmReset(rawToken, PASSWORD).getResponse().getStatus()).isEqualTo(400);
+        // The rejected attempt must leave the link usable.
+        assertThat(confirmReset(rawToken, "different-password-1").getResponse().getStatus())
+                .isEqualTo(204);
+    }
+
+    @Test
+    void resetRequestsAreRateLimitedPerAddress() throws Exception {
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            mvc.perform(post("/api/v1/auth/password-reset/request")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(
+                                    java.util.Map.of("email", "rate.limit@it.test"))))
+                    .andExpect(status().isAccepted());
+        }
+
+        mvc.perform(post("/api/v1/auth/password-reset/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(
+                                java.util.Map.of("email", "rate.limit@it.test"))))
+                .andExpect(status().isTooManyRequests());
     }
 }

@@ -75,6 +75,27 @@ curl -s localhost:8080/actuator/health          # {"status":"UP"}
 refuses to start without them, which is intentional. Generate the secret with
 `openssl rand -base64 48`.
 
+### Password-reset email (optional)
+
+Without mail the reset link is written to the service log at `WARN`, which means an
+operator has to relay it. To let students recover their own password, point the
+backend at any SMTP provider and set the public origin the link should use:
+
+```bash
+APP_BASE_URL=https://questlearn.example.com
+MAIL_HOST=smtp.example.com
+MAIL_PORT=587
+MAIL_USERNAME=postgres@questlearn.example.com
+MAIL_PASSWORD=replace-with-an-app-password
+MAIL_FROM=no-reply@questlearn.example.com
+RESET_TOKEN_MINUTES=30
+RESET_MAX_PER_HOUR=3
+```
+
+`sudo journalctl -u questlearn | grep 'reset link'` is the fallback while mail is
+unconfigured; once it is configured, check the log for `Password reset link emailed
+to …` after a test request.
+
 ### Voice viva and AI authoring (Groq)
 
 The AI features are optional. Create a key at <https://console.groq.com/keys> and

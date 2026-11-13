@@ -30,10 +30,11 @@ After the hardening release described below: the same routes plus
 `GET /admin/audit`, 94 backend tests (16 PostgreSQL integration tests), and 24
 frontend tests across 5 files.
 
-After the enrollment release (also 13 November 2026): 45 API routes, 112 backend
-tests (34 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
-"my courses" split, per-course rosters, a CSV export, per-learner attempt history and
-a course-scoped leaderboard are all live and covered by tests.
+After the enrollment release (also 13 November 2026): 47 API routes, 119 backend
+tests (41 of them PostgreSQL integration tests), and 31 frontend tests across 6 files,
+plus a Playwright smoke suite. Enrollment, a catalogue vs. "my courses" split,
+per-course rosters, a CSV export, per-learner attempt history, a course-scoped
+leaderboard and self-service password recovery are all live and covered by tests.
 
 ---
 
@@ -131,12 +132,15 @@ that board, and **enrol a pasted class list** (CSV or a column of addresses) wit
 unknown addresses reported back rather than silently created. Nothing in this
 finding is still open.
 
-**2. No email transport at all.**
-Consequences: no address verification, no self-service password recovery, no
-notifications. The only reset path is an admin reading a temporary password aloud.
-*Fix shape:* an SMTP or transactional-email provider, a verification token table, a
-reset-token flow with single use and expiry, and a mail outbox so delivery failures
-are visible.
+**2. Email delivery — password recovery CLOSED, notifications still open.**
+Self-service recovery now exists: a token table, a 30-minute expiry, single use
+enforced by a conditional claim, superseded links, hashed storage, per-address
+throttling and session revocation on redemption. Mail itself is still opt-in: with
+`MAIL_HOST` blank the link goes to the server log instead of an inbox, so address
+verification and lesson notifications remain open, and a delivery failure is only
+visible in the log rather than an outbox. *Fix shape:* point `MAIL_HOST` at an SMTP
+or transactional-email provider, then reuse the same mailer for verification and
+notifications.
 
 **3. Class reporting: acting on the data — CLOSED.**
 The roster lists every enrolled learner with their per-node status, attempts, XP and
@@ -213,6 +217,7 @@ below), so the order starts from what a graded term still needs.
 | `_pending_` | Audit pass over the above: roster import now refuses an empty list and caps at 500 addresses instead of returning a silent 200 or holding a transaction across ten thousand lookups; the dead `roster` and `courseLeaderboard` overloads (which would have bypassed `@Transactional` through self-invocation) are gone, along with two unused repository finders; the import panel no longer prints | 1 new integration test (empty object, blank strings, 501 addresses all 400, a normal import still 200); live regression sweep: gating hides course 18 from an unenrolled learner and 403s the direct link, a class round-trip filters roster, board and node filter and leaves progress intact on delete (2/6, 420 XP) |
 | `c4fec20` | Progress reset in the UI: a Reset button on each touched node of a learner's detail page, and the existing endpoint opened to the owning instructor (ownership checked in the service) | 1 integration test (teacher resets a cleared node, XP returns to 0, node back to UNLOCKED with no attempts, student refused); live: Leo's two cleared nodes show Reset, the four untouched ones do not |
 | `b587165` | Admin pagination (page/size, total and totalPages, size capped at 100, pager in the admin table) and edge hardening: `deploy/security-headers.conf` with CSP/HSTS/permissions policy included from `nginx.conf`, and the Google Fonts CDN removed so `font-src` can stay `'self'` | 1 integration test (page 0 and 1 of 3 accounts, clamped size, unchanged search shape); live: admin table showed "1–5 of 5" with both pager buttons disabled, network had no font request, and the heading computed to the system stack |
+| Password recovery | `password_reset_tokens` (V9) plus `POST /auth/password-reset/request` and `/confirm`, a mailer that falls back to the server log when `MAIL_HOST` is blank, and `/forgot-password` + `/reset-password` pages with a link from sign-in. Tokens are stored as SHA-256 hashes, expire after 30 minutes, are claimed by a conditional UPDATE so they work once, and a redemption bumps `token_version` to sign other sessions out | 7 integration tests (hash-only storage and 30-minute window, unknown address gets the same 202 with no email, single use, expired refused, newer link supersedes the old, same-password rejected without burning the token, 4th request in an hour 429); live: registered a throwaway account, pulled its link from the log, set a new password through the browser page, then new password 200 / old password 401 / replay 400 |
 | Playwright smoke suite | `questlearn-frontend/e2e/smoke.spec.js` signs a brand-new account up, joins the course from the catalogue, clears *HTML Foundations* through the quiz UI, then signs in as the instructor and reads that learner off the roster at 1/6 cleared. Runs against the live API, with the frontend dev server started by the config | Passing locally in ~12s (headless Chromium, `npm run test:e2e`); its own `e2e` CI job builds the jar, starts it on :8091 against a throwaway PostgreSQL database, and uploads the report plus API log if it fails |
 | `e10bdfa` | Roster import + node filter + print: `POST /courses/{id}/roster/import` (addresses only, duplicates collapsed, unknown accounts reported), `?nodeId=&nodeCleared=` on the roster, `nodes` on the roster payload so the picker survives an empty result, and a print stylesheet | 2 integration tests (import idempotency, case-folded duplicates, unknown address, student refused; node filter cleared/not-cleared and a foreign node 404); live: import via the UI reported 1 enrolled and 1 unknown, repeat returned "already in", node filter narrowed to Leo then emptied the list with the picker still present |
 | `55b4b6c` | Demo data: a second course, "Data Structures Detour" (3 nodes, a quiz on the last), with two nodes cleared for the demo student, an enrollment row and an account total recomputed from the work; written to apply to an existing database, not just a fresh one | 107 tests still pass (the seeder is excluded from the `it` profile); live: Leo 420 XP across 2 courses, level 3, `mine` shows 2/6 and 2/3, per-course board 200 XP and the combined board 420 |

@@ -3,10 +3,12 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import Navbar from './components/common/Navbar.jsx';
 import ProtectedRoute from './components/common/ProtectedRoute.jsx';
 import { useAuth } from './context/AuthContext.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import NotFound from './pages/NotFound.jsx';
 import Register from './pages/Register.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
 
 // The skill tree, dashboards and studio pull in framer-motion, lottie and
 // confetti. Loading them on demand keeps the landing and sign-in pages small
@@ -66,6 +68,12 @@ export default function App() {
               path="/register"
               element={user ? <Navigate to="/" replace /> : <Register />}
             />
+            <Route
+              path="/forgot-password"
+              element={user ? <Navigate to="/" replace /> : <ForgotPassword />}
+            />
+            {/* Reachable while signed in too: a reset link can be opened in any tab. */}
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route
               path="/dashboard"
               element={
