@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Crown, Flame, Layers, Medal } from 'lucide-react';
+import { BookOpen, Crown, Flame, Layers, Medal } from 'lucide-react';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
@@ -42,8 +42,9 @@ export default function Leaderboard() {
   const [entries, setEntries] = useState([]);
   const [courses, setCourses] = useState([]);
   const [coursesLoaded, setCoursesLoaded] = useState(false);
-  // 'all' ranks lifetime XP across the building; a course id ranks one class.
-  const [scope, setScope] = useState('all');
+  // 'overall' adds up every course; 'all' ranks lifetime XP; a course id ranks one
+  // course, and its class picker narrows that further.
+  const [scope, setScope] = useState('overall');
   // '' is the whole course; a cohort id narrows to that class.
   const [cohorts, setCohorts] = useState([]);
   const [cohort, setCohort] = useState('');
@@ -56,21 +57,31 @@ export default function Leaderboard() {
   const scopedCourse = courses.find((course) => String(course.id) === String(scope));
   const scopedCohort = cohorts.find((item) => String(item.id) === String(cohort));
   // A teacher has no building-wide board, so their board opens on their first course.
-  const waitingForOwnCourse = user?.role === 'INSTRUCTOR' && scope === 'all' && !coursesLoaded;
+  const waitingForOwnCourse =
+    user?.role === 'INSTRUCTOR' && (scope === 'all' || scope === 'overall') && !coursesLoaded;
 
   const load = useCallback(async () => {
     if (waitingForOwnCourse) {
       return;
     }
     // A teacher with no courses has no board to ask for; the 403 would only nag.
-    if (user?.role === 'INSTRUCTOR' && scope === 'all') {
+    if (user?.role === 'INSTRUCTOR' && (scope === 'all' || scope === 'overall')) {
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      if (scope === 'all') {
+      if (scope === 'overall') {
+        const { data } = await api.get('/leaderboard/overall');
+        // The card draws one XP figure and a node count; the overall board already
+        // supplies both, under the names the sum deserves.
+        setEntries(data.map((entry) => ({
+          ...entry,
+          totalXp: entry.combinedXp,
+          modulesCleared: entry.nodesCleared,
+        })));
+      } else if (scope === 'all') {
         const { data } = await api.get('/leaderboard');
         setEntries(data);
       } else {
@@ -107,14 +118,14 @@ export default function Leaderboard() {
   }, []);
 
   useEffect(() => {
-    if (user?.role === 'INSTRUCTOR' && scope === 'all' && courses.length > 0) {
+    if (user?.role === 'INSTRUCTOR' && (scope === 'all' || scope === 'overall') && courses.length > 0) {
       setScope(String(courses[0].id));
     }
   }, [user?.role, scope, courses]);
 
   useEffect(() => {
     setCohort('');
-    if (!isStaff || scope === 'all') {
+    if (!isStaff || scope === 'all' || scope === 'overall') {
       setCohorts([]);
       return undefined;
     }
@@ -175,7 +186,9 @@ export default function Leaderboard() {
             ? `Everyone in ${scopedCohort.name}, ranked by XP earned inside ${scopedCourse?.title ?? 'this course'}.`
             : scopedCourse
               ? `Ranked by XP earned inside ${scopedCourse.title}, so a class compares with itself.`
-              : 'Ranked by total XP earned across every completed node. Consistency beats cramming.'}
+              : scope === 'overall'
+                ? 'Every course added up: each cleared node counts once, in the course it belongs to.'
+                : 'Ranked by total XP earned across every completed node. Consistency beats cramming.'}
         </p>
       </header>
 
@@ -188,7 +201,8 @@ export default function Leaderboard() {
             onChange={(event) => setScope(event.target.value)}
             aria-label="Choose what this leaderboard ranks"
           >
-            {user?.role !== 'INSTRUCTOR' && <option value="all">All learners</option>}
+            {user?.role !== 'INSTRUCTOR' && <option value="overall">All courses combined</option>}
+            {user?.role !== 'INSTRUCTOR' && <option value="all">Lifetime XP</option>}
             {courses.map((course) => (
               <option key={course.id} value={course.id}>
                 {course.title}
@@ -233,9 +247,11 @@ export default function Leaderboard() {
             <p className="mt-3 text-sm font-semibold text-foreground">
               {scopedCohort
                 ? `Nobody in ${scopedCohort.name} has cleared a node yet`
-                : user?.role === 'INSTRUCTOR' && scope === 'all'
+                : user?.role === 'INSTRUCTOR' && (scope === 'all' || scope === 'overall')
                   ? 'You have no courses to rank yet'
-                  : 'No students on the board yet'}
+                  : scope === 'overall'
+                    ? 'No nodes cleared anywhere yet'
+                    : 'No students on the board yet'}
             </p>
             <p className="mt-1 text-[12px] leading-5 text-fg-muted">
               {scopedCohort
@@ -333,6 +349,12 @@ export default function Leaderboard() {
                           <Layers size={10} /> {entry.modulesCleared}{' '}
                           {entry.modulesCleared === 1 ? 'node' : 'nodes'}
                         </span>
+                        {entry.coursesCleared > 0 && (
+                          <span className="inline-flex items-center gap-1">
+                            <BookOpen size={10} /> {entry.coursesCleared}{' '}
+                            {entry.coursesCleared === 1 ? 'course' : 'courses'}
+                          </span>
+                        )}
                       </p>
                     </div>
                     <p className="shrink-0 text-[14px] font-semibold tabular-nums text-foreground">
@@ -350,7 +372,9 @@ export default function Leaderboard() {
           <p className="mt-6 text-center text-[11px] text-fg-subtle">
             {boardTitle
               ? `Only XP earned in ${scopedCourse?.title ?? 'this course'} counts on this board.`
-              : `Your current rank is based on ${user.role === 'STUDENT' ? 'student' : 'account'} XP.`}
+              : scope === 'overall'
+                ? 'Combined XP is summed from cleared nodes, so a course you never opened adds nothing.'
+                : `Your current rank is based on ${user.role === 'STUDENT' ? 'student' : 'account'} XP.`}
           </p>
         </>
       )}

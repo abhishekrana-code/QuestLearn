@@ -30,8 +30,8 @@ After the hardening release described below: the same routes plus
 `GET /admin/audit`, 94 backend tests (16 PostgreSQL integration tests), and 24
 frontend tests across 5 files.
 
-After the enrollment release (also 13 November 2026): 43 API routes, 106 backend
-tests (28 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
+After the enrollment release (also 13 November 2026): 44 API routes, 107 backend
+tests (29 of them PostgreSQL integration tests), and 31 frontend tests across 6 files. Enrollment, a catalogue vs.
 "my courses" split, per-course rosters, a CSV export, per-learner attempt history and
 a course-scoped leaderboard are all live and covered by tests.
 
@@ -204,7 +204,8 @@ below), so the order starts from what a graded term still needs.
 | `3bc1b2b` | `GET /courses/{id}/roster/{userId}`: per-learner attempt trail, 404 for anyone not on that roster, 403 for students | Integration test covering the trail, the 404 and the 403; live page reviewed |
 | `76a253d` | `GET /courses/{id}/leaderboard`: class ranking by XP earned inside one course, plus a scope picker on the leaderboard page | Integration test (rank, course XP, modules cleared, draft 403); live scope switch on the page |
 | `c40bcb5` | Cohorts (V7): create/list/delete a class, eight-character join codes without ambiguous characters, and `POST /cohorts/join` which enrolls and joins in one step | 2 integration tests (code join, idempotency, case-insensitivity, 404, role refusals, delete keeps enrollment); live: instructor created "10B Demo", the student joined with a lower-case code, roster showed 1 member, deleting the class left Leo enrolled |
-| `_pending_` | Class board: `?cohortId=` on `/courses/{id}/leaderboard`, the board opens to the owning instructor, and the standings page gains a class picker under the course one | 1 integration test (whole course 2 → one class 1, rank restarts at 1, unknown class 404, teacher may read own board); live: instructor's board auto-opened on their course, picking "10B Board" left Leo alone on it |
+| `_pending_` | Overall board: `GET /leaderboard/overall` sums the XP of every cleared node across every course per learner, with a node count, a course count and the top three contributing courses; the standings page opens on it ("All courses combined") and keeps lifetime XP as a second option | 1 integration test (combined 100 from one node, one course, the course named, teacher refused); live: Mira 520/4 nodes, Leo 220/2, Sam 100/1, each attributed to the one course |
+| `97fea6d` | Class board: `?cohortId=` on `/courses/{id}/leaderboard`, the board opens to the owning instructor, and the standings page gains a class picker under the course one | 1 integration test (whole course 2 → one class 1, rank restarts at 1, unknown class 404, teacher may read own board); live: instructor's board auto-opened on their course, picking "10B Board" left Leo alone on it |
 | `09f4b4c` | Course gating (V8 `membership_required`): a members-only course leaves the catalogue and refuses non-members, while a class code still works; plus `?cohortId=` on the roster and the class picker, and a members-only switch on the classes page | 2 integration tests (gated course hidden + 403 + code still joins + owner-only toggle; roster narrowing 2 → 1 and a foreign class 404); live: switch on → "Members only", switch off restored, roster picker 4 → 1 learner |
 
 ---

@@ -624,6 +624,28 @@ class QuestLearnApiIntegrationTest {
     }
 
     @Test
+    void theOverallBoardAddsUpEveryCourse() throws Exception {
+        skillTree();
+        complete(studentToken, root.getId(), 1);
+
+        mvc.perform(get("/api/v1/leaderboard/overall")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].rank").value(1))
+                .andExpect(jsonPath("$[0].combinedXp").value(100))
+                .andExpect(jsonPath("$[0].nodesCleared").value(1))
+                .andExpect(jsonPath("$[0].coursesCleared").value(1))
+                .andExpect(jsonPath("$[0].topCourses[0].title").value("Integration Quest"))
+                .andExpect(jsonPath("$[0].currentUser").value(true));
+
+        // A teacher is not on the board and cannot read it.
+        mvc.perform(get("/api/v1/leaderboard/overall")
+                        .header("Authorization", "Bearer " + login("teacher@it.test")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void theCourseBoardRanksByXpEarnedInThatCourse() throws Exception {
         skillTree();
         complete(studentToken, root.getId(), 1);

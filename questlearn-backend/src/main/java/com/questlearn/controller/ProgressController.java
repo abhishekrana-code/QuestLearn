@@ -5,6 +5,7 @@ import com.questlearn.dto.CompleteModuleRequest;
 import com.questlearn.dto.CourseLeaderboardEntry;
 import com.questlearn.dto.LeaderboardEntry;
 import com.questlearn.dto.ModuleDetailDto;
+import com.questlearn.dto.OverallLeaderboardEntry;
 import com.questlearn.dto.SkillTreeDto;
 import com.questlearn.dto.XpAwardResponse;
 import com.questlearn.service.ProgressService;
@@ -62,6 +63,13 @@ public class ProgressController {
     @Operation(summary = "Top students by total XP")
     public List<LeaderboardEntry> leaderboard(@AuthenticationPrincipal AppUserPrincipal principal) {
         return progressService.leaderboard(principal);
+    }
+
+    @GetMapping("/leaderboard/overall")
+    @PreAuthorize("hasAnyRole('STUDENT','ADMIN')")
+    @Operation(summary = "Top students by XP earned across every course combined")
+    public List<OverallLeaderboardEntry> overallLeaderboard(@AuthenticationPrincipal AppUserPrincipal principal) {
+        return progressService.overallLeaderboard(principal);
     }
 
     /**

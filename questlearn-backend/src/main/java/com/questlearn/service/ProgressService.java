@@ -6,6 +6,7 @@ import com.questlearn.dto.AttemptDto;
 import com.questlearn.dto.CourseLeaderboardEntry;
 import com.questlearn.dto.LeaderboardEntry;
 import com.questlearn.dto.ModuleDetailDto;
+import com.questlearn.dto.OverallLeaderboardEntry;
 import com.questlearn.dto.SkillNodeDto;
 import com.questlearn.dto.SkillTreeDto;
 import com.questlearn.dto.VivaConfig;
@@ -358,6 +359,67 @@ public class ProgressService {
                             student.getId(), ProgressStatus.COMPLETED),
                     student.getId().equals(principal.id())
             ));
+        }
+        return entries;
+    }
+
+    /**
+     * The school-wide board, decided by work rather than by account history: every
+     * cleared node's XP, in every course, added up. Each row carries where the XP came
+     * from, so "1200 across three courses" can be read rather than guessed at.
+     */
+    @Transactional(readOnly = true)
+    public List<OverallLeaderboardEntry> overallLeaderboard(AppUserPrincipal principal) {
+        Map<Long, Integer> combinedXp = new HashMap<>();
+        Map<Long, Integer> nodesCleared = new HashMap<>();
+        Map<Long, Map<Long, Integer>> xpByCourse = new HashMap<>();
+        Map<Long, String> courseTitles = new HashMap<>();
+
+        for (UserModuleProgress row : progressRepository.findByStatus(ProgressStatus.COMPLETED)) {
+            Long learnerId = row.getUser().getId();
+            Course course = row.getModule().getCourse();
+            int reward = row.getModule().getXpReward();
+
+            combinedXp.merge(learnerId, reward, Integer::sum);
+            nodesCleared.merge(learnerId, 1, Integer::sum);
+            xpByCourse.computeIfAbsent(learnerId, key -> new HashMap<>())
+                    .merge(course.getId(), reward, Integer::sum);
+            courseTitles.putIfAbsent(course.getId(), course.getTitle());
+        }
+        if (combinedXp.isEmpty()) {
+            return List.of();
+        }
+
+        List<User> learners = userRepository.findAllById(combinedXp.keySet()).stream()
+                .filter(learner -> learner.getRole() == Role.STUDENT)
+                .sorted(Comparator
+                        .comparingInt((User learner) -> combinedXp.getOrDefault(learner.getId(), 0))
+                        .reversed()
+                        .thenComparing(User::getName, String.CASE_INSENSITIVE_ORDER))
+                .limit(10)
+                .toList();
+
+        List<OverallLeaderboardEntry> entries = new ArrayList<>(learners.size());
+        int rank = 1;
+        for (User learner : learners) {
+            Map<Long, Integer> shares = xpByCourse.getOrDefault(learner.getId(), Map.of());
+            List<OverallLeaderboardEntry.CourseXpShare> topCourses = shares.entrySet().stream()
+                    .sorted(Map.Entry.<Long, Integer>comparingByValue().reversed())
+                    .limit(3)
+                    .map(entry -> new OverallLeaderboardEntry.CourseXpShare(
+                            entry.getKey(), courseTitles.get(entry.getKey()), entry.getValue()))
+                    .toList();
+            entries.add(new OverallLeaderboardEntry(
+                    rank++,
+                    learner.getId(),
+                    learner.getName(),
+                    combinedXp.getOrDefault(learner.getId(), 0),
+                    nodesCleared.getOrDefault(learner.getId(), 0),
+                    shares.size(),
+                    learner.getCurrentLevel(),
+                    learner.getStreakDays(),
+                    learner.getId().equals(principal.id()),
+                    topCourses));
         }
         return entries;
     }
