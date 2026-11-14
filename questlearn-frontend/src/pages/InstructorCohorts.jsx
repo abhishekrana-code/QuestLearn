@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, Copy, Plus, Trash2, Users } from 'lucide-react';
+import CohortDeadlineEditor from '../components/studio/CohortDeadlineEditor.jsx';
 import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
@@ -17,6 +18,7 @@ export default function InstructorCohorts() {
   const { courseId } = useParams();
   const [cohorts, setCohorts] = useState([]);
   const [course, setCourse] = useState(null);
+  const [nodes, setNodes] = useState([]);
   const [gatingBusy, setGatingBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -33,12 +35,14 @@ export default function InstructorCohorts() {
     setLoading(true);
     setError(null);
     try {
-      const [cohortResponse, courseResponse] = await Promise.all([
+      const [cohortResponse, courseResponse, treeResponse] = await Promise.all([
         api.get(`/courses/${courseId}/cohorts`),
         api.get(`/courses/${courseId}`),
+        api.get(`/courses/${courseId}/skill-tree`),
       ]);
       setCohorts(cohortResponse.data);
       setCourse(courseResponse.data);
+      setNodes(treeResponse.data.nodes ?? []);
     } catch (loadError) {
       setError(apiError(loadError, 'Could not load the classes for this course.'));
     } finally {
@@ -288,6 +292,13 @@ export default function InstructorCohorts() {
               >
                 <Trash2 size={14} />
               </button>
+
+              <CohortDeadlineEditor
+                courseId={courseId}
+                cohort={cohort}
+                nodes={nodes}
+                onNotice={setNotice}
+              />
             </article>
           ))}
         </div>

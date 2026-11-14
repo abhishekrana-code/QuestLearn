@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Loader2, Save, X } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Loader2, Save, X } from 'lucide-react';
 import api, { apiError } from '../../services/api.js';
+import { fromDateTimeInput, toDateTimeInput } from '../../services/deadlines.js';
 import { EMPTY_LESSON, lessonPayload } from '../../services/lesson.js';
 import LessonEditor from './LessonEditor.jsx';
 
@@ -10,9 +11,10 @@ import LessonEditor from './LessonEditor.jsx';
  *
  * <p>The lesson itself is loaded on open rather than taken from the tree, which
  * only carries the summary. The node's video is left alone - the upload panel
- * owns it, and the API carries it across a lesson save.</p>
+ * owns it, and the API carries it across a lesson save. A deadline is saved
+ * through its own endpoint, and only when the teacher actually changed it.</p>
  */
-export default function NodeEditorDialog({ node, onClose, onSaved }) {
+export default function NodeEditorDialog({ node, courseId, onClose, onSaved }) {
   const [form, setForm] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -30,6 +32,7 @@ export default function NodeEditorDialog({ node, onClose, onSaved }) {
           summary: data.summary ?? '',
           xpReward: data.xpReward ?? 100,
           content: data.content ?? EMPTY_LESSON,
+          dueAt: toDateTimeInput(data.dueAt),
         });
       })
       .catch((loadError) => {
@@ -69,6 +72,17 @@ export default function NodeEditorDialog({ node, onClose, onSaved }) {
         xpReward: Number(form.xpReward),
         content: lessonPayload(form.content),
       });
+
+      const originalDue = toDateTimeInput(node.dueAt);
+      if (form.dueAt !== originalDue) {
+        const dueAt = fromDateTimeInput(form.dueAt);
+        if (dueAt) {
+          await api.put(`/courses/${courseId}/modules/${node.id}/deadline`, { dueAt });
+        } else {
+          await api.delete(`/courses/${courseId}/modules/${node.id}/deadline`);
+        }
+      }
+
       onSaved?.(data);
     } catch (saveError) {
       setError(apiError(saveError, 'Could not save this node.'));
@@ -174,6 +188,40 @@ export default function NodeEditorDialog({ node, onClose, onSaved }) {
                       onChange={(event) => set({ xpReward: event.target.value })}
                     />
                   </div>
+                </div>
+
+                <div className="rounded-lg border border-line bg-muted/30 p-3">
+                  <label
+                    className="label flex items-center gap-1.5"
+                    htmlFor="edit-node-due"
+                  >
+                    <CalendarClock size={12} className="text-gold-text" />
+                    Due date <span className="font-normal text-fg-subtle">(optional)</span>
+                  </label>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <input
+                      id="edit-node-due"
+                      type="datetime-local"
+                      className="field max-w-[220px]"
+                      value={form.dueAt}
+                      onChange={(event) => set({ dueAt: event.target.value })}
+                      disabled={saving}
+                    />
+                    {form.dueAt && (
+                      <button
+                        type="button"
+                        onClick={() => set({ dueAt: '' })}
+                        disabled={saving}
+                        className="btn-ghost h-9 px-3 text-[11px]"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1.5 text-[10.5px] leading-4 text-fg-subtle">
+                    Deadlines are advisory: learners can still finish after this, and late work is
+                    flagged on the roster. Leave it blank for self-paced work.
+                  </p>
                 </div>
 
                 <div className="rounded-lg border border-line bg-muted/30 p-3">

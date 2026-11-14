@@ -12,6 +12,7 @@ import com.questlearn.repository.CourseRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.QuizRepository;
 import com.questlearn.repository.UserRepository;
+import com.questlearn.service.DeadlineReminderService;
 import com.questlearn.service.MailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,14 +29,19 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -82,6 +88,9 @@ class QuestLearnApiIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private DeadlineReminderService deadlineReminderService;
+
     /** Captures raw links instead of sending mail during the suite. */
     @MockitoBean
     private MailService mailService;
@@ -99,8 +108,8 @@ class QuestLearnApiIntegrationTest {
     void seed() throws Exception {
         // The suite owns the whole database, so start from nothing every time.
         jdbc.execute("TRUNCATE TABLE admin_audit_log, cohort_memberships, cohorts, enrollments, "
-                + "email_verification_tokens, password_reset_tokens, module_attempts, "
-                + "user_module_progress, quizzes, modules, "
+                + "email_verification_tokens, deadline_reminders, password_reset_tokens, "
+                + "module_attempts, user_module_progress, quizzes, modules, "
                 + "courses, users RESTART IDENTITY CASCADE");
 
         instructor = users.save(User.builder()
@@ -310,6 +319,31 @@ class QuestLearnApiIntegrationTest {
             }
         }
         throw new AssertionError("No node titled " + title + " in the skill tree");
+    }
+
+    private void enrollInCourse() throws Exception {
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+    }
+
+    private MvcResult putDeadline(String token, long courseId, long moduleId, Instant dueAt)
+            throws Exception {
+        return mvc.perform(put("/api/v1/courses/" + courseId
+                                + "/modules/" + moduleId + "/deadline")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(
+                                java.util.Map.of("dueAt", dueAt.toString()))))
+                .andReturn();
+    }
+
+    private JsonNode deadlineOverview(String token) throws Exception {
+        MvcResult result = mvc.perform(get("/api/v1/me/deadlines")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn();
+        return json.readTree(result.getResponse().getContentAsString());
     }
 
     // ------------------------------------------------------------ registration
@@ -1404,5 +1438,232 @@ class QuestLearnApiIntegrationTest {
         mvc.perform(post("/api/v1/auth/verify-email/resend")
                         .header("Authorization", "Bearer " + session))
                 .andExpect(status().isTooManyRequests());
+    }
+
+    // ------------------------------------------------------------- deadlines
+
+    @Test
+    void theCourseOwnerCanSetMoveAndClearANodeDeadline() throws Exception {
+        String teacherToken = login("teacher@it.test");
+        Instant due = Instant.now().plus(3, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+
+        MvcResult set = putDeadline(teacherToken, course.getId(), root.getId(), due);
+        assertThat(set.getResponse().getStatus()).isEqualTo(200);
+        assertThat(Instant.parse(json.readTree(set.getResponse().getContentAsString())
+                .path("dueAt").asText())).isEqualTo(due);
+
+        JsonNode rootNode = node(skillTree(teacherToken), "Root node");
+        assertThat(Instant.parse(rootNode.path("dueAt").asText())).isEqualTo(due);
+        assertThat(rootNode.path("deadlineState").asText()).isEqualTo("DUE_SOON");
+
+        // Moving it beyond the warning window changes the state everywhere.
+        Instant later = due.plus(10, ChronoUnit.DAYS);
+        assertThat(putDeadline(teacherToken, course.getId(), root.getId(), later)
+                .getResponse().getStatus()).isEqualTo(200);
+        assertThat(node(skillTree(teacherToken), "Root node").path("deadlineState").asText())
+                .isEqualTo("UPCOMING");
+
+        mvc.perform(delete("/api/v1/courses/" + course.getId()
+                                + "/modules/" + root.getId() + "/deadline")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isNoContent());
+
+        JsonNode cleared = node(skillTree(teacherToken), "Root node");
+        // Null fields are omitted from the wire under non_null, so absence is the signal.
+        assertThat(cleared.path("dueAt").isMissingNode()).isTrue();
+        assertThat(cleared.path("deadlineState").isMissingNode()).isTrue();
+        assertThat(modules.findById(root.getId()).orElseThrow().getDueAt()).isNull();
+    }
+
+    @Test
+    void onlyTheCourseOwnerOrAdminCanChangeADeadline() throws Exception {
+        Instant due = Instant.now().plus(2, ChronoUnit.DAYS);
+
+        assertThat(putDeadline(studentToken, course.getId(), root.getId(), due)
+                .getResponse().getStatus()).isEqualTo(403);
+
+        // A node from another course cannot be reached through this course's id.
+        String teacherToken = login("teacher@it.test");
+        assertThat(putDeadline(teacherToken, draft.getId(), root.getId(), due)
+                .getResponse().getStatus()).isEqualTo(404);
+
+        // The registrar may step in for any course.
+        String adminToken = login("admin@it.test");
+        assertThat(putDeadline(adminToken, course.getId(), root.getId(), due)
+                .getResponse().getStatus()).isEqualTo(200);
+        assertThat(modules.findById(root.getId()).orElseThrow().getDueAt()).isNotNull();
+    }
+
+    @Test
+    void theOverviewListsJoinedCoursesSoonestFirst() throws Exception {
+        enrollInCourse();
+        String teacherToken = login("teacher@it.test");
+        putDeadline(teacherToken, course.getId(), root.getId(),
+                Instant.now().plus(3, ChronoUnit.DAYS));
+        putDeadline(teacherToken, course.getId(), child.getId(),
+                Instant.now().plus(10, ChronoUnit.DAYS));
+
+        JsonNode overview = deadlineOverview(studentToken);
+
+        assertThat(overview.path("deadlineEmailsEnabled").asBoolean()).isTrue();
+        assertThat(overview.path("deadlines").size()).isEqualTo(2);
+        assertThat(overview.path("deadlines").get(0).path("moduleTitle").asText())
+                .isEqualTo("Root node");
+        assertThat(overview.path("deadlines").get(0).path("state").asText())
+                .isEqualTo("DUE_SOON");
+        assertThat(overview.path("deadlines").get(1).path("moduleTitle").asText())
+                .isEqualTo("Child node");
+        assertThat(overview.path("deadlines").get(1).path("state").asText())
+                .isEqualTo("UPCOMING");
+
+        // Leaving the course removes its work from the panel.
+        mvc.perform(delete("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isNoContent());
+        assertThat(deadlineOverview(studentToken).path("deadlines").size()).isZero();
+    }
+
+    @Test
+    void completedWorkSortsAfterOpenWork() throws Exception {
+        enrollInCourse();
+        String teacherToken = login("teacher@it.test");
+        putDeadline(teacherToken, course.getId(), root.getId(),
+                Instant.now().plus(3, ChronoUnit.DAYS));
+        putDeadline(teacherToken, course.getId(), child.getId(),
+                Instant.now().plus(1, ChronoUnit.DAYS));
+
+        // Opening the tree creates the progress rows the completion flow uses.
+        skillTree();
+        assertThat(complete(studentToken, root.getId(), 1).getResponse().getStatus())
+                .isEqualTo(200);
+
+        JsonNode overview = deadlineOverview(studentToken);
+
+        assertThat(overview.path("deadlines").size()).isEqualTo(2);
+        assertThat(overview.path("deadlines").get(0).path("moduleTitle").asText())
+                .isEqualTo("Child node");
+        assertThat(overview.path("deadlines").get(0).path("state").asText())
+                .isEqualTo("DUE_SOON");
+        assertThat(overview.path("deadlines").get(1).path("moduleTitle").asText())
+                .isEqualTo("Root node");
+        assertThat(overview.path("deadlines").get(1).path("state").asText())
+                .isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void aDatedNodeStaysPlayableAfterItsDueDateAndIsMarkedLate() throws Exception {
+        enrollInCourse();
+        String teacherToken = login("teacher@it.test");
+        putDeadline(teacherToken, course.getId(), root.getId(),
+                Instant.now().minus(2, ChronoUnit.HOURS));
+
+        // Advisory deadlines never block the work.
+        skillTree();
+        assertThat(complete(studentToken, root.getId(), 1).getResponse().getStatus())
+                .isEqualTo(200);
+
+        JsonNode rootNode = node(skillTree(), "Root node");
+        assertThat(rootNode.path("status").asText()).isEqualTo("COMPLETED");
+        assertThat(rootNode.path("deadlineState").asText()).isEqualTo("COMPLETED_LATE");
+
+        JsonNode overview = deadlineOverview(studentToken);
+        assertThat(overview.path("deadlines").get(0).path("state").asText())
+                .isEqualTo("COMPLETED_LATE");
+        assertThat(overview.path("deadlines").get(0).path("completedAt").isTextual()).isTrue();
+
+        // The briefing shows the same verdict as the tree and the panel.
+        mvc.perform(get("/api/v1/modules/" + root.getId())
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deadlineState").value("COMPLETED_LATE"));
+    }
+
+    @Test
+    void theDigestEmailsEachFreshReminderOnce() throws Exception {
+        when(mailService.sendDeadlineDigest(any(User.class), any())).thenReturn(true);
+        enrollInCourse();
+        String teacherToken = login("teacher@it.test");
+        putDeadline(teacherToken, course.getId(), root.getId(),
+                Instant.now().plus(2, ChronoUnit.DAYS));
+
+        DeadlineReminderService.ReminderRun first = deadlineReminderService.sendDueReminders();
+        assertThat(first.learnersEmailed()).isEqualTo(1);
+        assertThat(first.remindersRecorded()).isEqualTo(1);
+        verify(mailService).sendDeadlineDigest(any(User.class), any());
+
+        // A second run the same day must not repeat the message.
+        DeadlineReminderService.ReminderRun second = deadlineReminderService.sendDueReminders();
+        assertThat(second.learnersEmailed()).isZero();
+        assertThat(second.remindersRecorded()).isZero();
+        verify(mailService).sendDeadlineDigest(any(User.class), any());
+
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM deadline_reminders", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void aFailedDigestIsRetriedInsteadOfBeingMarkedSent() throws Exception {
+        when(mailService.sendDeadlineDigest(any(User.class), any())).thenReturn(false);
+        enrollInCourse();
+        String teacherToken = login("teacher@it.test");
+        putDeadline(teacherToken, course.getId(), root.getId(),
+                Instant.now().plus(2, ChronoUnit.DAYS));
+
+        DeadlineReminderService.ReminderRun failed = deadlineReminderService.sendDueReminders();
+        assertThat(failed.learnersEmailed()).isZero();
+        assertThat(failed.remindersRecorded()).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM deadline_reminders", Integer.class)).isZero();
+
+        when(mailService.sendDeadlineDigest(any(User.class), any())).thenReturn(true);
+        DeadlineReminderService.ReminderRun retried = deadlineReminderService.sendDueReminders();
+        assertThat(retried.learnersEmailed()).isEqualTo(1);
+        assertThat(retried.remindersRecorded()).isEqualTo(1);
+    }
+
+    @Test
+    void turningDeadlineEmailsOffStopsTheDigest() throws Exception {
+        when(mailService.sendDeadlineDigest(any(User.class), any())).thenReturn(true);
+        enrollInCourse();
+        String teacherToken = login("teacher@it.test");
+        putDeadline(teacherToken, course.getId(), root.getId(),
+                Instant.now().plus(2, ChronoUnit.DAYS));
+
+        mvc.perform(patch("/api/v1/auth/notification-preferences")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(
+                                java.util.Map.of("deadlineEmails", false))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.notifyDeadlines").value(false));
+
+        assertThat(deadlineReminderService.sendDueReminders().learnersEmailed()).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM deadline_reminders", Integer.class)).isZero();
+        assertThat(deadlineOverview(studentToken).path("deadlineEmailsEnabled").asBoolean())
+                .isFalse();
+
+        mvc.perform(patch("/api/v1/auth/notification-preferences")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(
+                                java.util.Map.of("deadlineEmails", true))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.notifyDeadlines").value(true));
+
+        assertThat(deadlineReminderService.sendDueReminders().learnersEmailed()).isEqualTo(1);
+    }
+
+    @Test
+    void anOverdueNodeIsRemindedAsOverdue() throws Exception {
+        when(mailService.sendDeadlineDigest(any(User.class), any())).thenReturn(true);
+        enrollInCourse();
+        String teacherToken = login("teacher@it.test");
+        putDeadline(teacherToken, course.getId(), root.getId(),
+                Instant.now().minus(1, ChronoUnit.DAYS));
+
+        assertThat(deadlineReminderService.sendDueReminders().remindersRecorded()).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT kind FROM deadline_reminders", String.class)).isEqualTo("OVERDUE");
     }
 }

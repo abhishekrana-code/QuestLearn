@@ -4,6 +4,7 @@ import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.AuthResponse;
 import com.questlearn.dto.ChangePasswordRequest;
 import com.questlearn.dto.LoginRequest;
+import com.questlearn.dto.NotificationPreferenceRequest;
 import com.questlearn.dto.PasswordResetConfirmRequest;
 import com.questlearn.dto.PasswordResetRequest;
 import com.questlearn.dto.RegisterRequest;
@@ -110,5 +111,13 @@ public class AuthController {
     public AuthResponse changePassword(@Valid @RequestBody ChangePasswordRequest request,
                                        @AuthenticationPrincipal AppUserPrincipal principal) {
         return authService.changePassword(principal, request);
+    }
+
+    @PatchMapping("/notification-preferences")
+    @Operation(summary = "Turn the daily deadline digest on or off for your own account")
+    public UserDto updateNotificationPreferences(
+            @Valid @RequestBody NotificationPreferenceRequest request,
+            @AuthenticationPrincipal AppUserPrincipal principal) {
+        return authService.setDeadlineEmails(principal, request.deadlineEmails());
     }
 }

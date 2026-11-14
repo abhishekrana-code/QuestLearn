@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, BookOpen, Check, Compass, Crown, Layers, Sparkles, Trophy, Zap } from 'lucide-react';
 import EmailVerificationBanner from '../components/common/EmailVerificationBanner.jsx';
+import DeadlinePanel from '../components/deadlines/DeadlinePanel.jsx';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import StreakCounter from '../components/gamification/StreakCounter.jsx';
@@ -16,6 +17,7 @@ export default function StudentDashboard() {
   const { totalXp, currentLevel } = useGamification();
   const [courses, setCourses] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [deadlineOverview, setDeadlineOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -23,12 +25,15 @@ export default function StudentDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [courseResponse, leaderboardResponse] = await Promise.all([
+      const [courseResponse, leaderboardResponse, deadlineResponse] = await Promise.all([
         api.get('/courses'),
         api.get('/leaderboard'),
+        // Deadlines are supplementary: their failure must not blank the dashboard.
+        api.get('/me/deadlines').catch(() => ({ data: null })),
       ]);
       setCourses(courseResponse.data);
       setLeaderboard(leaderboardResponse.data.slice(0, 5));
+      setDeadlineOverview(deadlineResponse.data);
     } catch (loadError) {
       setError(apiError(loadError, 'Could not load your dashboard.'));
     } finally {
@@ -232,7 +237,7 @@ export default function StudentDashboard() {
               {[
                 'Every node shows its XP reward before you open it.',
                 'Quiz answers are scored on the server before XP is awarded.',
-                'Level = ⌊0.1 × √XP⌋ + 1 — there is no cap.',
+                'Level = ⌊0.1 × √XP⌋ + 1. There is no cap.',
                 'Completing any node keeps your daily streak alive.',
               ].map((tip) => (
                 <li
@@ -248,6 +253,8 @@ export default function StudentDashboard() {
         </section>
 
         <aside className="space-y-4">
+          <DeadlinePanel overview={deadlineOverview} onChange={setDeadlineOverview} />
+
           <div className="panel p-5">
             <div className="mb-4 flex items-center justify-between gap-2">
               <h2 className="flex items-center gap-2 text-[14px] font-semibold text-foreground">

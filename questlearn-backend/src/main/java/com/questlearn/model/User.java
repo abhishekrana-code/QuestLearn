@@ -69,6 +69,14 @@ public class User {
     @Column(nullable = false)
     private boolean emailVerified;
 
+    /**
+     * Whether the daily deadline digest may be emailed to this account. On by
+     * default; a learner turns it off from the dashboard.
+     */
+    @Column(name = "notify_deadlines", nullable = false)
+    @Builder.Default
+    private boolean notifyDeadlines = true;
+
     private LocalDate lastActivityDate;
 
     @Column(nullable = false)

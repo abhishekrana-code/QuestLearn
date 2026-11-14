@@ -1,5 +1,6 @@
 import { useAnimationControls, motion } from 'framer-motion';
 import { Brain, Check, Code2, Lock, Play, Shapes } from 'lucide-react';
+import { deadlineHint } from '../../services/deadlines.js';
 
 const QUIZ_ICON = {
   MULTIPLE_CHOICE: Brain,
@@ -14,6 +15,7 @@ export default function SkillNode({ node, x, y, active, onSelect, onLockedClick 
   const locked = node.status === 'LOCKED';
   const completed = node.status === 'COMPLETED';
   const QuizIcon = node.quizType ? QUIZ_ICON[node.quizType] : null;
+  const hint = deadlineHint(node.deadlineState);
 
   const handleClick = () => {
     if (locked) {
@@ -86,6 +88,13 @@ export default function SkillNode({ node, x, y, active, onSelect, onLockedClick 
         <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-gold-text">
           +{node.xpReward} XP
         </p>
+        {hint && (
+          <p
+            className={`mt-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] ${hint.tone}`}
+          >
+            {hint.label}
+          </p>
+        )}
         {locked && (
           <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-fg-subtle">Locked</p>
         )}

@@ -123,6 +123,13 @@ public class AuthService {
         return toAuthResponse(user);
     }
 
+    @Transactional
+    public UserDto setDeadlineEmails(AppUserPrincipal principal, boolean enabled) {
+        User user = loadUser(principal.id());
+        user.setNotifyDeadlines(enabled);
+        return DtoMapper.toUserDto(userRepository.save(user));
+    }
+
     @Transactional(readOnly = true)
     public UserDto currentUser(AppUserPrincipal principal) {
         return DtoMapper.toUserDto(loadUser(principal.id()));

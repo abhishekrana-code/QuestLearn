@@ -25,6 +25,7 @@ import { generateCourse as requestGeneratedCourse, getAiStatus } from '../servic
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import EmailVerificationBanner from '../components/common/EmailVerificationBanner.jsx';
 import api, { apiError } from '../services/api.js';
+import { formatDeadline } from '../services/deadlines.js';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import { EMPTY_LESSON, lessonPayload } from '../services/lesson.js';
 
@@ -798,7 +799,7 @@ export default function InstructorStudio() {
                         setModuleForm({ ...moduleForm, parentModuleId: event.target.value })
                       }
                     >
-                      <option value="">— Root node (no prerequisite) —</option>
+                      <option value="">Root node (no prerequisite)</option>
                       {nodes.map((node) => (
                         <option key={node.id} value={node.id}>
                           {node.title}
@@ -885,6 +886,7 @@ export default function InstructorStudio() {
                         <tr>
                           <th className="pb-2 pr-3 font-semibold">Node</th>
                           <th className="pb-2 pr-3 font-semibold">Prerequisite</th>
+                          <th className="pb-2 pr-3 font-semibold">Due</th>
                           <th className="pb-2 pr-3 font-semibold">Pos</th>
                           <th className="pb-2 pr-3 font-semibold">XP</th>
                           <th className="pb-2 pr-3 font-semibold">Quiz</th>
@@ -897,7 +899,14 @@ export default function InstructorStudio() {
                             <td className="py-2 pr-3 font-medium text-foreground">{node.title}</td>
                             <td className="py-2 pr-3 text-fg-muted">
                               {nodes.find((candidate) => candidate.id === node.parentId)?.title ??
-                                '—'}
+                                'None'}
+                            </td>
+                            <td className="py-2 pr-3 text-fg-muted">
+                              {node.dueAt ? (
+                                formatDeadline(node.dueAt)
+                              ) : (
+                                <span className="text-fg-subtle">Self-paced</span>
+                              )}
                             </td>
                             <td className="py-2 pr-3 tabular-nums text-fg-subtle">
                               {node.positionX},{node.positionY}
@@ -1021,7 +1030,7 @@ export default function InstructorStudio() {
                 <h3 className="text-sm font-semibold text-foreground">Quiz coverage</h3>
                 {nodes.length === 0 ? (
                   <p className="mt-2 text-xs text-fg-subtle">
-                    Add nodes first — a quiz belongs to one node.
+                    Add nodes first: a quiz belongs to one node.
                   </p>
                 ) : (
                   <ul className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1179,6 +1188,7 @@ export default function InstructorStudio() {
       {editingNode && (
         <NodeEditorDialog
           node={editingNode}
+          courseId={selectedCourse?.id}
           onClose={() => setEditingNode(null)}
           onSaved={saveNodeEdits}
         />

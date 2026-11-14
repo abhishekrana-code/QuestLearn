@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeft,
   BookOpen,
+  CalendarClock,
   CheckCircle2,
   Crown,
   ExternalLink,
@@ -25,6 +26,7 @@ import VoiceVivaDialog from '../components/viva/VoiceVivaDialog.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useGamification } from '../context/GamificationContext.jsx';
 import api, { apiError } from '../services/api.js';
+import { deadlineStateMeta, formatDeadline } from '../services/deadlines.js';
 import { isPlayableVideo, getYouTubeEmbedUrl, getVimeoEmbedUrl } from '../services/media.js';
 
 const STATUS_STYLE = {
@@ -238,7 +240,7 @@ export default function SkillTreePage() {
           <p className="text-[13px] font-medium text-danger">{error}</p>
           <p className="mt-2 text-[11px] text-fg-muted">
             {retryPaused
-              ? 'Automatic retries paused — use Try again when the server is back.'
+              ? 'Automatic retries paused. Use Try again when the server is back.'
               : 'Trying again automatically…'}
           </p>
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
@@ -354,7 +356,7 @@ export default function SkillTreePage() {
 
         {isPreview && (
           <p className="mt-4 rounded-xl border border-arcane/25 bg-arcane/[0.06] px-3.5 py-2 text-[11px] leading-5 text-arcane-text">
-            Instructor preview — you can play the quizzes, but XP and progress are only recorded for
+            Instructor preview: you can play the quizzes, but XP and progress are only recorded for
             students.
           </p>
         )}
@@ -476,6 +478,17 @@ export default function SkillTreePage() {
                         {detail.score}% scored
                       </span>
                     )}
+                    {detail.deadlineState &&
+                      (() => {
+                        const meta = deadlineStateMeta(detail.deadlineState);
+                        if (!meta) return null;
+                        return (
+                          <span className={`chip ${meta.chip}`}>
+                            <CalendarClock size={11} /> {meta.label} ·{' '}
+                            {formatDeadline(detail.dueAt)}
+                          </span>
+                        );
+                      })()}
                   </div>
 
                   <h3 className="mt-3 font-display text-[19px] font-semibold leading-snug tracking-[-0.03em] text-foreground">
@@ -588,7 +601,7 @@ export default function SkillTreePage() {
                         </div>
                       ) : (
                         <div className="mt-5 rounded-xl border border-line bg-muted/40 p-4 text-center text-[11.5px] leading-5 text-fg-muted">
-                          No assessment attached — this node completes without a quiz.
+                          No assessment attached: this node completes without a quiz.
                           {detail.status === 'UNLOCKED' && !isPreview && (
                             <button
                               type="button"

@@ -1,5 +1,6 @@
 package com.questlearn.service;
 
+import com.questlearn.dto.DeadlineDigestItem;
 import com.questlearn.email.EmailMessage;
 import com.questlearn.email.EmailSender;
 import com.questlearn.model.User;
@@ -9,6 +10,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 /**
  * The one place that writes and sends QuestLearn's transactional email.
@@ -83,16 +87,79 @@ public class MailService {
     }
 
     private void send(User user, String subject, String text, String html) {
+        sendQuietly(user, subject, text, html);
+    }
+
+    /**
+     * Sends the daily list of soon-or-overdue nodes.
+     *
+     * <p>Returns false when the transport failed, so the caller can leave the
+     * reminder unrecorded and try again on the next run. The log fallback counts
+     * as delivered: on a demo machine the digest is simply written to the server
+     * log like every other message.</p>
+     */
+    public boolean sendDeadlineDigest(User user, List<DeadlineDigestItem> items) {
+        if (items.isEmpty()) {
+            return true;
+        }
+        long overdue = items.stream().filter(DeadlineDigestItem::overdue).count();
+        String subject = overdue > 0
+                ? overdue + (overdue == 1 ? " overdue task" : " overdue tasks")
+                        + " and " + items.size() + " deadline" + (items.size() == 1 ? "" : "s")
+                        + " in QuestLearn"
+                : items.size() + " deadline" + (items.size() == 1 ? "" : "s")
+                        + " coming up in QuestLearn";
+
+        StringBuilder text = new StringBuilder();
+        text.append("Hi ").append(user.getName()).append(",\n\n")
+                .append("Here is what needs your attention in QuestLearn:\n\n");
+        for (DeadlineDigestItem item : items) {
+            text.append(item.overdue() ? "[OVERDUE] " : "[DUE SOON] ")
+                    .append(item.courseTitle()).append(" - ").append(item.moduleTitle())
+                    .append("\n           due ").append(formatDue(item.dueAt()))
+                    .append("\n           ").append(appBaseUrl).append("/courses/")
+                    .append(item.courseId()).append("\n\n");
+        }
+        text.append("You can turn these reminders off from the deadline panel on your ")
+                .append("QuestLearn dashboard.\n\nQuestLearn\n");
+
+        StringBuilder html = new StringBuilder();
+        html.append("<p>Hi ").append(escape(user.getName())).append(",</p>")
+                .append("<p>Here is what needs your attention in QuestLearn:</p><ul>");
+        for (DeadlineDigestItem item : items) {
+            html.append("<li><strong>")
+                    .append(item.overdue() ? "Overdue: " : "Due soon: ")
+                    .append(escape(item.courseTitle())).append(" - ")
+                    .append(escape(item.moduleTitle())).append("</strong><br>")
+                    .append("due ").append(escape(formatDue(item.dueAt()))).append(" &middot; ")
+                    .append("<a href=\"").append(appBaseUrl).append("/courses/")
+                    .append(item.courseId()).append("\">Open the course</a></li>");
+        }
+        html.append("</ul><p style=\"color:#666;font-size:13px\">You can turn these reminders off ")
+                .append("from the deadline panel on your QuestLearn dashboard.</p><p>QuestLearn</p>");
+
+        return sendQuietly(user, subject, text.toString(), html.toString());
+    }
+
+    private static String formatDue(java.time.Instant dueAt) {
+        return DateTimeFormatter.ofPattern("EEE d MMM yyyy, HH:mm 'UTC'")
+                .withZone(ZoneOffset.UTC)
+                .format(dueAt);
+    }
+
+    private boolean sendQuietly(User user, String subject, String text, String html) {
         EmailMessage message = new EmailMessage(fromAddress, user.getEmail(), subject, text, html);
         try {
             sender.send(message);
             if (sender.isDeliveryConfigured()) {
                 log.info("Email '{}' sent to {}.", subject, user.getEmail());
             }
+            return true;
         } catch (RuntimeException ex) {
             // Never surface delivery problems to the caller: an anonymous reset
             // request must not learn whether an address exists or a provider is down.
             log.error("Could not send '{}' to {}: {}", subject, user.getEmail(), ex.getMessage());
+            return false;
         }
     }
 

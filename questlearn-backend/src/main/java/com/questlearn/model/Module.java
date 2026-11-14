@@ -20,6 +20,8 @@ import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.time.Instant;
+
 /**
  * A single node on the course skill tree. {@code content} is stored as JSONB so
  * instructors can attach lesson blocks of any shape without migrations.
@@ -60,6 +62,16 @@ public class Module {
 
     @Column(nullable = false)
     private int orderIndex;
+
+    /**
+     * When the node is due, or null for self-paced work.
+     *
+     * <p>The deadline is advisory: the node stays open and playable afterwards,
+     * and a completion after this instant is simply recorded as late. That keeps
+     * a mail outage, a sick day or a clock mistake from locking a class out.</p>
+     */
+    @Column(name = "due_at")
+    private Instant dueAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_id", nullable = false)

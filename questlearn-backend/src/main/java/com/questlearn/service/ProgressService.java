@@ -50,6 +50,8 @@ public class ProgressService {
     private final QuizService quizService;
     private final GamificationService gamificationService;
     private final CourseService courseService;
+    private final DeadlineStateResolver deadlineStateResolver;
+    private final EffectiveDeadlines effectiveDeadlines;
     private final com.questlearn.repository.CohortRepository cohortRepository;
     private final com.questlearn.repository.CohortMembershipRepository cohortMembershipRepository;
 
@@ -68,6 +70,7 @@ public class ProgressService {
                 .orElseThrow(() -> ApiException.unauthorized("Account no longer exists"));
 
         List<Module> modules = moduleRepository.findByCourseIdOrderByOrderIndexAsc(courseId);
+        Map<Long, Instant> overrides = effectiveDeadlines.overridesFor(user.getId(), List.of(courseId));
         Map<Long, UserModuleProgress> progressByModule = new HashMap<>();
 
         if (tracksProgress) {
@@ -100,6 +103,7 @@ public class ProgressService {
             if (status == ProgressStatus.COMPLETED) {
                 completed++;
             }
+            Instant effectiveDueAt = effectiveDeadlines.dueAt(module, overrides);
             nodes.add(new SkillNodeDto(
                     module.getId(),
                     module.getTitle(),
@@ -114,7 +118,10 @@ public class ProgressService {
                     progress == null ? 0 : progress.getAttempts(),
                     module.getQuiz() == null ? null : module.getQuiz().getType(),
                     videoField(module, "videoUrl"),
-                    videoField(module, "videoLabel")
+                    videoField(module, "videoLabel"),
+                    effectiveDueAt,
+                    deadlineStateResolver.resolve(
+                            effectiveDueAt, progress == null ? null : progress.getCompletedAt())
             ));
         }
 
@@ -141,6 +148,7 @@ public class ProgressService {
         ProgressStatus status = ProgressStatus.UNLOCKED;
         int score = 0;
         int attempts = 0;
+        Instant completedAt = null;
         List<AttemptDto> history = List.of();
 
         if (principal.role() != Role.INSTRUCTOR) {
@@ -151,6 +159,7 @@ public class ProgressService {
                 status = progress.getStatus();
                 score = progress.getScore();
                 attempts = progress.getAttempts();
+                completedAt = progress.getCompletedAt();
             } else if (module.getParentModule() != null) {
                 status = ProgressStatus.LOCKED;
             }
@@ -168,6 +177,9 @@ public class ProgressService {
 
         Quiz quiz = module.getQuiz();
 
+        Instant effectiveDueAt = effectiveDeadlines
+                .dueAt(module, effectiveDeadlines.overridesFor(principal.id(), List.of(module.getCourse().getId())));
+
         return new ModuleDetailDto(
                 module.getId(),
                 module.getCourse().getId(),
@@ -181,7 +193,9 @@ public class ProgressService {
                 attempts,
                 quizService.sanitize(quiz),
                 VivaConfig.forModule(module),
-                history
+                history,
+                effectiveDueAt,
+                deadlineStateResolver.resolve(effectiveDueAt, completedAt)
         );
     }
 

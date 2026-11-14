@@ -33,7 +33,7 @@ upgrades. Those are Phase 3 and Phase 5 below.
 
 ---
 
-## Phase 1: Accessibility and data-policy closure (current)
+## Phase 1: Accessibility and data-policy closure (done, `97ce54d`)
 
 **Why:** the audit asks for an accessibility statement and a documented retention
 policy; neither exists. A skip link is also missing, and the landing page nests a
@@ -55,15 +55,22 @@ content" control; a single `main` landmark exists; `/accessibility` renders and 
 reachable from the footer; the retention table is in `DEPLOY.md`; build and unit tests
 pass.
 
-## Phase 2: Per-class deadline overrides
+## Phase 2: Per-class deadline overrides (done, uncommitted)
 
 **Why:** the current audit lists it as the one gap in classroom operations. A deadline
-belongs to a node and applies to every class taking the course.
-**Scope:** `cohort_deadlines` table (cohort, node, due date), resolver takes the class
-context, `GET /me/deadlines` resolves per class, studio edit surface, tests for
-override precedence and clearing an override. **Done when:** two classes on one course
-show different due dates for the same node, and removing the override falls back to the
-node's date.
+belonged to a node and applied to every class taking the course.
+
+**Built:** `V12__cohort_deadlines.sql` and `CohortDeadline`, resolved through one
+`EffectiveDeadlines` component that the dashboard, the skill tree, the node briefing and
+the digest all share. A learner in two classes of one course gets the earlier override.
+Instructor endpoints under `/courses/{courseId}/cohorts/{cohortId}/modules/{moduleId}/deadline`,
+plus a collapsed **Class due dates** editor on the classes page.
+
+**Verified:** `EffectiveDeadlinesTest` (6 tests: fallback, override wins, only own
+classes, earlier date wins, no class, empty course list) and a 14-step live run against
+the API: node date → learner outside the class unaffected → join → override wins on the
+dashboard, skill tree and briefing → class lists its override → a learner gets 403 →
+clearing falls back to the node date → seeded state restored.
 
 ## Phase 3: Object storage for lesson video
 

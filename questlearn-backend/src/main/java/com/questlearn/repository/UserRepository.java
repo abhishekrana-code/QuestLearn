@@ -22,5 +22,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findTop10ByRoleOrderByTotalXpDesc(Role role);
 
+    /** Learners who still want the deadline digest. */
+    List<User> findByRoleAndNotifyDeadlinesTrue(Role role);
+
     long countByRole(Role role);
 }

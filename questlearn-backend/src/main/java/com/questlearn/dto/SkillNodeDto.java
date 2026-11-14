@@ -1,7 +1,10 @@
 package com.questlearn.dto;
 
+import com.questlearn.model.DeadlineState;
 import com.questlearn.model.ProgressStatus;
 import com.questlearn.model.QuizType;
+
+import java.time.Instant;
 
 public record SkillNodeDto(
         Long id,
@@ -19,6 +22,10 @@ public record SkillNodeDto(
         QuizType quizType,
         /** Lesson video attached to this node, null when it has none. */
         String videoUrl,
-        String videoLabel
+        String videoLabel,
+        /** When this node is due, or null when it is self-paced. */
+        Instant dueAt,
+        /** How the deadline reads for this learner, null when there is none. */
+        DeadlineState deadlineState
 ) {
 }
