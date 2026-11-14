@@ -1,4 +1,4 @@
-# QuestLearn — Warm Editorial Redesign
+# QuestLearn: Warm Editorial Redesign
 
 Working plan for the frontend refresh inspired by <https://www.studley.ai/>.
 
@@ -110,7 +110,7 @@ Rules:
 
 ### Public
 
-1. **`/` landing** — new public page for signed-out visitors.
+1. **`/` landing**: new public page for signed-out visitors.
    - 64px header: logo, section links, Sign in, Get started.
    - Editorial hero: oversized headline, one warm paragraph, two CTAs, product
      mock built from real UI shapes (skill nodes, score card, streak chip).
@@ -118,24 +118,24 @@ Rules:
      "how it works", orange final CTA, footer.
    - Signed-in visitors still redirect by role, exactly as before.
 
-2. **`/login`** — split screen. Editorial left panel, white form card right.
+2. **`/login`**: split screen. Editorial left panel, white form card right.
    Demo account shortcuts stay.
 
-3. **`/register`** — same shell, longer form, role cards, invite-code help.
+3. **`/register`**: same shell, longer form, role cards, invite-code help.
 
 ### App
 
-4. **Dashboard** — greeting header, XP / streak / cleared-node stat row, course
+4. **Dashboard**: greeting header, XP / streak / cleared-node stat row, course
    cards with progress, compact leaderboard, "how XP works" aside.
-5. **Explore** — catalogue header, white filter bar, teacher groups, course cards,
+5. **Explore**: catalogue header, white filter bar, teacher groups, course cards,
    expandable skill tree, active filter chips.
-6. **Skill tree** — course header, progress, jump chips, canvas, right-hand
+6. **Skill tree**: course header, progress, jump chips, canvas, right-hand
    briefing panel with lesson, quiz, viva, history.
-7. **Leaderboard** — top-three podium, remaining ranked rows, current-user accent.
-8. **Performance** — stat cards, overall completion, focus-next list, subject
+7. **Leaderboard**: top-three podium, remaining ranked rows, current-user accent.
+8. **Performance**: stat cards, overall completion, focus-next list, subject
    accordions.
-9. **NotFound** — plain, helpful, on-brand.
-10. **Instructor / admin** — inherit the token system; hardcoded dark classes are
+9. **NotFound**: plain, helpful, on-brand.
+10. **Instructor / admin**: inherit the token system; hardcoded dark classes are
     bridged so they remain readable while their bespoke layouts are left intact.
 
 ---
@@ -144,15 +144,15 @@ Rules:
 
 Defined in `src/index.css`:
 
-- `.panel` — white, 20px radius, 1px warm border, 1–2px shadow.
-- `.panel-raised` — same with a stronger card shadow for auth and hero cards.
-- `.btn`, `.btn-primary`, `.btn-ghost`, `.btn-danger` — 44–48px tall, 12px
+- `.panel`, white, 20px radius, 1px warm border, 1–2px shadow.
+- `.panel-raised`, same with a stronger card shadow for auth and hero cards.
+- `.btn`, `.btn-primary`, `.btn-ghost`, `.btn-danger`, 44–48px tall, 12px
   radius, tactile primary with a 3px shade edge.
-- `.field` — white, 12px radius, warm border, 3px orange focus ring.
-- `.chip` — warm tint, pill, 11px semibold, sentence-case.
-- `.eyebrow` — 11px semibold, muted, wide tracking.
+- `.field`, white, 12px radius, warm border, 3px orange focus ring.
+- `.chip`, warm tint, pill, 11px semibold, sentence-case.
+- `.eyebrow`, 11px semibold, muted, wide tracking.
 - `.page-title`, `.page-subtitle`, `.stat-value`, `.label`.
-- `.grid-floor` — faint warm grid for the skill-tree canvas.
+- `.grid-floor`, faint warm grid for the skill-tree canvas.
 
 ## 6. Navigation behaviour
 

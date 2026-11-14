@@ -47,7 +47,7 @@ export default function EmailVerificationBanner({ className = '' }) {
         <p className="text-[12px] font-semibold text-foreground">Confirm your email address</p>
         <p className="mt-0.5 text-[11px] leading-5 text-fg-muted">
           We sent a link to <span className="font-semibold text-foreground">{user.email}</span>.
-          Your courses, XP and streak are unaffected — confirming just proves the address is yours.
+          Your courses, XP and streak are unaffected; confirming just proves the address is yours.
         </p>
         {error && <p className="mt-1.5 text-[11px] leading-5 text-danger">{error}</p>}
         {sent && (

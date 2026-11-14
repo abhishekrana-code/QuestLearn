@@ -67,7 +67,7 @@ function emailsFromCsv(text) {
 }
 
 function shortDate(iso) {
-  if (!iso) return '—';
+  if (!iso) return 'Not set';
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
@@ -87,10 +87,10 @@ function NodePill({ node }) {
       className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-medium ${chip}`}
       title={
         node.status === 'COMPLETED'
-          ? `${node.title} — cleared ${shortDate(node.completedAt)} with ${node.score}% after ${node.attempts} ${
+          ? `${node.title}, cleared ${shortDate(node.completedAt)} with ${node.score}% after ${node.attempts} ${
               node.attempts === 1 ? 'try' : 'tries'
             }`
-          : `${node.title} — ${label.toLowerCase()} for this learner`
+          : `${node.title}, ${label.toLowerCase()} for this learner`
       }
     >
       <Icon size={11} />
@@ -260,7 +260,7 @@ export default function CourseRoster() {
 
   const learners = roster?.learners ?? [];
   // The nodes come from the roster itself, so the picker survives a filter that
-  // matches nobody — otherwise the only control that could undo it would vanish.
+  // matches nobody, otherwise the only control that could undo it would vanish.
   const nodes = roster?.nodes ?? [];
   const filtered = Boolean(nodeFilter || cohortFilter);
   const averageCleared =
@@ -411,7 +411,7 @@ export default function CourseRoster() {
                 Paste a column of email addresses, or a spreadsheet export with a name and an email
                 column. Only existing student accounts are enrolled; addresses that belong to nobody
                 are listed back so you can chase them
-                {cohortFilter ? ' — they join the selected class too' : ''}.
+                {cohortFilter ? ', and they join the selected class too' : ''}.
               </p>
               <textarea
                 className="field mt-2 h-28 w-full font-mono text-[11px]"

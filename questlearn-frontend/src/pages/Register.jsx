@@ -48,7 +48,7 @@ function RegisterAside() {
       </h1>
       <p className="mt-4 max-w-md text-[14px] leading-7 text-fg-muted">
         Students join a class with a code. Instructors join with an invite from an admin. Either way,
-        your first screen is a path — not an empty dashboard.
+        your first screen is a path, not an empty dashboard.
       </p>
 
       <div className="mt-8 rounded-[20px] border border-line bg-card p-5 shadow-card">

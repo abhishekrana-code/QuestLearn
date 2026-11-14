@@ -71,7 +71,7 @@ sudo systemctl status questlearn --no-pager
 curl -s localhost:8080/actuator/health          # {"status":"UP"}
 ```
 
-`JWT_SECRET` and `CORS_ORIGINS` have **no defaults in the prod profile** — the app
+`JWT_SECRET` and `CORS_ORIGINS` have **no defaults in the prod profile**: the app
 refuses to start without them, which is intentional. Generate the secret with
 `openssl rand -base64 48`.
 
@@ -107,9 +107,25 @@ VERIFICATION_MAX_PER_HOUR=3
 SMTP when `MAIL_HOST` is set, and the log otherwise. Naming a provider without its
 settings stops the app at startup instead of swallowing mail.
 
+Deadline reminders reuse the same transport but are **off by default**. Turn them on
+once recovery and confirmation mail is working:
+
+```bash
+NOTIFICATIONS_ENABLED=true
+NOTIFICATIONS_CRON=0 0 7 * * *          # UTC; adjust for your school's morning
+NOTIFICATIONS_DUE_SOON_DAYS=7           # the warning window on every screen
+NOTIFICATIONS_RETENTION_DAYS=120        # how long the reminder ledger is kept
+```
+
+The job sends at most one digest per learner per day, covering every unfinished node
+that is due soon or overdue. Overdue work is listed first. A learner can opt out from
+the deadline panel on their dashboard, and a failed send is retried on the next run
+rather than marked delivered.
+
 While mail is unconfigured, `sudo journalctl -u questlearn | grep 'email not sent'`
 shows the latest link. Once it is configured, check the log for
-`Email 'Confirm your QuestLearn email address' sent to …` after a test sign-up.
+`Email 'Confirm your QuestLearn email address' sent to …` after a test sign-up, and
+`Deadline digest run: N learner(s) emailed` after a scheduled run.
 
 Address confirmation is soft: an unconfirmed account keeps full access and sees only
 a dashboard reminder. Accounts that predate this feature were migrated as verified.
@@ -184,7 +200,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://questlearn.example.com/   # 200
 curl -s -o /dev/null -w '%{http_code}\n' https://questlearn.example.com/api/v1/courses  # 401
 ```
 
-Sign in as an admin, open **War room**, and confirm the account list loads — that
+Sign in as an admin, open **War room**, and confirm the account list loads, that
 proves browser → nginx → Spring → PostgreSQL end to end.
 
 ---
@@ -234,7 +250,9 @@ fails, the old jar plus the previous dump gets you back.
 |---|---|
 | Student forgot their password | Ask them to use **Forgot your password?** on the sign-in page; the link expires in 30 minutes and works once. If mail is not configured or they cannot receive it, War room → **Reset** next to the account and read the one-time temporary password to them. Both paths revoke every session that account had. |
 | A student sees "Confirm your email address" | Expected until they open the link; nothing is blocked. Ask them to press **Resend link** on the dashboard, or check `journalctl -u questlearn | grep 'email not sent'` when no provider is configured. |
-| Student wants to retake a node | Nothing to do — completed nodes are replayable and keep the best score, with no extra XP. |
+| A learner is not getting deadline emails | Check that they did not turn the digest off in the dashboard deadline panel, that `NOTIFICATIONS_ENABLED=true`, and that `NOTIFICATIONS_CRON` is set for the school's morning (it is UTC). `journalctl -u questlearn | grep 'Deadline digest run'` shows each run, and a failed send is retried the next day. |
+| A learner finished after the due date | Expected: deadlines are advisory. The node is complete and marked `COMPLETED_LATE`; the roster and dashboard show the late state rather than blocking the work. |
+| Student wants to retake a node | Nothing to do, completed nodes are replayable and keep the best score, with no extra XP. |
 | A node shows as completed but the score is wrong | `DELETE /api/v1/admin/users/{userId}/modules/{moduleId}/progress` as admin; XP for that node is removed and the node becomes playable again. |
 | New instructor needs an account | Give them `INSTRUCTOR_INVITE_CODE`, or create the account and change its role in War room. |
 | Someone is brute-forcing logins | The account locks for 15 minutes after 5 failures and nginx limits `/auth/login` to 10 requests/minute per IP. Check `journalctl -u questlearn`. |
@@ -255,7 +273,11 @@ These are deliberate trade-offs, not bugs:
   instance needs a shared store or edge limiter.
 - **Courses can be members-only and grouped into classes.** Cohorts carry join codes,
   rosters narrow to a class, and a course can leave the catalogue until a code adds a
-  student. Deadlines and notification digests are still missing.
+  student. Deadlines are per node and course-wide, with no per-class override in v1;
+  the email digest is at most one message per learner per day and has no push or SMS.
+- **Deadlines are advisory.** A learner can still clear a node after its due date; the
+  product records `COMPLETED_LATE` instead of locking the work. A school that needs a
+  hard cut-off should read the late state from the roster.
 - **24-hour tokens, no refresh, but they can be revoked.** A session expires a day
   after sign-in; the user signs in again. A password change or an admin reset bumps
   `users.token_version`, which invalidates every earlier token immediately.
@@ -265,7 +287,7 @@ These are deliberate trade-offs, not bugs:
 - **Files live on one server.** No object storage; uploads are not a feature yet.
   Viva recordings are not an exception: they are graded and discarded.
 - **AI output is a draft.** Generated courses are always created unpublished and
-  must be reviewed — like any model output, the content can be wrong.
+  must be reviewed, like any model output, the content can be wrong.
 
 ## Data retention
 
@@ -293,8 +315,10 @@ enforced in code or set by the listed property.
 - [ ] `CORS_ORIGINS` lists only your real origin
 - [ ] `DB_USERNAME` is not `postgres`
 - [ ] HTTPS works and HTTP redirects to it
-- [ ] `/actuator/health` is reachable, `/v3/api-docs` is **not** (prod disables it)
+- [ ] `/actuator/health` is reachable, `/actuator/metrics` answers only with an admin token, and `/v3/api-docs` is **not** (prod disables it)
+- [ ] If nginx or a load balancer should correlate its access log with the app, it forwards `X-Request-Id` (the app generates one when the header is absent)
 - [ ] Transactional email is configured and a test sign-up received its confirmation link
+- [ ] `NOTIFICATIONS_ENABLED=true` (if wanted) and a test digest arrived at the configured UTC hour
 - [ ] A restore from backup has been tested
 - [ ] Admin account password changed from the demo value
 - [ ] `INSTRUCTOR_INVITE_CODE` set, or instructor signup intentionally disabled

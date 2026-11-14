@@ -142,7 +142,7 @@ export default function LessonEditor({ value, onChange, disabled = false }) {
               </span>
               <input
                 className="field flex-1 py-1.5 text-[13px]"
-                placeholder="Section heading — e.g. How flex lays out a row"
+                placeholder="Section heading, e.g. How flex lays out a row"
                 maxLength={120}
                 disabled={disabled}
                 value={section.heading}

@@ -309,7 +309,7 @@ export default function StudentPerformance() {
             <StatCard
               icon={Flame}
               label="Average quiz score"
-              value={overall.avgScore === null ? '—' : `${overall.avgScore}%`}
+              value={overall.avgScore === null ? 'n/a' : `${overall.avgScore}%`}
               hint={
                 overall.avgScore === null
                   ? 'No quizzes attempted yet'
@@ -420,7 +420,7 @@ export default function StudentPerformance() {
                             </p>
                           </div>
                           <span className={`chip shrink-0 ${scoreChip(avg)}`}>
-                            {avg === null ? '—' : `${avg}%`}
+                            {avg === null ? 'n/a' : `${avg}%`}
                           </span>
                           <span className="w-9 shrink-0 text-right text-[11px] font-bold tabular-nums text-fg-muted">
                             {percent}%

@@ -15,29 +15,29 @@ still needs, see [`AUDIT.md`](AUDIT.md).
 
 ## Key Features
 
-- **Visual skill-tree curriculum** — node-based course progression where completing a prerequisite
+- **Visual skill-tree curriculum**: node-based course progression where completing a prerequisite
   unlocks its child nodes. Nodes render on an SVG canvas with animated edges, pulsing unlocked
   states, shaking locked states and gold-ringed completed states.
-- **Gamification engine** — server-side XP awards, level-up calculation, daily streak counters and
+- **Gamification engine**: server-side XP awards, level-up calculation, daily streak counters and
   animated Lottie/confetti milestone celebrations.
-- **Interactive micro-assessments** — multiple-choice, code-snippet ordering and drag-and-drop
+- **Interactive micro-assessments**: multiple-choice, code-snippet ordering and drag-and-drop
   matching quizzes stored as PostgreSQL `JSONB`, scored **on the server** so XP cannot be faked.
-- **Course catalogue and enrollment** — students browse every published quest, preview its whole
+- **Course catalogue and enrollment**: students browse every published quest, preview its whole
   path, then join the ones they are taking. Joined courses appear on the dashboard; leaving keeps
   the work they have already done.
-- **Role-based access control (RBAC)** — strictly JWT-secured boundaries between **Student**,
+- **Role-based access control (RBAC)**: strictly JWT-secured boundaries between **Student**,
   **Instructor** and **Admin** dashboards, enforced with `@PreAuthorize` on the controller layer.
-- **Viva boss battles** — every node can be cleared by *answering the examiner* instead of taking the
+- **Viva boss battles**: every node can be cleared by *answering the examiner* instead of taking the
   quiz. Speak it and the recording is transcribed by Groq `whisper-large-v3-turbo`, or type it when
   there is no microphone; either way `openai/gpt-oss-120b` grades it against the node's own topics
   and replies with a score, strengths, gaps, actionable feedback and a follow-up question. The verdict
   is spoken back with the browser speech synthesiser. Audio is streamed for grading and never stored.
-  Every attempt is kept, so the node shows the trail — 52% typed, then 75% spoken — behind the best
+  Every attempt is kept, so the node shows the trail, 52% typed, then 75% spoken, behind the best
   score.
-- **AI quest authoring** — an instructor describes a topic and gets a whole draft quest: linked
+- **AI quest authoring**: an instructor describes a topic and gets a whole draft quest: linked
   nodes, lesson sections, takeaways, quizzes and a boss viva each, ready to review and publish.
   Generated content is validated server-side before it is saved.
-- **High-performance animations** — Framer Motion and Lottie, with every animation bundled locally
+- **High-performance animations**: Framer Motion and Lottie, with every animation bundled locally
   so a lab demo works completely offline.
 
 ---
@@ -80,7 +80,7 @@ createdb -U postgres questlearn
 ```
 
 The backend reads `DB_USERNAME` / `DB_PASSWORD` and defaults to `postgres` / `postgres`. Put the real
-credentials in the gitignored `questlearn-backend/.env` file — it is imported automatically at
+credentials in the gitignored `questlearn-backend/.env` file, it is imported automatically at
 startup, so no shell exports are needed:
 
 ```ini
@@ -91,7 +91,7 @@ DB_PASSWORD=your_password
 
 Environment variables still take precedence over the file when both are set.
 
-**No PostgreSQL running?** Start the bundled zero-setup H2 profile instead — schema and demo data
+**No PostgreSQL running?** Start the bundled zero-setup H2 profile instead, schema and demo data
 are created automatically in `questlearn-backend/data/`:
 
 ```bash
@@ -133,8 +133,8 @@ Open <http://localhost:5173>. Vite reads `SERVER_PORT` from the backend `.env` a
 
 The demo course **“Full-Stack Web Engineering Quest”** ships with six linked nodes and a quiz on
 every node. The demo student starts with two nodes cleared, a 4-day streak, and work in a second
-course, **“Data Structures Detour”** (three nodes, two cleared), so 420 XP, level 3 and both boards —
-combined across courses and scoped to one — are populated from the first login. The rival learners
+course, **“Data Structures Detour”** (three nodes, two cleared), so 420 XP, level 3 and both boards, 
+combined across courses and scoped to one, are populated from the first login. The rival learners
 stay inside the first course, which is what makes the two boards read differently.
 
 ---
@@ -177,6 +177,7 @@ All routes are under `/api/v1`. Protected routes need `Authorization: Bearer <to
 | `POST` | `/auth/verify-email` | public | Confirm an address using the link token |
 | `POST` | `/auth/verify-email/resend` | authenticated | Send a fresh confirmation link to your own address |
 | `PATCH` | `/auth/password` | authenticated | Change your own password (returns a fresh token) |
+| `PATCH` | `/auth/notification-preferences` | authenticated | Turn the daily deadline digest on or off (`{"deadlineEmails": false}`) |
 
 ### Password recovery
 
@@ -246,6 +247,8 @@ so the response cannot be used to probe which state it was in.
 | `PATCH` | `/courses/{id}/publish?published=true` | Instructor (owner), Admin | Publish / unpublish |
 | `POST` | `/courses/{id}/modules` | Instructor (owner), Admin | Add a skill node |
 | `PUT` | `/modules/{id}` | Instructor (owner), Admin | Edit a node's title, summary, lesson and XP |
+| `PUT` | `/courses/{courseId}/modules/{moduleId}/deadline` | Instructor (owner), Admin | Set or move one node's due date |
+| `DELETE` | `/courses/{courseId}/modules/{moduleId}/deadline` | Instructor (owner), Admin | Make one node self-paced again |
 | `POST` | `/modules/{id}/quiz` | Instructor (owner), Admin | Attach or replace a JSONB quiz |
 | `POST` | `/modules/{id}/video` | Instructor (owner), Admin | Upload a lesson video (multipart `file`) |
 | `PUT` | `/modules/{id}/video-url` | Instructor (owner), Admin | Attach a lesson video hosted elsewhere |
@@ -270,6 +273,43 @@ so the response cannot be used to probe which state it was in.
 | `GET` | `/leaderboard` | Student, Admin | Top 10 students by lifetime XP |
 | `GET` | `/courses/{id}/leaderboard?cohortId=` | Student, Instructor (owner), Admin | Top 10 in one course, by XP earned in it; `cohortId` ranks a single class |
 
+### Deadlines and reminders
+
+A deadline belongs to one node and applies to the whole course. It is **advisory**:
+the node stays playable after the due date, and a completion after it is recorded as
+`COMPLETED_LATE` rather than blocked. A mail outage or a sick day must never become an
+access-control incident, so the server computes one state per learner, 
+`UPCOMING`, `DUE_SOON`, `OVERDUE`, `COMPLETED` or `COMPLETED_LATE`, inside the
+configurable warning window (`NOTIFICATIONS_DUE_SOON_DAYS`, default 7). The dashboard,
+skill tree, node briefing and digest all read that same resolver.
+
+| Method | Path | Access | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/me/deadlines` | authenticated | Dated nodes in the courses you joined, plus your digest preference |
+| `PUT` | `/courses/{courseId}/modules/{moduleId}/deadline` | Instructor (owner), Admin | Set or move a due date (`{"dueAt":"2026-11-20T17:00:00Z"}`) |
+| `DELETE` | `/courses/{courseId}/modules/{moduleId}/deadline` | Instructor (owner), Admin | Clear the due date |
+| `GET` | `/courses/{courseId}/cohorts/{cohortId}/deadlines` | Instructor (owner), Admin | One class's overrides |
+| `PUT` | `/courses/{courseId}/cohorts/{cohortId}/modules/{moduleId}/deadline` | Instructor (owner), Admin | Give one class its own date for a node |
+| `DELETE` | `/courses/{courseId}/cohorts/{cohortId}/modules/{moduleId}/deadline` | Instructor (owner), Admin | Drop the override and fall back to the course date |
+
+The node date is the course-wide default. A class can answer it with an override
+(`cohort_deadlines`), edited from **Class due dates** on the classes page. Only that
+class's members see the override, in the dashboard, the skill tree, the node briefing
+and the digest alike. A learner who belongs to two classes of one course gets the
+earlier of their overrides, so one class cannot quietly extend a date another class
+already set. Clearing an override restores the node's own date, because the node date
+is never copied into the override row.
+
+The dashboard lists overdue work first, then due-soon and upcoming nodes, and lets a
+learner turn the email digest off per account. The digest is **one email per learner**,
+not one per node, and is disabled unless `NOTIFICATIONS_ENABLED=true`; the scheduler
+runs on the UTC `NOTIFICATIONS_CRON` (default 07:00). A sent reminder is keyed by
+learner, node, kind and due date in `deadline_reminders`, so rerunning the job cannot
+duplicate an inbox entry while a moved deadline may notify again. A failed send leaves
+the row unrecorded, so the next run retries.
+
+Skill-tree nodes and node details now also carry `dueAt` and `deadlineState`.
+
 ### AI (Groq)
 
 Both routes answer **503** with an actionable message when `GROQ_API_KEY` is unset, and **502**
@@ -290,9 +330,22 @@ when Groq itself fails. A per-account hourly quota (`AI_HOURLY_LIMIT`, default 3
 | `DELETE` | `/admin/users/{id}/modules/{moduleId}/progress` | Admin, course instructor | Reset one node so a learner can retry it (XP for that node is taken back) |
 | `GET` | `/admin/stats` | Admin | Platform counters |
 | `GET` | `/admin/audit` | Admin | Last 50 privileged actions, newest first |
+| `GET` | `/admin/telemetry` | Admin | Uptime, requests served, p50/p95/p99 latency and the last 10 server errors |
 
 Password changes (`PATCH /auth/password`) return a fresh token: the caller stays signed
 in while every other session for that account is revoked.
+
+### Observability
+
+Only `/actuator/health` is public. `/actuator/metrics` needs an admin token, and the
+admin panel shows the same numbers as `/admin/telemetry`.
+
+Every response carries an `X-Request-Id` header. A well-formed id sent by a proxy is
+kept, otherwise one is generated. The same value appears in the log line for that
+request and in any error body, so "the page said 500, here is the id" is enough to find
+the cause. Server errors (5xx only, never 4xx noise) are also kept in a bounded
+in-memory list of the last 100, which is what the admin panel displays; it is a
+diagnostic aid rather than an audit trail and clears on restart.
 
 ---
 
@@ -314,7 +367,7 @@ in while every other session for that account is revoked.
 }
 ```
 
-`CODE_ORDER` — `lines` is the correct order; the client shuffles the display.
+`CODE_ORDER`, `lines` is the correct order; the client shuffles the display.
 
 ```json
 {
@@ -419,7 +472,7 @@ database collects a few of them over time; CI uses a throwaway database.
 | Symptom | Fix |
 | :--- | :--- |
 | `Cannot reach the QuestLearn API` | Start the backend on the port in `SERVER_PORT` (8091 locally) and check CORS origins |
-| `401` on every request | Token expired or cleared — sign in again |
+| `401` on every request | Token expired or cleared, sign in again |
 | `403 Course is not published yet` | The instructor must publish the draft first |
 | PostgreSQL `password authentication failed` | Set `DB_PASSWORD` (or use the `h2` profile) |
 | Lottie animations missing | Ensure `src/assets/animations/*.json` were not excluded by git |

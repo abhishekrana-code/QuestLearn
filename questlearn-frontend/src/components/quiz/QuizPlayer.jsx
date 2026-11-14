@@ -184,10 +184,10 @@ export default function QuizPlayer({ quiz, onSubmit, disabled = false, retake = 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
         <p className="text-[11px] text-fg-subtle">
           {disabled
-            ? 'Completed — use “Try again” in the attempt history to retake.'
+            ? 'Completed. Use “Try again” in the attempt history to retake.'
             : retake
               ? 'A retake keeps your best score and awards no extra XP.'
-              : 'Answers are scored on the server — XP cannot be faked.'}
+              : 'Answers are scored on the server: XP cannot be faked.'}
         </p>
         <button type="button" onClick={submit} disabled={!canSubmit} className="btn-primary">
           <Send size={15} />

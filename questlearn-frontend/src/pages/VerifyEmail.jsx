@@ -17,7 +17,7 @@ function VerificationAside() {
       </h1>
       <p className="mt-4 max-w-md text-[14px] leading-7 text-fg-muted">
         Confirming your email is how QuestLearn knows a real person owns the account. It changes
-        nothing about your courses, XP or streak — you keep working either way.
+        nothing about your courses, XP or streak; you keep working either way.
       </p>
 
       <div className="mt-8 rounded-[20px] border border-line bg-card p-5 shadow-card">

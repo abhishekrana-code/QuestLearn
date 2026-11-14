@@ -20,7 +20,7 @@ const SOURCE = {
 };
 
 function stamp(iso) {
-  if (!iso) return '—';
+  if (!iso) return 'Not set';
   return new Date(iso).toLocaleString(undefined, {
     day: 'numeric',
     month: 'short',
@@ -30,7 +30,7 @@ function stamp(iso) {
 }
 
 function shortDate(iso) {
-  if (!iso) return '—';
+  if (!iso) return 'Not set';
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 

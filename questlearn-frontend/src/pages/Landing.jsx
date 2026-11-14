@@ -653,7 +653,7 @@ export default function Landing() {
               </h1>
 
               <p className="mt-6 max-w-xl text-[16px] leading-7 text-fg-muted sm:text-[17px] sm:leading-8">
-                QuestLearn turns a syllabus into a guided skill tree — short lessons, instant
+                QuestLearn turns a syllabus into a guided skill tree: short lessons, instant
                 quizzes, and progress you can actually see. Less tab-juggling, more finishing.
               </p>
 

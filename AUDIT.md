@@ -21,7 +21,7 @@ status, so it can be used as the backlog for "what does a real class still need"
 | Quality gates | `mvn verify` against PostgreSQL, `npm test`, `npm run build`, Lighthouse on the landing page, GitHub Actions |
 
 Demo accounts used: `admin@questlearn.dev`, `instructor@questlearn.dev`,
-`student@questlearn.dev` — all with `password123`.
+`student@questlearn.dev`, all with `password123`.
 
 At the time of the audit: 32 API routes, 89 backend tests (11 of them PostgreSQL
 integration tests), 22 frontend tests, and CI green on both halves.
@@ -42,6 +42,12 @@ backend tests (47 of them PostgreSQL integration tests), and 37 frontend tests a
 resend, and recovery and verification share one transport that can be Resend, SMTP
 or the server log.
 
+After the deadlines release (14 November 2026): 53 API route methods, 149 backend
+tests (56 of them PostgreSQL integration tests), and 48 frontend tests across 10
+files. Instructors can date any node, learners see one advisory state everywhere
+(dashboard, map, briefing), and an optional daily digest nudges due and overdue work
+with per-account opt-out and a dedupe ledger.
+
 ---
 
 ## Scorecard
@@ -54,17 +60,17 @@ or the server log.
 | Instructor authoring | 8/10 | Five-step studio, AI draft builder, quiz and video editors |
 | Admin and account management | 8/10 | Moderation, account search, the audit feed and course rosters work; no pagination |
 | Authentication and security | 9/10 | Role enforcement, throttling, revocable sessions and soft email verification |
-| Classroom operations | 7/10 | Enrollment, cohorts with join codes, rosters, per-learner history, CSV export and a class leaderboard; no gating or deadlines |
+| Classroom operations | 8/10 | Enrollment, cohorts with join codes, rosters, per-learner history, CSV export, a class leaderboard and advisory deadlines with an opt-out digest; no per-class deadline override |
 | Reliability and observability | 5/10 | Health endpoint only; no metrics, tracing or error aggregation |
 | Tests and CI | 8/10 | Real PostgreSQL in CI, guards against silently skipped tests, both halves gated |
 | Deployment and documentation | 8/10 | `DEPLOY.md` covers TLS, backups, upgrades and known limits |
 | Responsive and mobile | 8/10 | Verified at 375 px; no horizontal scroll or clipped controls |
 
-**Overall: about 8/10 as a single-class pilot, about 7/10 as a school-wide system.**
+**Overall: about 8/10 as a single-class pilot, about 7.5/10 as a school-wide system.**
 The classroom layer now exists (join by code, class, roster, report, per-learner
-history, class board) and email handles recovery and address confirmation; what is
-still missing is the institution above it - deadlines, notification digests and
-operational telemetry.
+history, class board, dated work) and email handles recovery, address confirmation
+and deadline digests; what is still missing is the institution above it -
+operational telemetry and object storage.
 
 ---
 
@@ -128,9 +134,9 @@ operational telemetry.
 
 ## Open findings
 
-### P0 — blocks a real term
+### P0: blocks a real term
 
-**1. Per-class competition and administration — CLOSED.**
+**1. Per-class competition and administration: CLOSED.**
 This item is now substantially closed. A teacher can create a class with a join
 code, mark the course **members only** so it leaves the catalogue until a code adds
 a student, narrow the roster (and therefore the CSV) to one class, open any
@@ -139,7 +145,7 @@ that board, and **enrol a pasted class list** (CSV or a column of addresses) wit
 unknown addresses reported back rather than silently created. Nothing in this
 finding is still open.
 
-**2. Email delivery — recovery and verification CLOSED, notification digests open.**
+**2. Email delivery: recovery and verification CLOSED, notification digests open.**
 One transport now carries both links. `EMAIL_PROVIDER` chooses Resend (HTTP API),
 SMTP, or the server-log fallback; the default `auto` picks Resend when a key exists,
 SMTP when a host exists, and otherwise logs the link at `WARN`. Asking for a provider
@@ -149,7 +155,7 @@ and a soft dashboard reminder; unconfirmed accounts keep full access. A delivery
 failure is still only a log line (there is no outbox or retry queue) and lesson
 notification digests remain open, but the P0 access gap is closed.
 
-**3. Class reporting: acting on the data — CLOSED.**
+**3. Class reporting, acting on the data: CLOSED.**
 The roster lists every enrolled learner with their per-node status, attempts, XP and
 last activity; each name opens their full attempt trail; the CSV exports the same grid
 for a gradebook. It can now also be narrowed to **one node, cleared or not**, which is
@@ -157,43 +163,51 @@ the "who is stuck on node 3" question, and printed: a print stylesheet drops the
 navigation and buttons and keeps the rows. Class lists import, so the whole loop runs
 inside the product. **All four P0 findings are now closed.**
 
-### P1 — needed in the first month of use
+### P1: needed in the first month of use
 
-4. **No deadlines, assignments or notifications.** The path is self-paced only; there
-   is no way to say "due Friday" or to nudge a student who has stalled.
+4. **Deadlines and notifications: CLOSED.** Any node can carry a due date, set or
+   moved from the studio. A single server-side resolver turns it into `UPCOMING`,
+   `DUE_SOON`, `OVERDUE`, `COMPLETED` or `COMPLETED_LATE`, and the dashboard panel, map
+   badges, node briefing and email digest all read that same state. Deadlines are
+   deliberately advisory: the node stays playable, and late work is recorded rather
+   than blocked, because a mail outage must never become an access-control incident.
+   The digest is one email per learner per day, off by default, opt-out per account,
+   and deduplicated by learner, node, kind and due date so reruns cannot duplicate an
+   inbox entry while a moved deadline may notify again. Per-class overrides are not in
+   v1 - a deadline belongs to the node and applies to the whole course.
 5. **Media lives on one server's disk.** Backups must include `uploads/videos`
    (documented), but there is no object storage, CDN or transcoding, and a 100 MB
    phone video is hostile to a slow connection.
 6. **Dependency advisories.** `npm audit` reports 2 critical, 1 high and 5 moderate,
    all in the Vite/Vitest/react-router toolchain and all requiring major upgrades
    (Vite 8, Vitest 5, react-router 7).
-7. **`/admin/users` pagination — CLOSED.** The list takes `page` and `size`
+7. **`/admin/users` pagination: CLOSED.** The list takes `page` and `size`
    (default 25, capped at 100) and returns `users`, `total`, `page`, `size` and
    `totalPages`, so the page can say "26–50 of 2,000" and a request cannot ask for
    the whole school. Account search pages the same way.
-8. **CSP and HSTS — CLOSED.** `deploy/security-headers.conf` carries a policy
+8. **CSP and HSTS: CLOSED.** `deploy/security-headers.conf` carries a policy
    written for this app (no font CDN, YouTube allowed in a frame, `blob:` for the
    recorder), plus HSTS, `nosniff`, `SAMEORIGIN`, a referrer policy and a
    permissions policy. `deploy/nginx.conf` includes it, and the TLS block certbot
    writes must include the same file. The one deliberate weakness left: `script-src`
-   needs `'unsafe-inline'` for the inline theme bootstrap — moving that to a hashed
+   needs `'unsafe-inline'` for the inline theme bootstrap, moving that to a hashed
    file is the follow-up. While doing this, the Google Fonts `<link>` that had crept
    into `index.html` was removed: the README already promised system fonts, and the
    CDN request both contradicted it and would have forced a looser policy.
-9. **Email verification — CLOSED.** A new sign-up receives a single-use,
+9. **Email verification: CLOSED.** A new sign-up receives a single-use,
    48-hour confirmation link; only its SHA-256 hash is stored, a resend supersedes
    the older link, and the dashboard carries a soft reminder with a resend button.
    Existing accounts and demo data were migrated as verified. An account can still
    be created with an address the person does not own, but the product no longer
    claims it is confirmed, and recovery will not silently go to an unproven inbox.
 
-### P2 — later
+### P2: later
 
 10. Certificates of completion, CSV import of students, SSO/LTI, i18n, teacher
     analytics dashboards, Playwright end-to-end tests, load testing, richer metrics
     (`/actuator/health` is the only exposed actuator endpoint), an accessibility
     statement page, and a documented data-retention policy.
-11. **Admin progress reset — CLOSED.** `DELETE /admin/users/{userId}/modules/{moduleId}/progress`
+11. **Admin progress reset: CLOSED.** `DELETE /admin/users/{userId}/modules/{moduleId}/progress`
     now has a Reset button on each node of a learner's detail page, and it is open to
     the course's own instructor as well as admins (the service refuses any course the
     teacher does not own). The node returns to its starting state and the XP it earned
@@ -203,13 +217,13 @@ inside the product. **All four P0 findings are now closed.**
 
 ## Roadmap
 
-Items 1 and 3 of the previous roadmap are shipped (see "The enrollment release"
-below) and email transport is now shipped too, so the order starts from what a
+The first roadmap item - deadlines and notifications - is now shipped (see "The
+deadlines release" below), as is email transport. The order starts from what a
 graded term still needs.
 
 | Order | Work | Effort | Why first |
 |---|---|---|---|
-| 1 | Deadlines and notifications | 1–2 weeks | Turns self-paced study into schedulable coursework |
+| 1 | Operational telemetry (metrics, error aggregation, a request trace) | 2–3 days | The product now sends scheduled mail and runs migrations; an operator needs to see a failure before a teacher reports it |
 | 2 | Object storage for lesson video | 3–5 days | Protects the single server and slow connections |
 | 3 | Dependency majors (Vite 8, Vitest 5, react-router 7) | 2–4 days | Clears two critical advisories; needs its own quiet week |
 
@@ -234,7 +248,13 @@ graded term still needs.
 | `df5e268` | Overall board: `GET /leaderboard/overall` sums the XP of every cleared node across every course per learner, with a node count, a course count and the top three contributing courses; the standings page opens on it ("All courses combined") and keeps lifetime XP as a second option | 1 integration test (combined 100 from one node, one course, the course named, teacher refused); live: Mira 520/4 nodes, Leo 220/2, Sam 100/1, each attributed to the one course |
 | `97fea6d` | Class board: `?cohortId=` on `/courses/{id}/leaderboard`, the board opens to the owning instructor, and the standings page gains a class picker under the course one | 1 integration test (whole course 2 → one class 1, rank restarts at 1, unknown class 404, teacher may read own board); live: instructor's board auto-opened on their course, picking "10B Board" left Leo alone on it |
 | `09f4b4c` | Course gating (V8 `membership_required`): a members-only course leaves the catalogue and refuses non-members, while a class code still works; plus `?cohortId=` on the roster and the class picker, and a members-only switch on the classes page | 2 integration tests (gated course hidden + 403 + code still joins + owner-only toggle; roster narrowing 2 → 1 and a foreign class 404); live: switch on → "Members only", switch off restored, roster picker 4 → 1 learner |
-| `_pending_` | Email delivery and address confirmation: `EmailSender` transports (Resend HTTP API, SMTP, log fallback) selected by `EMAIL_PROVIDER`; one `MailService` now serves recovery and verification; V10 adds `users.email_verified` (existing rows migrated true) and `email_verification_tokens`; `POST /auth/verify-email` (public) and `/auth/verify-email/resend` (signed in); a dashboard/studio reminder and a `/verify-email` page | 6 integration tests (hash-only storage and 48-hour window, single use, expired refused, resend supersedes the old link, confirmed account refused, resend throttle) and 7 unit tests (hashing, claim race, expiry, resend rules); live: registered through the browser, saw the reminder, pulled the link from the log, confirmed it on the page, then the reminder disappeared and `/auth/me` reported `emailVerified: true`; an invalid token showed the fresh-link message |
+| `ead6e99` | Email delivery and address confirmation: `EmailSender` transports (Resend HTTP API, SMTP, log fallback) selected by `EMAIL_PROVIDER`; one `MailService` now serves recovery and verification; V10 adds `users.email_verified` (existing rows migrated true) and `email_verification_tokens`; `POST /auth/verify-email` (public) and `/auth/verify-email/resend` (signed in); a dashboard/studio reminder and a `/verify-email` page | 6 integration tests (hash-only storage and 48-hour window, single use, expired refused, resend supersedes the old link, confirmed account refused, resend throttle) and 7 unit tests (hashing, claim race, expiry, resend rules); live: registered through the browser, saw the reminder, pulled the link from the log, confirmed it on the page, then the reminder disappeared and `/auth/me` reported `emailVerified: true`; an invalid token showed the fresh-link message |
+
+### The deadlines release (14 November 2026)
+
+| Commit | What it added | How it was verified |
+|---|---|---|
+| `_pending_` | Advisory deadlines and the reminder digest. V11 adds `modules.due_at`, `users.notify_deadlines`, and a `deadline_reminders` ledger keyed by learner, node, kind and due date. `DeadlineStateResolver` is the single clock for `UPCOMING`/`DUE_SOON`/`OVERDUE`/`COMPLETED`/`COMPLETED_LATE`; `DeadlineService` sets, moves, clears and aggregates; `PUT`/`DELETE /courses/{courseId}/modules/{moduleId}/deadline` is owner-or-admin; `GET /me/deadlines` feeds the dashboard; `DeadlineReminderService` and `DeadlineReminderJob` send one digest per learner on the UTC cron; `PATCH /auth/notification-preferences` stores the opt-out. Skill-tree nodes and node details carry `dueAt` and `deadlineState`, and the dashboard panel, map badges, briefing chip and studio Due column all render them | 17 new backend tests: 11 integration (set/move/clear, owner/admin/student permissions, foreign-course 404, overview ordering and course-leave removal, completed-work ordering, late completion, digest send and dedupe, failed-send retry, opt-out round trip, overdue kind) and 8 resolver unit tests (window edges, due-instant boundary, completion win, minimum window); 11 new frontend tests: 7 date/state helpers and 4 panel interactions (ordering, toggle success, provider error, empty state). Full suite: 149 backend tests (56 integration), 48 frontend tests across 10 files, `npm run build` clean |
 
 ---
 
@@ -271,9 +291,9 @@ failure modes are contained. A teacher can now run a class inside the product - 
 join, the roster shows who is stuck, a click shows why, and the CSV lands in a
 gradebook - and can rank that class on its own board.
 
-For a department running a graded term, the remaining blockers are deadlines,
-notification digests and operational telemetry, not access control. A teacher can
-create a class, share its code, keep the course out of the catalogue until the class
-arrives, watch the roster, and hand a learner a self-service recovery link. Ship
-roadmap items 1 and 2 next; configure a real mail provider before opening sign-up to
-the public.
+For a department running a graded term, the remaining blocker is operational
+telemetry, not access control or scheduling. A teacher can create a class, share its
+code, keep the course out of the catalogue until the class arrives, date the work,
+watch the roster, and hand a learner a self-service recovery link. Ship roadmap item
+1 next; configure a real mail provider (and turn the digest on) before opening sign-up
+to the public.

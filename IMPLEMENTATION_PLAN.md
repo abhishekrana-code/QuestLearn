@@ -27,7 +27,7 @@ dependencies. Each phase is complete in the current repository.
 
 ---
 
-## Phase 2: Backend Core, Security & RBAC — ✅ done
+## Phase 2: Backend Core, Security & RBAC, ✅ done
 
 1. **Entities & repositories**
    - `User`, `Course`, `Module`, `Quiz`, `UserModuleProgress` with the enums `Role`, `QuizType`,
@@ -36,19 +36,19 @@ dependencies. Each phase is complete in the current repository.
      `@JdbcTypeCode(SqlTypes.JSON)`.
    - Unique constraint on `(user_id, module_id)` in `user_module_progress`.
 2. **JWT security layer**
-   - `JwtUtil` — sign, parse, role extraction, expiry.
-   - `JwtAuthenticationFilter extends OncePerRequestFilter` — populates the security context.
-   - `SecurityConfig` — stateless sessions, CORS for `http://localhost:5173`, JSON 401/403 handlers,
+   - `JwtUtil`, sign, parse, role extraction, expiry.
+   - `JwtAuthenticationFilter extends OncePerRequestFilter`, populates the security context.
+   - `SecurityConfig`, stateless sessions, CORS for `http://localhost:5173`, JSON 401/403 handlers,
      `@EnableMethodSecurity`, BCrypt encoder.
 3. **Auth endpoints** (`AuthController`)
    - `POST /api/v1/auth/register` (Student or Instructor; Admin blocked)
    - `POST /api/v1/auth/login` (JWT + profile + XP/level)
    - `GET /api/v1/auth/me`
-4. **Error handling** — `ApiException` + `GlobalExceptionHandler` with field-level validation errors.
+4. **Error handling**: `ApiException` + `GlobalExceptionHandler` with field-level validation errors.
 
 ---
 
-## Phase 3: Course Skill-Tree & Gamification API — ✅ done
+## Phase 3: Course Skill-Tree & Gamification API: ✅ done
 
 1. **Instructor endpoints** (`CourseController`)
    - `POST /api/v1/courses`
@@ -56,19 +56,19 @@ dependencies. Each phase is complete in the current repository.
    - `POST /api/v1/courses/{courseId}/modules` (links `parentModuleId`, stores layout positions)
    - `POST /api/v1/modules/{moduleId}/quiz` (validates and stores a `JSONB` payload)
 2. **Student progression endpoints** (`ProgressController`)
-   - `GET /api/v1/courses/{courseId}/skill-tree` — nodes merged with the learner's
+   - `GET /api/v1/courses/{courseId}/skill-tree`, nodes merged with the learner's
      `LOCKED` / `UNLOCKED` / `COMPLETED` status; first call also enrols the learner.
-   - `GET /api/v1/modules/{moduleId}` — lesson content + sanitized quiz.
-   - `POST /api/v1/modules/{moduleId}/complete` — evaluates the quiz, awards XP, updates the streak,
+   - `GET /api/v1/modules/{moduleId}`, lesson content + sanitized quiz.
+   - `POST /api/v1/modules/{moduleId}/complete`, evaluates the quiz, awards XP, updates the streak,
      unlocks child nodes, returns level-up status.
-   - `GET /api/v1/leaderboard` — top 10 students by XP.
-3. **Admin endpoints** (`AdminController`) — user list, role change, stats.
-4. **Quiz evaluation** (`QuizService`) — validates instructor payloads, strips answers before they
+   - `GET /api/v1/leaderboard`, top 10 students by XP.
+3. **Admin endpoints** (`AdminController`), user list, role change, stats.
+4. **Quiz evaluation** (`QuizService`), validates instructor payloads, strips answers before they
    leave the server, and scores MCQ / code-order / drag-drop submissions.
 
 ---
 
-## Phase 4: React Frontend & Animation Engine — ✅ done
+## Phase 4: React Frontend & Animation Engine: ✅ done
 
 1. **Scaffold Vite project**
    ```bash
@@ -78,21 +78,21 @@ dependencies. Each phase is complete in the current repository.
    npm install -D tailwindcss postcss autoprefixer
    ```
 2. **Global context providers**
-   - `AuthContext.jsx` — token, cached profile, login/logout, 401 handling.
-   - `GamificationContext.jsx` — live `totalXp`, `currentLevel`, `streakDays` and an `award(result)`
+   - `AuthContext.jsx`, token, cached profile, login/logout, 401 handling.
+   - `GamificationContext.jsx`, live `totalXp`, `currentLevel`, `streakDays` and an `award(result)`
      function that animates the navbar XP bar, shows the XP toast and opens the Lottie/confetti
      level-up modal.
 3. **Interactive UI modules**
-   - `SkillTreeCanvas.jsx` — SVG edges + absolutely positioned nodes, vertical/branching layout.
-   - `SkillNode.jsx` — pulsing UNLOCKED, greyed LOCKED with a shake on click, gold COMPLETED.
-   - `QuizPlayer.jsx` / `MCQCard.jsx` / `CodeOrderQuiz.jsx` / `DragDropQuiz.jsx` — Framer Motion
+   - `SkillTreeCanvas.jsx`, SVG edges + absolutely positioned nodes, vertical/branching layout.
+   - `SkillNode.jsx`, pulsing UNLOCKED, greyed LOCKED with a shake on click, gold COMPLETED.
+   - `QuizPlayer.jsx` / `MCQCard.jsx` / `CodeOrderQuiz.jsx` / `DragDropQuiz.jsx`, Framer Motion
      `Reorder.Group` for code ordering and an HTML5 drag-and-drop matcher with a click fallback.
-4. **Role dashboards** — `StudentDashboard`, `SkillTreePage`, `InstructorStudio`, `AdminPanel`,
+4. **Role dashboards**: `StudentDashboard`, `SkillTreePage`, `InstructorStudio`, `AdminPanel`,
    `Leaderboard`, plus login/register with one-click demo accounts.
 
 ---
 
-## Phase 5: Seeding, Polish & Local Hosting Demo — ✅ done
+## Phase 5: Seeding, Polish & Local Hosting Demo, ✅ done
 
 - `DataInitializer` implements `ApplicationRunner` and seeds, only when the database is empty:
   - 1 Admin, 1 Instructor, 3 Students.

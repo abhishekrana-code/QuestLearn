@@ -1,6 +1,6 @@
 # Academic Project Execution Plan (`PROJECT_PLAN.md`)
 
-**Project title:** QuestLearn — An Interactive, Gamified Learning Management System
+**Project title:** QuestLearn, An Interactive, Gamified Learning Management System
 **Timeline:** 6 weeks (sprint-based agile)
 **Target hardware:** Windows 10/11, 8GB RAM, local hosting
 
@@ -9,8 +9,8 @@
 ## 1. Project Objectives
 
 Traditional LMS platforms suffer from low student engagement because progress is presented as
-static PDF/video lists. QuestLearn applies game-design mechanics — visual skill trees, immediate
-micro-feedback, XP progression and animated milestones — while maintaining enterprise-style security
+static PDF/video lists. QuestLearn applies game-design mechanics, visual skill trees, immediate
+micro-feedback, XP progression and animated milestones, while maintaining enterprise-style security
 (RBAC + JWT) and relational data integrity.
 
 Success criteria:
@@ -61,7 +61,7 @@ Implementation notes:
 
 - **Risk 1: Out-of-memory freezes during the live demo.**
   - *Mitigation:* package the backend before the presentation (`mvn clean package -DskipTests`) and
-    run `java -Xmx512m -jar target/questlearn-1.0.0.jar`. Close the Java IDE completely — it frees
+    run `java -Xmx512m -jar target/questlearn-1.0.0.jar`. Close the Java IDE completely, it frees
     roughly 1–2.5 GB. Keep the Hikari pool at 5 connections and PostgreSQL `shared_buffers` at 128MB.
 - **Risk 2: Offline or unstable Wi-Fi in the college lab.**
   - *Mitigation:* all Lottie JSON, icons and fonts are bundled locally; the frontend fetches nothing
@@ -79,17 +79,17 @@ Implementation notes:
 
 ## 5. Future Scope (for viva / presentation questions)
 
-1. **AI quiz generator** — feed lecture notes to a lightweight LLM API and emit the same `JSONB`
+1. **AI quiz generator**: feed lecture notes to a lightweight LLM API and emit the same `JSONB`
    quiz contract, so no frontend change is required.
-2. **Real-time PvP quiz battles** — Spring Boot WebSockets (STOMP) pairing two students on the same
+2. **Real-time PvP quiz battles**: Spring Boot WebSockets (STOMP) pairing two students on the same
    question set, with a server-authoritative scoreboard.
-3. **Adaptive difficulty** — use attempt history in `user_module_progress` to raise or lower quiz
+3. **Adaptive difficulty**: use attempt history in `user_module_progress` to raise or lower quiz
    difficulty per learner.
-4. **Instructor analytics** — per-node completion funnels and time-to-clear metrics for course
+4. **Instructor analytics**: per-node completion funnels and time-to-clear metrics for course
    tuning.
-5. **Refresh tokens & OAuth2** — replace the 24-hour access token with short-lived access plus
+5. **Refresh tokens & OAuth2**: replace the 24-hour access token with short-lived access plus
    rotating refresh tokens, and add Google/GitHub login.
-6. **Certificate generation** — issue a signed completion certificate once every node in a course is
+6. **Certificate generation**: issue a signed completion certificate once every node in a course is
    cleared.
 
 ---

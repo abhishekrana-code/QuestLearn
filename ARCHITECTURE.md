@@ -64,27 +64,27 @@ users ──1:N── user_module_progress ──N:1── modules
 | `quizzes` | `module_id` (unique), `type`, `passing_score`, `payload JSONB` | Payload shape depends on `type` |
 | `user_module_progress` | `user_id`, `module_id`, `status`, `score`, `attempts` | Unique pair prevents duplicate rows |
 
-`JSONB` is mapped directly with Hibernate 6's `@JdbcTypeCode(SqlTypes.JSON)` on a `JsonNode` field —
+`JSONB` is mapped directly with Hibernate 6's `@JdbcTypeCode(SqlTypes.JSON)` on a `JsonNode` field, 
 no extra library required. Hibernate's PostgreSQL dialect emits `jsonb`; the H2 profile emits `json`.
 
 ---
 
 ## 3. Security & Authentication Flow (JWT + RBAC)
 
-1. **Login request** — client sends `POST /api/v1/auth/login` with credentials.
-2. **Token issuance** — `AuthService` loads the user, verifies the password with
+1. **Login request**: client sends `POST /api/v1/auth/login` with credentials.
+2. **Token issuance**: `AuthService` loads the user, verifies the password with
    `BCryptPasswordEncoder`, and `JwtUtil` signs a token containing `sub` (email), `userId`, `role`
    and `name`.
-3. **Request interception** — React's Axios interceptor attaches `Authorization: Bearer <token>` to
+3. **Request interception**: React's Axios interceptor attaches `Authorization: Bearer <token>` to
    every outbound call; a 401 response automatically clears the session and bounces to `/login`.
-4. **Filter** — `JwtAuthenticationFilter` (a `OncePerRequestFilter`) validates the signature and
+4. **Filter**: `JwtAuthenticationFilter` (a `OncePerRequestFilter`) validates the signature and
    expiry, then populates the `SecurityContext` with an `AppUserPrincipal` and a
    `ROLE_<role>` authority. No database call is made per request.
-5. **Method-level enforcement** — controllers use `@PreAuthorize("hasRole('INSTRUCTOR')")`,
+5. **Method-level enforcement**: controllers use `@PreAuthorize("hasRole('INSTRUCTOR')")`,
    `hasAnyRole('STUDENT','ADMIN')`, and so on. Resource ownership (instructor owns the course) is
    checked in the service layer.
-6. **Statelessness** — sessions are disabled; there is no server-side session store.
-7. **CORS** — restricted to configured origins (`CORS_ORIGINS`, default `http://localhost:5173`).
+6. **Statelessness**: sessions are disabled; there is no server-side session store.
+7. **CORS**: restricted to configured origins (`CORS_ORIGINS`, default `http://localhost:5173`).
 
 Admin self-registration is refused: `POST /auth/register` accepts only `STUDENT` or `INSTRUCTOR`.
 
@@ -101,7 +101,7 @@ without duplicating the curve.
 
 `ProgressService.completeModule` is one `@Transactional` unit:
 
-1. Verify the `user_module_progress` row is **UNLOCKED** — rejects locked and already-completed
+1. Verify the `user_module_progress` row is **UNLOCKED**: rejects locked and already-completed
    nodes, which prevents duplicate XP farming.
 2. Evaluate the quiz server-side. If the score is below `passingScore`, persist the attempt and
    return `passed: false` with `xpGained: 0`.
@@ -114,7 +114,7 @@ without duplicating the curve.
    `unlockedModuleIds`, `streakDays`, …) so the React client can trigger the Lottie celebration.
 
 Enrollment is implicit: the first `GET /courses/{id}/skill-tree` by a student creates progress rows
-for every node — roots `UNLOCKED`, the rest `LOCKED`.
+for every node, roots `UNLOCKED`, the rest `LOCKED`.
 
 ---
 
@@ -130,7 +130,7 @@ for every node — roots `UNLOCKED`, the rest `LOCKED`.
   edges from `parentId` with `pathLength` animation, and delegates state styling to `SkillNode`.
 - **`QuizPlayer`** builds the type-specific answer payload and posts it to the completion endpoint;
   it never receives the correct answers.
-- **Offline assets** — Lottie JSON, `lucide-react` icons and system fonts only; nothing is fetched
+- **Offline assets**: Lottie JSON, `lucide-react` icons and system fonts only; nothing is fetched
   from a CDN at runtime.
 
 ---

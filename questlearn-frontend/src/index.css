@@ -155,14 +155,6 @@
     color: hsl(var(--muted-foreground));
   }
 
-  .eyebrow::before {
-    content: '';
-    width: 18px;
-    height: 1px;
-    background: hsl(var(--gold));
-    flex: none;
-  }
-
   .page-title {
     font-family: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
     font-size: clamp(2rem, 1.45rem + 1.55vw, 2.85rem);
