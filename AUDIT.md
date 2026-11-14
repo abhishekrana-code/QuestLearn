@@ -189,9 +189,11 @@ inside the product. **All four P0 findings are now closed.**
    written for this app (no font CDN, YouTube allowed in a frame, `blob:` for the
    recorder), plus HSTS, `nosniff`, `SAMEORIGIN`, a referrer policy and a
    permissions policy. `deploy/nginx.conf` includes it, and the TLS block certbot
-   writes must include the same file. The one deliberate weakness left: `script-src`
-   needs `'unsafe-inline'` for the inline theme bootstrap, moving that to a hashed
-   file is the follow-up. While doing this, the Google Fonts `<link>` that had crept
+   writes must include the same file. `script-src` is now `'self'` alone: the theme
+   bootstrap moved out of `index.html` into `public/theme-init.js`, so the build ships
+   no inline script and the policy blocks injected ones instead of merely narrowing
+   them. `style-src` keeps `'unsafe-inline'` because components set inline style
+   attributes for positions and progress widths. While doing this, the Google Fonts `<link>` that had crept
    into `index.html` was removed: the README already promised system fonts, and the
    CDN request both contradicted it and would have forced a looser policy.
 9. **Email verification: CLOSED.** A new sign-up receives a single-use,

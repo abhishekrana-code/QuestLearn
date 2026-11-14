@@ -14,32 +14,10 @@
     <!-- No font CDN: the app ships with system stacks, so a page cannot hang on a
          third-party request and the Content-Security-Policy can stay 'self'. -->
 
-    <script>
-      // Paint the right theme before React mounts. Light is the product default;
-      // an explicit choice or the OS preference wins from there.
-      (function () {
-        try {
-          var stored = localStorage.getItem('questlearn.theme');
-          var prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
-          var theme;
-          if (stored === 'light' || stored === 'dark') {
-            theme = stored;
-          } else if (stored === 'system') {
-            theme = prefersLight ? 'light' : 'dark';
-          } else {
-            theme = 'light';
-          }
-          var root = document.documentElement;
-          root.classList.remove('light', 'dark');
-          root.classList.add(theme);
-          root.style.colorScheme = theme;
-          var meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute('content', theme === 'light' ? '#FAF6F0' : '#141212');
-        } catch (error) {
-          /* storage blocked: keep the light default */
-        }
-      })();
-    </script>
+    <!-- External rather than inline so the production policy can say
+         script-src 'self' with no 'unsafe-inline'. Blocking on purpose: it has to
+         set the theme before the first paint. -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

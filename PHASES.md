@@ -111,14 +111,27 @@ first attempt, class scope, empty class, even-count median) and a 14-step live r
 cross-checked against the roster, learner 403, class scope of one learner, unknown
 course 404, test class cleaned up).
 
-## Phase 5: Dependency majors and CSP tightening
+## Phase 5: Dependency majors and CSP tightening (done, uncommitted)
 
 **Why:** `npm audit` reports 2 critical, 1 high and 5 moderate, all fixed only by major
 upgrades: Vite 8, Vitest 5, react-router 7. The inline theme bootstrap is the reason
 `script-src` needs `'unsafe-inline'`.
-**Scope:** upgrade the three toolchain majors, replace the inline theme script with a
-hashed one, drop `'unsafe-inline'` from `script-src`, re-run the audit and the Playwright
-suite. Needs a quiet window: it touches every build.
+**Built:** Vite 8.3.8, Vitest 5.1.0, `@vitejs/plugin-react` 6.3.0 and react-router-dom
+7.18.5. `manualChunks` had to become the function form because Vite 8 builds with
+Rolldown. The theme bootstrap moved to `public/theme-init.js`, so `index.html` ships no
+inline script and `script-src` is now `'self'`, with `style-src` unchanged for inline
+style attributes.
+
+The upgrade exposed a real bug rather than only a version bump: `lottie-react` is
+CommonJS, and Rolldown hands the default import its whole module object, so
+`LevelUpModal` rendered an object as a component and white-screened the page on a level
+up. The import now unwraps `.default`, and the Playwright smoke test that a first
+login had been masking fails and passes with it.
+
+**Verified:** `npm audit` reports 0 vulnerabilities (from 2 critical, 1 high and 5
+moderate); `vite build` succeeds with no inline script in the built HTML and
+`theme-init.js` copied; 48 unit tests pass; both Playwright smoke tests pass on a
+restarted dev server.
 
 ## Phase 6: Later, deliberately not scheduled
 

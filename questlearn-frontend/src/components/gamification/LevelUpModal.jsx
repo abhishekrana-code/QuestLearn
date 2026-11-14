@@ -1,9 +1,14 @@
 import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import Lottie from 'lottie-react';
+import lottieModule from 'lottie-react';
 import confetti from 'canvas-confetti';
 import { Trophy } from 'lucide-react';
 import levelUpAnimation from '../../assets/animations/level-up.json';
+
+// lottie-react is CommonJS, and the bundler hands its whole module object to the
+// default import, so the component sits one level down. Unwrap it explicitly
+// rather than trusting the interop, which changed under Vite 8.
+const Lottie = lottieModule?.default ?? lottieModule;
 
 export default function LevelUpModal({ level, xpGained, unlocked = 0, onClose }) {
   useEffect(() => {

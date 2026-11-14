@@ -88,11 +88,21 @@ export default defineConfig({
         // Split the heavy animation libraries out of the entry bundle so the
         // sign-in page never downloads Lottie or confetti, and repeat visits
         // reuse cached vendor chunks.
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          motion: ['framer-motion'],
-          animation: ['lottie-react', 'canvas-confetti'],
-          icons: ['lucide-react'],
+        // Vite 8 builds with Rolldown, which only takes the function form here.
+        manualChunks(id) {
+          const file = id.replace(/\\/g, '/');
+          if (!file.includes('node_modules')) return undefined;
+          if (file.includes('framer-motion') || file.includes('motion-dom')) return 'motion';
+          if (file.includes('lottie-react') || file.includes('canvas-confetti')) return 'animation';
+          if (file.includes('lucide-react')) return 'icons';
+          if (
+            file.includes('/react/') ||
+            file.includes('/react-dom/') ||
+            file.includes('react-router')
+          ) {
+            return 'react-vendor';
+          }
+          return undefined;
         },
       },
     },
