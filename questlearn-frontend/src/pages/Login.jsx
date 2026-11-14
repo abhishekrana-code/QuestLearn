@@ -6,12 +6,6 @@ import { apiError } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import AuthShell from '../components/auth/AuthShell.jsx';
 
-const DEMO_ACCOUNTS = [
-  { label: 'Student', email: 'student@questlearn.dev', password: 'password123' },
-  { label: 'Instructor', email: 'instructor@questlearn.dev', password: 'password123' },
-  { label: 'Admin', email: 'admin@questlearn.dev', password: 'password123' },
-];
-
 const HIGHLIGHTS = [
   { icon: Route, text: 'Skill trees that show the next step' },
   { icon: Sparkles, text: 'Instant quiz feedback and XP' },
@@ -140,7 +134,7 @@ export default function Login() {
           Welcome back
         </h2>
         <p className="mt-1.5 text-[13px] leading-6 text-fg-muted">
-          Use your school account, or jump straight in with a demo profile.
+          Use your school account to pick up where you left off.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -152,6 +146,10 @@ export default function Login() {
               id="email"
               type="email"
               autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              inputMode="email"
               required
               className="field"
               placeholder="you@questlearn.dev"
@@ -169,6 +167,9 @@ export default function Login() {
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 required
                 className="field pr-11"
                 placeholder="Enter your password"
@@ -206,30 +207,6 @@ export default function Login() {
             {!busy && <ArrowRight size={15} />}
           </button>
         </form>
-
-        <div className="my-5 flex items-center gap-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-fg-subtle">
-          <span className="h-px flex-1 bg-line" />
-          Demo accounts
-          <span className="h-px flex-1 bg-line" />
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          {DEMO_ACCOUNTS.map((account) => (
-            <button
-              key={account.label}
-              type="button"
-              disabled={busy}
-              title={`Sign in as ${account.label.toLowerCase()}`}
-              onClick={() => {
-                setForm({ email: account.email, password: account.password });
-                signIn(account.email, account.password);
-              }}
-              className="btn-ghost h-9 px-2 text-[11px]"
-            >
-              {account.label}
-            </button>
-          ))}
-        </div>
 
         <p className="mt-5 text-center text-[12px] text-fg-muted">
           New here?{' '}

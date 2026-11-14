@@ -1,4 +1,25 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
+
+/**
+ * The seeded accounts can be rotated with DEMO_PASSWORD (DataInitializer rewrites
+ * them on start), so the teacher login reads the same root .env the backend does
+ * instead of assuming the published default.
+ */
+function demoPassword() {
+  if (process.env.DEMO_PASSWORD) return process.env.DEMO_PASSWORD;
+  const envPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.env');
+  try {
+    const match = fs.readFileSync(envPath, 'utf8').match(/^DEMO_PASSWORD=(.*)$/m);
+    const value = match?.[1]?.trim();
+    if (value) return value;
+  } catch {
+    /* no root .env: fall through to the default */
+  }
+  return 'password123';
+}
 
 /**
  * Two journeys, end to end, through the real UI and the real API.
@@ -23,7 +44,7 @@ const student = {
   email: `smoke.${run}@questlearn.dev`,
   password: 'password123',
 };
-const INSTRUCTOR = { email: 'instructor@questlearn.dev', password: 'password123' };
+const INSTRUCTOR = { email: 'instructor@questlearn.dev', password: demoPassword() };
 const COURSE = 'Full-Stack Web Engineering Quest';
 const GATED_COURSE = 'Data Structures Detour';
 const gatedClass = { name: `12C Smoke ${run}` };

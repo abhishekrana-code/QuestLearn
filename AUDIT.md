@@ -21,7 +21,8 @@ status, so it can be used as the backlog for "what does a real class still need"
 | Quality gates | `mvn verify` against PostgreSQL, `npm test`, `npm run build`, Lighthouse on the landing page, GitHub Actions |
 
 Demo accounts used: `admin@questlearn.dev`, `instructor@questlearn.dev`,
-`student@questlearn.dev`, all with `password123`.
+`student@questlearn.dev`, all with `password123` at the time (now settable with
+`DEMO_PASSWORD`, and the login page no longer offers one-click demo sign-in).
 
 At the time of the audit: 32 API routes, 89 backend tests (11 of them PostgreSQL
 integration tests), 22 frontend tests, and CI green on both halves.

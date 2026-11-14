@@ -24,6 +24,7 @@ import com.questlearn.repository.UserRepository;
 import com.questlearn.service.GamificationService;
 import com.questlearn.service.MediaStorageService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
@@ -59,7 +60,20 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class DataInitializer implements ApplicationRunner {
 
-    private static final String DEMO_PASSWORD = "password123";
+    /**
+     * The five seeded accounts all share this password. A local checkout keeps the
+     * built-in default; anything the internet can reach sets DEMO_PASSWORD, and
+     * {@link #syncDemoPasswords()} rewrites existing rows to match on every start.
+     */
+    @Value("${questlearn.demo.password:password123}")
+    private String demoPassword;
+
+    private static final List<String> DEMO_EMAILS = List.of(
+            "admin@questlearn.dev",
+            "instructor@questlearn.dev",
+            "student@questlearn.dev",
+            "mira@questlearn.dev",
+            "sam@questlearn.dev");
 
     private final UserRepository userRepository;
     private final CourseRepository courseRepository;
@@ -78,6 +92,7 @@ public class DataInitializer implements ApplicationRunner {
         if (userRepository.count() == 0) {
             seedDemoData();
         }
+        syncDemoPasswords();
         seedRivalProgress();
         seedSecondCourse();
         attachDemoVideo();
@@ -287,15 +302,41 @@ public class DataInitializer implements ApplicationRunner {
 
         System.out.printf("""
                 %nQuestLearn demo data ready%n
-                  Admin       admin@questlearn.dev / %s%n
-                  Instructor  instructor@questlearn.dev / %s%n
-                  Student     student@questlearn.dev / %s%n
+                  Admin       admin@questlearn.dev%n
+                  Instructor  instructor@questlearn.dev%n
+                  Student     student@questlearn.dev%n
+                  Password    %s%n
                   Course      "%s" with 6 skill nodes%n
-                """, DEMO_PASSWORD, DEMO_PASSWORD, DEMO_PASSWORD, course.getTitle());
+                """, demonstrationPasswordNote(), course.getTitle());
 
         // touch admin/instructor so they are not reported as unused by the compiler
         List<User> staff = new ArrayList<>(List.of(admin, instructor));
         staff.size();
+    }
+
+    /**
+     * The password is printed only while it is the published default. Once it comes
+     * from DEMO_PASSWORD the log says so instead of copying a real secret into it.
+     */
+    private String demonstrationPasswordNote() {
+        return "password123".equals(demoPassword) ? demoPassword : "set by DEMO_PASSWORD";
+    }
+
+    /**
+     * Keeps the demo logins on the configured password. A database seeded before
+     * DEMO_PASSWORD was set would otherwise keep the published default forever, which
+     * is the hole this closes on any machine the internet can reach.
+     */
+    private void syncDemoPasswords() {
+        for (String email : DEMO_EMAILS) {
+            userRepository.findByEmailIgnoreCase(email).ifPresent(user -> {
+                if (!passwordEncoder.matches(demoPassword, user.getPasswordHash())) {
+                    user.setPasswordHash(passwordEncoder.encode(demoPassword));
+                    userRepository.save(user);
+                    System.out.printf("Demo password updated for %s%n", email);
+                }
+            });
+        }
     }
 
     private static final String SECOND_COURSE_TITLE = "Data Structures Detour";
@@ -585,7 +626,7 @@ public class DataInitializer implements ApplicationRunner {
         return userRepository.save(User.builder()
                 .name(name)
                 .email(email)
-                .passwordHash(passwordEncoder.encode(DEMO_PASSWORD))
+                .passwordHash(passwordEncoder.encode(demoPassword))
                 .role(role)
                 .totalXp(totalXp)
                 .currentLevel(GamificationService.levelForXp(totalXp))

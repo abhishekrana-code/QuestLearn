@@ -69,6 +69,11 @@ export default defineConfig({
     // VITE_PORT lets a second project keep 5173 for itself on a shared machine.
     port: Number(process.env.VITE_PORT) || 5173,
     strictPort: true,
+    // Vite rejects an unknown Host header, which is exactly right: it stops a
+    // DNS-rebinding page from reading this dev server. A tunnel arrives with its
+    // own hostname, so allow only the tunnel providers' domains rather than
+    // turning the check off with `true`.
+    allowedHosts: ['.trycloudflare.com', '.ngrok-free.dev', '.ngrok-free.app', '.ngrok.app', '.ts.net'],
     proxy: {
       '/api': {
         target: apiTarget,
