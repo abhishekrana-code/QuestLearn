@@ -74,7 +74,8 @@ export function AuthProvider({ children }) {
     [persistSession],
   );
 
-  const updateUser = useCallback((partial) => {    setUserState((previous) => {
+  const updateUser = useCallback((partial) => {
+    setUserState((previous) => {
       if (!previous) return previous;
       const next = { ...previous, ...partial };
       userCache.write(next);

@@ -88,6 +88,7 @@ public class BootstrapAdminRunner implements ApplicationRunner {
                 .totalXp(0)
                 .currentLevel(1)
                 .streakDays(0)
+                .emailVerified(true)
                 .build());
 
         // The password itself is never logged.

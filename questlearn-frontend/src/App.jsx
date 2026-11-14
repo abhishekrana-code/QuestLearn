@@ -9,6 +9,7 @@ import Login from './pages/Login.jsx';
 import NotFound from './pages/NotFound.jsx';
 import Register from './pages/Register.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
+import VerifyEmail from './pages/VerifyEmail.jsx';
 
 // The skill tree, dashboards and studio pull in framer-motion, lottie and
 // confetti. Loading them on demand keeps the landing and sign-in pages small
@@ -74,6 +75,8 @@ export default function App() {
             />
             {/* Reachable while signed in too: a reset link can be opened in any tab. */}
             <Route path="/reset-password" element={<ResetPassword />} />
+            {/* Opened from a confirmation email; may be signed out. */}
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route
               path="/dashboard"
               element={

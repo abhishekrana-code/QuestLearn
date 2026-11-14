@@ -593,6 +593,7 @@ public class DataInitializer implements ApplicationRunner {
                 .currentLevel(GamificationService.levelForXp(totalXp))
                 .streakDays(streak)
                 .lastActivityDate(lastActivity)
+                .emailVerified(true)
                 .build());
     }
 

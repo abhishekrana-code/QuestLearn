@@ -5,21 +5,16 @@ import com.questlearn.model.PasswordResetToken;
 import com.questlearn.model.User;
 import com.questlearn.repository.PasswordResetTokenRepository;
 import com.questlearn.repository.UserRepository;
+import com.questlearn.security.OneTimeTokens;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
-import java.util.Base64;
 import java.util.Deque;
-import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,13 +34,10 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class PasswordResetService {
 
-    private static final SecureRandom RANDOM = new SecureRandom();
-    private static final int TOKEN_BYTES = 32;
-
     private final UserRepository userRepository;
     private final PasswordResetTokenRepository tokenRepository;
     private final PasswordEncoder passwordEncoder;
-    private final PasswordResetMailer mailer;
+    private final MailService mailService;
     private final LoginAttemptService loginAttemptService;
     private final Duration tokenTtl;
     private final int maxRequestsPerHour;
@@ -56,14 +48,14 @@ public class PasswordResetService {
     public PasswordResetService(UserRepository userRepository,
                                 PasswordResetTokenRepository tokenRepository,
                                 PasswordEncoder passwordEncoder,
-                                PasswordResetMailer mailer,
+                                MailService mailService,
                                 LoginAttemptService loginAttemptService,
                                 @Value("${questlearn.auth.reset-token-minutes:30}") long tokenTtlMinutes,
                                 @Value("${questlearn.auth.reset-max-per-hour:3}") int maxRequestsPerHour) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
         this.passwordEncoder = passwordEncoder;
-        this.mailer = mailer;
+        this.mailService = mailService;
         this.loginAttemptService = loginAttemptService;
         this.tokenTtl = Duration.ofMinutes(Math.max(1, tokenTtlMinutes));
         this.maxRequestsPerHour = Math.max(1, maxRequestsPerHour);
@@ -89,15 +81,15 @@ public class PasswordResetService {
             // A new link supersedes any older one, so a forwarded email stops working.
             tokenRepository.invalidateAllForUser(user.getId(), now);
 
-            String rawToken = newToken();
+            String rawToken = OneTimeTokens.mint();
             tokenRepository.save(PasswordResetToken.builder()
                     .user(user)
-                    .tokenHash(hash(rawToken))
+                    .tokenHash(OneTimeTokens.sha256(rawToken))
                     .createdAt(now)
                     .expiresAt(now.plus(tokenTtl))
                     .build());
 
-            mailer.send(user, rawToken, tokenTtl);
+            mailService.sendPasswordReset(user, rawToken, tokenTtl);
         });
     }
 
@@ -107,7 +99,7 @@ public class PasswordResetService {
     @Transactional
     public void confirm(String rawToken, String newPassword) {
         Instant now = Instant.now();
-        PasswordResetToken token = tokenRepository.findByTokenHash(hash(rawToken.trim()))
+        PasswordResetToken token = tokenRepository.findByTokenHash(OneTimeTokens.sha256(rawToken.trim()))
                 .orElseThrow(PasswordResetService::invalidToken);
 
         if (token.getUsedAt() != null || !token.getExpiresAt().isAfter(now)) {
@@ -155,20 +147,5 @@ public class PasswordResetService {
     private static ApiException invalidToken() {
         return ApiException.badRequest(
                 "This reset link is invalid or has expired. Request a new one.");
-    }
-
-    private static String newToken() {
-        byte[] bytes = new byte[TOKEN_BYTES];
-        RANDOM.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
-
-    static String hash(String rawToken) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(rawToken.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 is required by the platform", ex);
-        }
     }
 }

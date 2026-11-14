@@ -20,6 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,6 +37,7 @@ class AuthServiceTest {
     private final UserRepository userRepository = mock(UserRepository.class);
     private final JwtUtil jwtUtil = mock(JwtUtil.class);
     private final LoginAttemptService loginAttemptService = mock(LoginAttemptService.class);
+    private final EmailVerificationService emailVerificationService = mock(EmailVerificationService.class);
     /** Low cost factor keeps the suite fast; production uses the default. */
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
 
@@ -44,7 +46,7 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         authService = new AuthService(userRepository, passwordEncoder, jwtUtil,
-                loginAttemptService, INVITE, "", false);
+                loginAttemptService, emailVerificationService, INVITE, "", false);
         when(jwtUtil.generateToken(any())).thenReturn("signed-token");
         when(jwtUtil.getExpirationMs()).thenReturn(86_400_000L);
         when(userRepository.save(any(User.class))).thenAnswer(call -> call.getArgument(0));
@@ -68,6 +70,9 @@ class AuthServiceTest {
         verify(userRepository).save(saved.capture());
         assertTrue(passwordEncoder.matches("secret123", saved.getValue().getPasswordHash()),
                 "the stored value must be a BCrypt hash of the password");
+        assertFalse(saved.getValue().isEmailVerified(),
+                "a new sign-up starts unverified");
+        verify(emailVerificationService).issue(saved.getValue());
     }
 
     @Test
@@ -194,7 +199,7 @@ class AuthServiceTest {
     /** A deployment where the class code is configured and enforced. */
     private AuthService gatedService(boolean requireCode) {
         return new AuthService(userRepository, passwordEncoder, jwtUtil,
-                loginAttemptService, INVITE, STUDENT_CODE, requireCode);
+                loginAttemptService, emailVerificationService, INVITE, STUDENT_CODE, requireCode);
     }
 
     @Test
@@ -226,7 +231,7 @@ class AuthServiceTest {
     @Test
     void studentSignUpFailsClosedWhenTheCodeIsRequiredButUnset() {
         AuthService unconfigured = new AuthService(userRepository, passwordEncoder, jwtUtil,
-                loginAttemptService, INVITE, "", true);
+                loginAttemptService, emailVerificationService, INVITE, "", true);
 
         ApiException error = assertThrows(ApiException.class, () -> unconfigured.register(
                 new RegisterRequest("Mira", "mira@questlearn.dev", "secret123", Role.STUDENT, "")));

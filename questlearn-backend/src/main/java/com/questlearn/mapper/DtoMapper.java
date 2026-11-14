@@ -15,6 +15,7 @@ public final class DtoMapper {
                 user.getName(),
                 user.getEmail(),
                 user.getRole(),
+                user.isEmailVerified(),
                 user.getTotalXp(),
                 user.getCurrentLevel(),
                 user.getStreakDays(),

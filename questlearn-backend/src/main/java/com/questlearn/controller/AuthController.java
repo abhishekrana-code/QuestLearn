@@ -8,7 +8,9 @@ import com.questlearn.dto.PasswordResetConfirmRequest;
 import com.questlearn.dto.PasswordResetRequest;
 import com.questlearn.dto.RegisterRequest;
 import com.questlearn.dto.UserDto;
+import com.questlearn.dto.VerifyEmailRequest;
 import com.questlearn.service.AuthService;
+import com.questlearn.service.EmailVerificationService;
 import com.questlearn.service.PasswordResetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,6 +36,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final PasswordResetService passwordResetService;
+    private final EmailVerificationService emailVerificationService;
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
@@ -75,6 +78,31 @@ public class AuthController {
     @Operation(summary = "Set a new password using a reset token")
     public void confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
         passwordResetService.confirm(request.token(), request.password());
+    }
+
+    /**
+     * Redeems an address-confirmation link. Public because the link may be opened
+     * in a browser that is not signed in; possession of the token is the proof.
+     */
+    @PostMapping("/verify-email")
+    @Operation(summary = "Confirm an email address using the link token")
+    public Map<String, String> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        emailVerificationService.verify(request.token());
+        return Map.of("message", "Email confirmed. Your account is fully set up.");
+    }
+
+    /**
+     * Sends a fresh confirmation link to the signed-in account. Only an unconfirmed
+     * address may ask, and the per-account throttle keeps an inbox from being flooded.
+     */
+    @PostMapping("/verify-email/resend")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @Operation(summary = "Resend the confirmation link to your own address")
+    public Map<String, String> resendEmailVerification(
+            @AuthenticationPrincipal AppUserPrincipal principal) {
+        emailVerificationService.resend(principal);
+        return Map.of("message", "A new confirmation link is on its way. It expires in "
+                + emailVerificationService.tokenTtlHours() + " hours.");
     }
 
     @PatchMapping("/password")

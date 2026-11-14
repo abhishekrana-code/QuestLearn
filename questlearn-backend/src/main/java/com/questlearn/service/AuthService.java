@@ -27,6 +27,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final LoginAttemptService loginAttemptService;
+    private final EmailVerificationService emailVerificationService;
     private final String instructorInviteCode;
     private final String studentInviteCode;
     private final boolean requireStudentCode;
@@ -35,6 +36,7 @@ public class AuthService {
                        PasswordEncoder passwordEncoder,
                        JwtUtil jwtUtil,
                        LoginAttemptService loginAttemptService,
+                       EmailVerificationService emailVerificationService,
                        @Value("${questlearn.registration.instructor-invite-code:}") String instructorInviteCode,
                        @Value("${questlearn.registration.student-invite-code:}") String studentInviteCode,
                        @Value("${questlearn.registration.require-student-code:false}") boolean requireStudentCode) {
@@ -42,6 +44,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.loginAttemptService = loginAttemptService;
+        this.emailVerificationService = emailVerificationService;
         this.instructorInviteCode = instructorInviteCode;
         this.studentInviteCode = studentInviteCode;
         this.requireStudentCode = requireStudentCode;
@@ -72,8 +75,13 @@ public class AuthService {
                 .totalXp(0)
                 .currentLevel(1)
                 .streakDays(0)
+                .emailVerified(false)
                 .build();
         userRepository.save(user);
+
+        // Soft verification: the account already works, but a confirmation link
+        // goes out so the dashboard can stop reminding them.
+        emailVerificationService.issue(user);
         return toAuthResponse(user);
     }
 
@@ -95,7 +103,7 @@ public class AuthService {
 
     /**
      * Lets a signed-in learner or instructor rotate their own password without
-     * an email round-trip (there is no mail transport on this deployment yet).
+     * waiting for an email round-trip.
      *
      * <p>Every other session is revoked by bumping the token version. The caller
      * is handed a fresh token so the browser that made the change stays signed in.</p>

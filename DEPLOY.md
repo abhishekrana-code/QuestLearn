@@ -75,26 +75,44 @@ curl -s localhost:8080/actuator/health          # {"status":"UP"}
 refuses to start without them, which is intentional. Generate the secret with
 `openssl rand -base64 48`.
 
-### Password-reset email (optional)
+### Transactional email (optional)
 
-Without mail the reset link is written to the service log at `WARN`, which means an
-operator has to relay it. To let students recover their own password, point the
-backend at any SMTP provider and set the public origin the link should use:
+QuestLearn sends two kinds of mail: a password-reset link and an address-confirmation
+link. Without a provider both are written to the service log at `WARN`, which means
+an operator has to relay them; with a provider they arrive in the student's inbox.
+Set the public origin the links should use and either a Resend key or SMTP:
 
 ```bash
 APP_BASE_URL=https://questlearn.example.com
+MAIL_FROM=no-reply@questlearn.example.com
+
+# Option A - Resend HTTP API (simplest; no SMTP credentials to keep)
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=re_...
+
+# Option B - any SMTP provider
+EMAIL_PROVIDER=smtp
 MAIL_HOST=smtp.example.com
 MAIL_PORT=587
 MAIL_USERNAME=postgres@questlearn.example.com
 MAIL_PASSWORD=replace-with-an-app-password
-MAIL_FROM=no-reply@questlearn.example.com
+
 RESET_TOKEN_MINUTES=30
 RESET_MAX_PER_HOUR=3
+VERIFICATION_TOKEN_HOURS=48
+VERIFICATION_MAX_PER_HOUR=3
 ```
 
-`sudo journalctl -u questlearn | grep 'reset link'` is the fallback while mail is
-unconfigured; once it is configured, check the log for `Password reset link emailed
-to …` after a test request.
+`EMAIL_PROVIDER=auto` is the default: it picks Resend when `RESEND_API_KEY` is set,
+SMTP when `MAIL_HOST` is set, and the log otherwise. Naming a provider without its
+settings stops the app at startup instead of swallowing mail.
+
+While mail is unconfigured, `sudo journalctl -u questlearn | grep 'email not sent'`
+shows the latest link. Once it is configured, check the log for
+`Email 'Confirm your QuestLearn email address' sent to …` after a test sign-up.
+
+Address confirmation is soft: an unconfirmed account keeps full access and sees only
+a dashboard reminder. Accounts that predate this feature were migrated as verified.
 
 ### Voice viva and AI authoring (Groq)
 
@@ -214,7 +232,8 @@ fails, the old jar plus the previous dump gets you back.
 
 | Request | How to handle it |
 |---|---|
-| Student forgot their password | War room → **Reset** next to the account → read the one-time temporary password to them. The reset revokes every session that account had. They can change it themselves from the account menu once they are back in. |
+| Student forgot their password | Ask them to use **Forgot your password?** on the sign-in page; the link expires in 30 minutes and works once. If mail is not configured or they cannot receive it, War room → **Reset** next to the account and read the one-time temporary password to them. Both paths revoke every session that account had. |
+| A student sees "Confirm your email address" | Expected until they open the link; nothing is blocked. Ask them to press **Resend link** on the dashboard, or check `journalctl -u questlearn | grep 'email not sent'` when no provider is configured. |
 | Student wants to retake a node | Nothing to do — completed nodes are replayable and keep the best score, with no extra XP. |
 | A node shows as completed but the score is wrong | `DELETE /api/v1/admin/users/{userId}/modules/{moduleId}/progress` as admin; XP for that node is removed and the node becomes playable again. |
 | New instructor needs an account | Give them `INSTRUCTOR_INVITE_CODE`, or create the account and change its role in War room. |
@@ -226,12 +245,17 @@ fails, the old jar plus the previous dump gets you back.
 
 These are deliberate trade-offs, not bugs:
 
-- **No email is sent.** There is no mail transport, so password recovery is the
-  admin-issued temporary password. Add an email provider before signup goes public.
-- **Login throttling is in-memory.** Correct for one instance; a second instance
-  needs a shared store or edge limiter.
-- **No class/cohort model.** Every published course is visible to every student and
-  the leaderboard is global.
+- **Email is optional.** Recovery and confirmation links are written to the log when
+  no provider is configured. Set `RESEND_API_KEY` or `MAIL_HOST` before opening
+  sign-up to the public; delivery failures are logged, not retried from an outbox.
+- **Verification is soft.** An unconfirmed address never blocks coursework; it only
+  shows a dashboard reminder. That is deliberate, so a mail outage cannot lock a
+  class out.
+- **Login and mail throttling are in-memory.** Correct for one instance; a second
+  instance needs a shared store or edge limiter.
+- **Courses can be members-only and grouped into classes.** Cohorts carry join codes,
+  rosters narrow to a class, and a course can leave the catalogue until a code adds a
+  student. Deadlines and notification digests are still missing.
 - **24-hour tokens, no refresh, but they can be revoked.** A session expires a day
   after sign-in; the user signs in again. A password change or an admin reset bumps
   `users.token_version`, which invalidates every earlier token immediately.
@@ -250,6 +274,7 @@ These are deliberate trade-offs, not bugs:
 - [ ] `DB_USERNAME` is not `postgres`
 - [ ] HTTPS works and HTTP redirects to it
 - [ ] `/actuator/health` is reachable, `/v3/api-docs` is **not** (prod disables it)
+- [ ] Transactional email is configured and a test sign-up received its confirmation link
 - [ ] A restore from backup has been tested
 - [ ] Admin account password changed from the demo value
 - [ ] `INSTRUCTOR_INVITE_CODE` set, or instructor signup intentionally disabled

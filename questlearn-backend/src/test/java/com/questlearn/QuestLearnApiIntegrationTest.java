@@ -12,7 +12,7 @@ import com.questlearn.repository.CourseRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.QuizRepository;
 import com.questlearn.repository.UserRepository;
-import com.questlearn.service.PasswordResetMailer;
+import com.questlearn.service.MailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -82,9 +82,9 @@ class QuestLearnApiIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    /** Captures the raw reset token instead of sending mail during the suite. */
+    /** Captures raw links instead of sending mail during the suite. */
     @MockitoBean
-    private PasswordResetMailer passwordResetMailer;
+    private MailService mailService;
 
     private User instructor;
     private User student;
@@ -99,7 +99,8 @@ class QuestLearnApiIntegrationTest {
     void seed() throws Exception {
         // The suite owns the whole database, so start from nothing every time.
         jdbc.execute("TRUNCATE TABLE admin_audit_log, cohort_memberships, cohorts, enrollments, "
-                + "password_reset_tokens, module_attempts, user_module_progress, quizzes, modules, "
+                + "email_verification_tokens, password_reset_tokens, module_attempts, "
+                + "user_module_progress, quizzes, modules, "
                 + "courses, users RESTART IDENTITY CASCADE");
 
         instructor = users.save(User.builder()
@@ -110,6 +111,7 @@ class QuestLearnApiIntegrationTest {
                 .totalXp(0)
                 .currentLevel(1)
                 .streakDays(0)
+                .emailVerified(true)
                 .build());
 
         student = users.save(User.builder()
@@ -120,6 +122,7 @@ class QuestLearnApiIntegrationTest {
                 .totalXp(0)
                 .currentLevel(1)
                 .streakDays(0)
+                .emailVerified(true)
                 .build());
 
         admin = users.save(User.builder()
@@ -130,6 +133,7 @@ class QuestLearnApiIntegrationTest {
                 .totalXp(0)
                 .currentLevel(1)
                 .streakDays(0)
+                .emailVerified(true)
                 .build());
 
         course = courses.save(Course.builder()
@@ -213,10 +217,36 @@ class QuestLearnApiIntegrationTest {
                 .andExpect(status().isAccepted());
 
         ArgumentCaptor<String> token = ArgumentCaptor.forClass(String.class);
-        verify(passwordResetMailer, org.mockito.Mockito.atLeastOnce())
-                .send(any(User.class), token.capture(), any());
+        verify(mailService, org.mockito.Mockito.atLeastOnce())
+                .sendPasswordReset(any(User.class), token.capture(), any());
         // A test may request more than once; the newest link is the live one.
         return token.getAllValues().get(token.getAllValues().size() - 1);
+    }
+
+    /** Registers through the API and returns the raw confirmation token it mailed. */
+    private String registerAndCaptureVerificationToken(String email) throws Exception {
+        mvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of(
+                                "name", "New Learner",
+                                "email", email,
+                                "password", PASSWORD,
+                                "role", "STUDENT",
+                                "inviteCode", STUDENT_CODE))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.user.emailVerified").value(false));
+
+        ArgumentCaptor<String> token = ArgumentCaptor.forClass(String.class);
+        verify(mailService, org.mockito.Mockito.atLeastOnce())
+                .sendEmailVerification(any(User.class), token.capture(), any());
+        return token.getAllValues().get(token.getAllValues().size() - 1);
+    }
+
+    private MvcResult verifyEmail(String rawToken) throws Exception {
+        return mvc.perform(post("/api/v1/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("token", rawToken))))
+                .andReturn();
     }
 
     private MvcResult confirmReset(String token, String password) throws Exception {
@@ -240,6 +270,7 @@ class QuestLearnApiIntegrationTest {
                 .totalXp(0)
                 .currentLevel(1)
                 .streakDays(0)
+                .emailVerified(true)
                 .build());
     }
 
@@ -792,6 +823,7 @@ class QuestLearnApiIntegrationTest {
                 .totalXp(0)
                 .currentLevel(1)
                 .streakDays(0)
+                .emailVerified(true)
                 .build());
         String otherToken = login("other@it.test");
 
@@ -993,6 +1025,7 @@ class QuestLearnApiIntegrationTest {
                 .totalXp(0)
                 .currentLevel(1)
                 .streakDays(0)
+                .emailVerified(true)
                 .build());
         jdbc.update("INSERT INTO enrollments (user_id, course_id, enrolled_at) VALUES (?, ?, now())",
                 other.getId(), course.getId());
@@ -1197,7 +1230,7 @@ class QuestLearnApiIntegrationTest {
                                 java.util.Map.of("email", "nobody@it.test"))))
                 .andExpect(status().isAccepted());
 
-        verifyNoInteractions(passwordResetMailer);
+        verifyNoInteractions(mailService);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM password_reset_tokens", Integer.class))
                 .isZero();
     }
@@ -1278,6 +1311,98 @@ class QuestLearnApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(
                                 java.util.Map.of("email", "rate.limit@it.test"))))
+                .andExpect(status().isTooManyRequests());
+    }
+
+    // -------------------------------------------------- email verification
+
+    @Test
+    void registrationSendsAConfirmationLinkAndOnlyStoresItsHash() throws Exception {
+        String rawToken = registerAndCaptureVerificationToken("verify.hash@it.test");
+
+        assertThat(rawToken).isNotBlank();
+        String stored = jdbc.queryForObject(
+                "SELECT token_hash FROM email_verification_tokens ORDER BY id DESC LIMIT 1",
+                String.class);
+        assertThat(stored).hasSize(64).isNotEqualTo(rawToken).isEqualTo(sha256(rawToken));
+
+        Long hours = jdbc.queryForObject("""
+                SELECT round(extract(epoch FROM (expires_at - created_at)) / 3600)
+                FROM email_verification_tokens ORDER BY id DESC LIMIT 1""", Long.class);
+        assertThat(hours).isEqualTo(48L);
+    }
+
+    @Test
+    void aConfirmationLinkWorksOnceAndMarksTheAccountVerified() throws Exception {
+        String email = "verify.once@it.test";
+        String rawToken = registerAndCaptureVerificationToken(email);
+
+        assertThat(verifyEmail(rawToken).getResponse().getStatus()).isEqualTo(200);
+
+        String session = login(email);
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.emailVerified").value(true));
+
+        // The same link cannot be replayed.
+        assertThat(verifyEmail(rawToken).getResponse().getStatus()).isEqualTo(400);
+    }
+
+    @Test
+    void anExpiredConfirmationLinkIsRefused() throws Exception {
+        String rawToken = registerAndCaptureVerificationToken("verify.expired@it.test");
+        jdbc.update("UPDATE email_verification_tokens SET expires_at = now() - interval '1 second'");
+
+        assertThat(verifyEmail(rawToken).getResponse().getStatus()).isEqualTo(400);
+    }
+
+    @Test
+    void resendingSupersedesTheOlderConfirmationLink() throws Exception {
+        String email = "verify.resend@it.test";
+        String first = registerAndCaptureVerificationToken(email);
+        String session = login(email);
+
+        mvc.perform(post("/api/v1/auth/verify-email/resend")
+                        .header("Authorization", "Bearer " + session))
+                .andExpect(status().isAccepted());
+
+        ArgumentCaptor<String> token = ArgumentCaptor.forClass(String.class);
+        verify(mailService, org.mockito.Mockito.atLeastOnce())
+                .sendEmailVerification(any(User.class), token.capture(), any());
+        String second = token.getAllValues().get(token.getAllValues().size() - 1);
+
+        assertThat(second).isNotEqualTo(first);
+        assertThat(verifyEmail(first).getResponse().getStatus()).isEqualTo(400);
+        assertThat(verifyEmail(second).getResponse().getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void aConfirmedAccountCannotAskForAnotherLink() throws Exception {
+        String email = "verify.done@it.test";
+        String rawToken = registerAndCaptureVerificationToken(email);
+        assertThat(verifyEmail(rawToken).getResponse().getStatus()).isEqualTo(200);
+
+        mvc.perform(post("/api/v1/auth/verify-email/resend")
+                        .header("Authorization", "Bearer " + login(email)))
+                .andExpect(status().isBadRequest());
+
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM email_verification_tokens", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void confirmationResendsAreRateLimitedPerAddress() throws Exception {
+        String email = "verify.rate@it.test";
+        registerAndCaptureVerificationToken(email);
+        String session = login(email);
+
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            mvc.perform(post("/api/v1/auth/verify-email/resend")
+                            .header("Authorization", "Bearer " + session))
+                    .andExpect(status().isAccepted());
+        }
+        mvc.perform(post("/api/v1/auth/verify-email/resend")
+                        .header("Authorization", "Bearer " + session))
                 .andExpect(status().isTooManyRequests());
     }
 }

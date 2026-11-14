@@ -23,6 +23,7 @@ import QuizEditor from '../components/studio/QuizEditor.jsx';
 import VideoUploader from '../components/studio/VideoUploader.jsx';
 import { generateCourse as requestGeneratedCourse, getAiStatus } from '../services/ai.js';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
+import EmailVerificationBanner from '../components/common/EmailVerificationBanner.jsx';
 import api, { apiError } from '../services/api.js';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import { EMPTY_LESSON, lessonPayload } from '../services/lesson.js';
@@ -437,6 +438,8 @@ export default function InstructorStudio() {
           skipped by accident.
         </p>
       </header>
+
+      <EmailVerificationBanner className="mb-5" />
 
       {message && (
         <div

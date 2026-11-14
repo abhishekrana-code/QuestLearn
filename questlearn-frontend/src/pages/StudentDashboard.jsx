@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, BookOpen, Check, Compass, Crown, Layers, Sparkles, Trophy, Zap } from 'lucide-react';
+import EmailVerificationBanner from '../components/common/EmailVerificationBanner.jsx';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import StreakCounter from '../components/gamification/StreakCounter.jsx';
@@ -82,6 +83,8 @@ export default function StudentDashboard() {
           </Link>
         </div>
       </header>
+
+      <EmailVerificationBanner className="mb-5" />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1.55fr_1fr_1fr]">
         <div className="col-span-2 lg:col-span-1">

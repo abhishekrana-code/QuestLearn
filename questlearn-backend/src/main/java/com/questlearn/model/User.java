@@ -61,6 +61,14 @@ public class User {
     @Column(nullable = false)
     private int tokenVersion;
 
+    /**
+     * Whether the owner has opened the confirmation link sent to their address.
+     * Verification is soft: an unconfirmed account keeps full access and only sees
+     * a reminder, so a mail outage cannot lock a class out of its work.
+     */
+    @Column(nullable = false)
+    private boolean emailVerified;
+
     private LocalDate lastActivityDate;
 
     @Column(nullable = false)

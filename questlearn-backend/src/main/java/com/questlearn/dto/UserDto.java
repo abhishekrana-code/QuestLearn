@@ -9,6 +9,7 @@ public record UserDto(
         String name,
         String email,
         Role role,
+        boolean emailVerified,
         int totalXp,
         int currentLevel,
         int streakDays,

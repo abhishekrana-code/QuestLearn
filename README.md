@@ -174,6 +174,8 @@ All routes are under `/api/v1`. Protected routes need `Authorization: Bearer <to
 | `GET` | `/auth/me` | authenticated | Live XP / level / streak |
 | `POST` | `/auth/password-reset/request` | public | Start a reset; always the same 202 answer |
 | `POST` | `/auth/password-reset/confirm` | public | Redeem a reset token and set the new password |
+| `POST` | `/auth/verify-email` | public | Confirm an address using the link token |
+| `POST` | `/auth/verify-email/resend` | authenticated | Send a fresh confirmation link to your own address |
 | `PATCH` | `/auth/password` | authenticated | Change your own password (returns a fresh token) |
 
 ### Password recovery
@@ -193,10 +195,35 @@ registered. For a real account the backend mints a 32-byte token, stores only it
   the reset. XP, progress and streaks are untouched, and the account's login lockout is cleared.
 - Requests are capped at 3 per address per rolling hour (`RESET_MAX_PER_HOUR`).
 
-Mail is optional. With `MAIL_HOST` blank nothing is sent and the link is written to the server log
-at `WARN`, which is how a local demo or a school without SMTP can hand it over; set `MAIL_HOST`,
-`MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` and `APP_BASE_URL` (the browser origin
-the link should point at) to send real email.
+Mail is optional. With no provider configured the link is written to the server log
+at `WARN`, which is how a local demo or a school without a mail server can hand it
+over. Set `RESEND_API_KEY` (or the `MAIL_*` SMTP variables) and `APP_BASE_URL` to
+send real email; see **Email delivery** below.
+
+### Email delivery and address confirmation
+
+One `MailService` sends every transactional email, and one `EmailSender` decides how
+it leaves the process. `EMAIL_PROVIDER` can be forced to `resend`, `smtp` or `log`;
+the default `auto` uses Resend when `RESEND_API_KEY` is set, SMTP when `MAIL_HOST`
+is set, and otherwise writes the message to the server log. Asking for a provider
+that is not configured fails at startup rather than silently dropping mail.
+
+A new sign-up gets a confirmation link alongside its session. The link carries a
+32-byte token; only its SHA-256 hash is stored in `email_verification_tokens`, it
+expires after 48 hours (`VERIFICATION_TOKEN_HOURS`), and redeeming it claims the row
+with a conditional `UPDATE` so it works once. Asking for another link supersedes
+the earlier one. Resends are capped at 3 per account per rolling hour
+(`VERIFICATION_MAX_PER_HOUR`).
+
+Verification is **soft on purpose**: an unconfirmed account keeps every permission
+and all of its progress. It only sees a "Confirm your email address" reminder on the
+dashboard, with a resend button. Accounts that existed before this feature, and the
+demo data, are migrated as verified, so nobody is nagged about an address they never
+had a way to confirm.
+
+The `/verify-email?token=…` page works signed in or signed out; the link is the
+proof. A used, superseded or expired token gets the same 400 with a fresh-link hint,
+so the response cannot be used to probe which state it was in.
 
 ### Courses & nodes
 

@@ -1,6 +1,6 @@
 # QuestLearn product audit
 
-**Date:** 13 November 2026
+**Date:** 13 November 2026 (last updated 14 November 2026)
 **Auditor stance:** signed-in administrator testing the product as a school would.
 **Scope:** authentication, student learning flow, instructor authoring, admin moderation,
 accessibility, security posture, production profile, CI, and the deployment runbook.
@@ -36,6 +36,12 @@ plus a Playwright smoke suite. Enrollment, a catalogue vs. "my courses" split,
 per-course rosters, a CSV export, per-learner attempt history, a course-scoped
 leaderboard and self-service password recovery are all live and covered by tests.
 
+After the email-verification release (14 November 2026): 49 API route methods, 132
+backend tests (47 of them PostgreSQL integration tests), and 37 frontend tests across
+8 files. A new account gets a single-use confirmation link, the dashboard offers a
+resend, and recovery and verification share one transport that can be Resend, SMTP
+or the server log.
+
 ---
 
 ## Scorecard
@@ -47,17 +53,18 @@ leaderboard and self-service password recovery are all live and covered by tests
 | Student learning flow | 8/10 | Skill tree → lesson → quiz → viva, with XP and a progress page that reads well |
 | Instructor authoring | 8/10 | Five-step studio, AI draft builder, quiz and video editors |
 | Admin and account management | 8/10 | Moderation, account search, the audit feed and course rosters work; no pagination |
-| Authentication and security | 8/10 | Role enforcement, throttling and revocable sessions; no email verification |
+| Authentication and security | 9/10 | Role enforcement, throttling, revocable sessions and soft email verification |
 | Classroom operations | 7/10 | Enrollment, cohorts with join codes, rosters, per-learner history, CSV export and a class leaderboard; no gating or deadlines |
 | Reliability and observability | 5/10 | Health endpoint only; no metrics, tracing or error aggregation |
 | Tests and CI | 8/10 | Real PostgreSQL in CI, guards against silently skipped tests, both halves gated |
 | Deployment and documentation | 8/10 | `DEPLOY.md` covers TLS, backups, upgrades and known limits |
 | Responsive and mobile | 8/10 | Verified at 375 px; no horizontal scroll or clipped controls |
 
-**Overall: about 8/10 as a single-class pilot, about 6/10 as a school-wide system.**
+**Overall: about 8/10 as a single-class pilot, about 7/10 as a school-wide system.**
 The classroom layer now exists (join by code, class, roster, report, per-learner
-history, class board); what is still missing is the institution above it - course
-gating, email and deadlines.
+history, class board) and email handles recovery and address confirmation; what is
+still missing is the institution above it - deadlines, notification digests and
+operational telemetry.
 
 ---
 
@@ -132,15 +139,15 @@ that board, and **enrol a pasted class list** (CSV or a column of addresses) wit
 unknown addresses reported back rather than silently created. Nothing in this
 finding is still open.
 
-**2. Email delivery — password recovery CLOSED, notifications still open.**
-Self-service recovery now exists: a token table, a 30-minute expiry, single use
-enforced by a conditional claim, superseded links, hashed storage, per-address
-throttling and session revocation on redemption. Mail itself is still opt-in: with
-`MAIL_HOST` blank the link goes to the server log instead of an inbox, so address
-verification and lesson notifications remain open, and a delivery failure is only
-visible in the log rather than an outbox. *Fix shape:* point `MAIL_HOST` at an SMTP
-or transactional-email provider, then reuse the same mailer for verification and
-notifications.
+**2. Email delivery — recovery and verification CLOSED, notification digests open.**
+One transport now carries both links. `EMAIL_PROVIDER` chooses Resend (HTTP API),
+SMTP, or the server-log fallback; the default `auto` picks Resend when a key exists,
+SMTP when a host exists, and otherwise logs the link at `WARN`. Asking for a provider
+without its settings fails at startup instead of silently dropping mail. Address
+verification is a single-use, hashed, 48-hour token with a per-account resend limit
+and a soft dashboard reminder; unconfirmed accounts keep full access. A delivery
+failure is still only a log line (there is no outbox or retry queue) and lesson
+notification digests remain open, but the P0 access gap is closed.
 
 **3. Class reporting: acting on the data — CLOSED.**
 The roster lists every enrolled learner with their per-node status, attempts, XP and
@@ -148,8 +155,7 @@ last activity; each name opens their full attempt trail; the CSV exports the sam
 for a gradebook. It can now also be narrowed to **one node, cleared or not**, which is
 the "who is stuck on node 3" question, and printed: a print stylesheet drops the
 navigation and buttons and keeps the rows. Class lists import, so the whole loop runs
-inside the product. **Three of the four P0 findings are now closed; the open one is
-email.**
+inside the product. **All four P0 findings are now closed.**
 
 ### P1 — needed in the first month of use
 
@@ -174,8 +180,12 @@ email.**
    file is the follow-up. While doing this, the Google Fonts `<link>` that had crept
    into `index.html` was removed: the README already promised system fonts, and the
    CDN request both contradicted it and would have forced a looser policy.
-9. **No email verification** means an account can be created with someone else's
-   address by anyone holding the institution code.
+9. **Email verification — CLOSED.** A new sign-up receives a single-use,
+   48-hour confirmation link; only its SHA-256 hash is stored, a resend supersedes
+   the older link, and the dashboard carries a soft reminder with a resend button.
+   Existing accounts and demo data were migrated as verified. An account can still
+   be created with an address the person does not own, but the product no longer
+   claims it is confirmed, and recovery will not silently go to an unproven inbox.
 
 ### P2 — later
 
@@ -194,14 +204,14 @@ email.**
 ## Roadmap
 
 Items 1 and 3 of the previous roadmap are shipped (see "The enrollment release"
-below), so the order starts from what a graded term still needs.
+below) and email transport is now shipped too, so the order starts from what a
+graded term still needs.
 
 | Order | Work | Effort | Why first |
 |---|---|---|---|
-| 1 | Email transport: verification + self-service reset | 3–5 days | The only P0 left, and the most embarrassing support path |
-| 2 | Deadlines and notifications | 1–2 weeks | Turns self-paced study into schedulable coursework |
-| 3 | Object storage for lesson video | 3–5 days | Protects the single server and slow connections |
-| 4 | Dependency majors (Vite 8, Vitest 5, react-router 7) | 2–4 days | Clears two critical advisories; needs its own quiet week |
+| 1 | Deadlines and notifications | 1–2 weeks | Turns self-paced study into schedulable coursework |
+| 2 | Object storage for lesson video | 3–5 days | Protects the single server and slow connections |
+| 3 | Dependency majors (Vite 8, Vitest 5, react-router 7) | 2–4 days | Clears two critical advisories; needs its own quiet week |
 
 ### The enrollment release (13 November 2026)
 
@@ -224,6 +234,7 @@ below), so the order starts from what a graded term still needs.
 | `df5e268` | Overall board: `GET /leaderboard/overall` sums the XP of every cleared node across every course per learner, with a node count, a course count and the top three contributing courses; the standings page opens on it ("All courses combined") and keeps lifetime XP as a second option | 1 integration test (combined 100 from one node, one course, the course named, teacher refused); live: Mira 520/4 nodes, Leo 220/2, Sam 100/1, each attributed to the one course |
 | `97fea6d` | Class board: `?cohortId=` on `/courses/{id}/leaderboard`, the board opens to the owning instructor, and the standings page gains a class picker under the course one | 1 integration test (whole course 2 → one class 1, rank restarts at 1, unknown class 404, teacher may read own board); live: instructor's board auto-opened on their course, picking "10B Board" left Leo alone on it |
 | `09f4b4c` | Course gating (V8 `membership_required`): a members-only course leaves the catalogue and refuses non-members, while a class code still works; plus `?cohortId=` on the roster and the class picker, and a members-only switch on the classes page | 2 integration tests (gated course hidden + 403 + code still joins + owner-only toggle; roster narrowing 2 → 1 and a foreign class 404); live: switch on → "Members only", switch off restored, roster picker 4 → 1 learner |
+| `_pending_` | Email delivery and address confirmation: `EmailSender` transports (Resend HTTP API, SMTP, log fallback) selected by `EMAIL_PROVIDER`; one `MailService` now serves recovery and verification; V10 adds `users.email_verified` (existing rows migrated true) and `email_verification_tokens`; `POST /auth/verify-email` (public) and `/auth/verify-email/resend` (signed in); a dashboard/studio reminder and a `/verify-email` page | 6 integration tests (hash-only storage and 48-hour window, single use, expired refused, resend supersedes the old link, confirmed account refused, resend throttle) and 7 unit tests (hashing, claim race, expiry, resend rules); live: registered through the browser, saw the reminder, pulled the link from the log, confirmed it on the page, then the reminder disappeared and `/auth/me` reported `emailVerified: true`; an invalid token showed the fresh-link message |
 
 ---
 
@@ -260,7 +271,9 @@ failure modes are contained. A teacher can now run a class inside the product - 
 join, the roster shows who is stuck, a click shows why, and the CSV lands in a
 gradebook - and can rank that class on its own board.
 
-For a department running a graded term, two things still block it: without email there
-is no self-service reset or address verification, and without cohorts a course is a
-public listing rather than a class. Ship roadmap items 1 and 2 first; neither is large,
-and between them they turn this from a good pilot into something a school can operate.
+For a department running a graded term, the remaining blockers are deadlines,
+notification digests and operational telemetry, not access control. A teacher can
+create a class, share its code, keep the course out of the catalogue until the class
+arrives, watch the roster, and hand a learner a self-service recovery link. Ship
+roadmap items 1 and 2 next; configure a real mail provider before opening sign-up to
+the public.
