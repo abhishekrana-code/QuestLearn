@@ -1,7 +1,9 @@
 package com.questlearn.controller;
 
 import com.questlearn.dto.AppUserPrincipal;
+import com.questlearn.dto.AttachUploadRequest;
 import com.questlearn.dto.VideoAttachmentDto;
+import com.questlearn.dto.VideoUploadTicketDto;
 import com.questlearn.dto.VideoUrlRequest;
 import com.questlearn.service.LessonVideoService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -43,6 +46,25 @@ public class MediaController {
                                           @RequestPart("file") MultipartFile file,
                                           @AuthenticationPrincipal AppUserPrincipal principal) {
         return lessonVideoService.upload(moduleId, principal, file);
+    }
+
+    @PostMapping("/modules/{moduleId}/video/upload-ticket")
+    @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
+    @Operation(summary = "Get a signed place to upload a lesson video")
+    public VideoUploadTicketDto uploadTicket(@PathVariable Long moduleId,
+                                            @RequestParam(required = false) String filename,
+                                            @AuthenticationPrincipal AppUserPrincipal principal) {
+        return lessonVideoService.uploadTicket(moduleId, filename, principal);
+    }
+
+    @PostMapping(path = "/modules/{moduleId}/video/attachments",
+            consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
+    @Operation(summary = "Record a video the browser uploaded directly")
+    public VideoAttachmentDto attachUpload(@PathVariable Long moduleId,
+                                          @Valid @RequestBody AttachUploadRequest request,
+                                          @AuthenticationPrincipal AppUserPrincipal principal) {
+        return lessonVideoService.attachUpload(moduleId, request.name(), request.label(), principal);
     }
 
     @PutMapping(path = "/modules/{moduleId}/video-url", consumes = MediaType.APPLICATION_JSON_VALUE)

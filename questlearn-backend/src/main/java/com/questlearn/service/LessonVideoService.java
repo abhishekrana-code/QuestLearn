@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.VideoAttachmentDto;
+import com.questlearn.dto.VideoUploadTicketDto;
 import com.questlearn.exception.ApiException;
 import com.questlearn.model.Module;
 import com.questlearn.repository.ModuleRepository;
@@ -38,6 +39,34 @@ public class LessonVideoService {
         Module module = manageableModule(moduleId, principal);
         String url = mediaStorageService.store(file);
         return attach(module, url, cleanLabel(file.getOriginalFilename()));
+    }
+
+    /**
+     * A place for the browser to put the file itself, so a large lesson is streamed
+     * once into the store rather than through this JVM.
+     */
+    @Transactional
+    public VideoUploadTicketDto uploadTicket(Long moduleId, String filename,
+                                             AppUserPrincipal principal) {
+        manageableModule(moduleId, principal);
+        var ticket = mediaStorageService.beginUpload(filename, null);
+        return new VideoUploadTicketDto(ticket.name(), ticket.uploadUrl(), ticket.method(),
+                ticket.headers(), ticket.mediaUrl(), ticket.expiresAt(), ticket.maxBytes());
+    }
+
+    /**
+     * Records an upload the browser completed. The object must really be in the store,
+     * so an abandoned or failed upload cannot leave a lesson pointing at nothing.
+     */
+    @Transactional
+    public VideoAttachmentDto attachUpload(Long moduleId, String name, String label,
+                                           AppUserPrincipal principal) {
+        Module module = manageableModule(moduleId, principal);
+        if (!mediaStorageService.existsStored(name)) {
+            throw ApiException.badRequest(
+                    "That upload did not arrive. Choose the file again, or attach a link.");
+        }
+        return attach(module, MediaStorageService.PUBLIC_PREFIX + name, cleanLabel(label));
     }
 
     @Transactional

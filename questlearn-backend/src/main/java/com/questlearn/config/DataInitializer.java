@@ -508,20 +508,18 @@ public class DataInitializer implements ApplicationRunner {
         }
 
         String fileName = "demo-html-foundations.mp4";
-        Path target = mediaStorageService.videoDir().resolve(fileName);
-        try {
-            if (!Files.exists(target)) {
-                try (InputStream stream = clip.getInputStream()) {
-                    Files.copy(stream, target, StandardCopyOption.REPLACE_EXISTING);
-                }
-            }
-        } catch (IOException ex) {
+        String videoUrl;
+        try (InputStream stream = clip.getInputStream()) {
+            // Through the store, so the demo lesson also works on a bucket.
+            videoUrl = mediaStorageService.storeNamed(fileName, stream, clip.contentLength(),
+                    "video/mp4");
+        } catch (IOException | com.questlearn.exception.ApiException ex) {
             System.out.printf("Demo lesson video skipped: %s%n", ex.getMessage());
             return;
         }
 
         ObjectNode updated = content.deepCopy();
-        updated.put("videoUrl", MediaStorageService.PUBLIC_PREFIX + fileName);
+        updated.put("videoUrl", videoUrl);
         updated.put("videoLabel", "Intro \u00b7 semantic scaffolding \u00b7 0:12");
         node.setContent(updated);
         moduleRepository.save(node);

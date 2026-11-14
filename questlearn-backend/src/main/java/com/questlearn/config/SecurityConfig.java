@@ -63,6 +63,9 @@ public class SecurityConfig {
                 // Lesson videos: a <video src> request cannot send a bearer token, and the
                 // stored names are random UUIDs, so the URL itself is the capability.
                 .requestMatchers(HttpMethod.GET, "/api/v1/media/videos/**").permitAll()
+                // A signed direct upload carries its own name, expiry and signature,
+                // checked by MediaStorageService; the signature is the credential.
+                .requestMatchers(HttpMethod.PUT, "/api/v1/media/uploads/**").permitAll()
                 .anyRequest().authenticated())
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint((request, response, authException) ->

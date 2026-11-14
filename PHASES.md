@@ -72,15 +72,27 @@ the API: node date → learner outside the class unaffected → join → overrid
 dashboard, skill tree and briefing → class lists its override → a learner gets 403 →
 clearing falls back to the node date → seeded state restored.
 
-## Phase 3: Object storage for lesson video
+## Phase 3: Object storage for lesson video (done, uncommitted)
 
 **Why:** uploads sit on the application server's disk; a backup must copy them and a
 second app server cannot serve them.
 **Scope:** a storage interface behind `MediaStorageService` with the local disk as the
 default and an S3-compatible driver (R2/S3/MinIO) selected by configuration; signed or
 proxied playback; migration note for existing files; tests against a local stub.
-**Done when:** the same upload and playback path works with the bucket driver and with
-disk, and a missing bucket fails at startup with a clear message.
+**Built:** a `MediaStore` interface with a disk driver (default, no account) and an
+S3 driver for AWS S3, Cloudflare R2 and MinIO, chosen by `MEDIA_STORAGE`. Uploads are
+signed in both modes: a presigned PUT to the bucket, or a signed one-shot URL on disk
+(`/api/v1/media/uploads/{name}`). Playback keeps one stable path,
+`/api/v1/media/videos/{name}`: the disk resource handler with Range support, or a
+redirect to a short-lived signed GET on a bucket. A bucket deployment is checked at
+startup. The studio asks for a ticket, uploads the bytes itself, then records the
+object, so a 100 MB lesson never passes through the API.
+
+**Verified:** `MediaStorageServiceTest` (8) and `MediaStoreConfigTest` (4), a 12-step
+live run on disk (ticket, signed upload, attach, playback, video content type, Range
+206, forged signature 403, missing object 400, learner 403, cleanup), a startup with
+`s3` and no bucket exits 1 naming `MEDIA_S3_BUCKET`, and the seeded demo lesson still
+plays. Not verified: a real bucket, since no account is configured here.
 
 ## Phase 4: Teacher analytics
 

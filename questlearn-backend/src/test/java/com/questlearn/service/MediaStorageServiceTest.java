@@ -1,13 +1,17 @@
 package com.questlearn.service;
 
 import com.questlearn.exception.ApiException;
+import com.questlearn.service.media.DiskMediaStore;
+import com.questlearn.service.media.UploadSignature;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -17,8 +21,10 @@ class MediaStorageServiceTest {
     @TempDir
     Path dir;
 
+    private final UploadSignature signatures = new UploadSignature("test-secret-for-media-signatures");
+
     private MediaStorageService service(long maxBytes) {
-        return new MediaStorageService(dir.toString(), maxBytes);
+        return new MediaStorageService(new DiskMediaStore(dir), signatures, maxBytes, 15, 60);
     }
 
     private MockMultipartFile video(String name, int bytes) {
@@ -88,5 +94,55 @@ class MediaStorageServiceTest {
 
         storage.deleteStored(url);
         assertThat(Files.exists(dir.resolve(name))).isFalse();
+    }
+
+    @Test
+    void aTicketUploadsStraightToTheServerAndPlaysFromTheStableUrl() throws Exception {
+        MediaStorageService storage = service(10_000);
+
+        var ticket = storage.beginUpload("lesson.mp4", "video/mp4");
+
+        assertThat(ticket.name()).matches("[0-9a-f-]{36}\\.mp4");
+        assertThat(ticket.uploadUrl()).startsWith(MediaStorageService.UPLOAD_PREFIX);
+        assertThat(ticket.uploadUrl()).contains("expires=").contains("signature=");
+        assertThat(ticket.mediaUrl()).isEqualTo(MediaStorageService.PUBLIC_PREFIX + ticket.name());
+        assertThat(storage.existsStored(ticket.name())).isFalse();
+
+        storage.acceptUpload(ticket.name(), ticket.uploadUrl().replaceAll(".*signature=", ""),
+                ticket.expiresAt().getEpochSecond(), "video/mp4", 4096,
+                new ByteArrayInputStream(new byte[4096]));
+
+        assertThat(storage.existsStored(ticket.name())).isTrue();
+        assertThat(Files.size(dir.resolve(ticket.name()))).isEqualTo(4096);
+    }
+
+    @Test
+    void anExpiredOrForgedTicketCannotWriteAnything() {
+        MediaStorageService storage = service(10_000);
+        var ticket = storage.beginUpload("lesson.webm", "video/webm");
+        String signature = signatures.sign(ticket.name(), ticket.expiresAt());
+        Instant past = Instant.now().minusSeconds(60);
+
+        assertThatThrownBy(() -> storage.acceptUpload(ticket.name(), signature,
+                past.getEpochSecond(), "video/webm", 10, new ByteArrayInputStream(new byte[10])))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("expired");
+
+        assertThatThrownBy(() -> storage.acceptUpload(ticket.name(), "deadbeef",
+                ticket.expiresAt().getEpochSecond(), "video/webm", 10,
+                new ByteArrayInputStream(new byte[10])))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("not valid");
+
+        assertThat(storage.existsStored(ticket.name())).isFalse();
+    }
+
+    @Test
+    void aTicketForAnotherFormatIsRefused() {
+        MediaStorageService storage = service(10_000);
+
+        assertThatThrownBy(() -> storage.beginUpload("installer.exe", null))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("Unsupported video format");
     }
 }

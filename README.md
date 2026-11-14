@@ -250,7 +250,9 @@ so the response cannot be used to probe which state it was in.
 | `PUT` | `/courses/{courseId}/modules/{moduleId}/deadline` | Instructor (owner), Admin | Set or move one node's due date |
 | `DELETE` | `/courses/{courseId}/modules/{moduleId}/deadline` | Instructor (owner), Admin | Make one node self-paced again |
 | `POST` | `/modules/{id}/quiz` | Instructor (owner), Admin | Attach or replace a JSONB quiz |
-| `POST` | `/modules/{id}/video` | Instructor (owner), Admin | Upload a lesson video (multipart `file`) |
+| `POST` | `/modules/{id}/video` | Instructor (owner), Admin | Upload a lesson video through the server (multipart `file`, small files) |
+| `POST` | `/modules/{id}/video/upload-ticket` | Instructor (owner), Admin | Signed place to upload a video directly to storage |
+| `POST` | `/modules/{id}/video/attachments` | Instructor (owner), Admin | Record an upload the browser finished |
 | `PUT` | `/modules/{id}/video-url` | Instructor (owner), Admin | Attach a lesson video hosted elsewhere |
 | `DELETE` | `/modules/{id}/video` | Instructor (owner), Admin | Remove the lesson video |
 
@@ -258,7 +260,24 @@ so the response cannot be used to probe which state it was in.
 
 | Method | Path | Access | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/media/videos/{name}` | public | Stream an uploaded lesson video (`Range` supported) |
+| `GET` | `/media/videos/{name}` | public | Play an uploaded lesson video (`Range` supported on disk, signed redirect on a bucket) |
+| `PUT` | `/media/uploads/{name}?expires=&signature=` | signed URL | Receive a direct disk upload; the signature is the credential |
+
+Lesson video is stored through one `MediaStore` interface with two drivers. `disk`
+(the default) keeps files under `MEDIA_VIDEO_DIR` and needs no account. `s3` uses any
+S3-compatible bucket (AWS S3, Cloudflare R2, MinIO) and is selected with
+`MEDIA_STORAGE=s3` plus `MEDIA_S3_BUCKET`, `MEDIA_S3_REGION`, `MEDIA_S3_ACCESS_KEY`,
+`MEDIA_S3_SECRET_KEY` and, for R2 or MinIO, `MEDIA_S3_ENDPOINT` (add
+`MEDIA_S3_PATH_STYLE=true` for MinIO). A bucket deployment is checked at startup, so a
+wrong bucket or key stops the app with a message naming the missing variable instead of
+failing a teacher's first upload.
+
+The studio never sends a large file through the API. It asks for a ticket, puts the
+bytes at the URL the ticket names (a presigned PUT on a bucket, a signed one-shot URL on
+disk), then records the object name. Playback always uses the stable
+`/api/v1/media/videos/{name}` path: on a bucket the handler redirects to a short-lived
+signed GET (`MEDIA_PLAYBACK_TTL_MINUTES`, default 60), so lessons keep working when the
+credentials rotate. Upload links expire after `MEDIA_UPLOAD_TTL_MINUTES` (default 15).
 
 ### Progression
 

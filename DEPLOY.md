@@ -158,9 +158,23 @@ Cost notes:
   streamed for grading and never written to disk.
 - Nginx must allow the larger body: the shipped `deploy/nginx.conf` sets
   `client_max_body_size 120m`.
-- Uploaded lesson videos are files under `MEDIA_VIDEO_DIR` (default
-  `./uploads/videos`), not database rows. Back that directory up with PostgreSQL,
-  and give it disk space.
+- Uploaded lesson videos are not database rows. Choose where they live with
+  `MEDIA_STORAGE`:
+  - `disk` (default) keeps files under `MEDIA_VIDEO_DIR` (default `./uploads/videos`).
+    Back that directory up with PostgreSQL, and give it disk space.
+  - `s3` keeps them in a bucket (AWS S3, Cloudflare R2, MinIO): set `MEDIA_S3_BUCKET`,
+    `MEDIA_S3_REGION`, `MEDIA_S3_ACCESS_KEY`, `MEDIA_S3_SECRET_KEY` and, for R2 or
+    MinIO, `MEDIA_S3_ENDPOINT` (`MEDIA_S3_PATH_STYLE=true` for MinIO). The bucket is
+    checked at startup, so a missing bucket or bad key refuses to start rather than
+    breaking the first upload. The bucket can stay private: playback is a redirect to
+    a signed GET that lives `MEDIA_PLAYBACK_TTL_MINUTES` (default 60).
+  - Moving an existing deployment from disk to a bucket needs the old
+    `uploads/videos` directory copied into the bucket under the same names; the URLs in
+    lesson content are unchanged. Copy before switching `MEDIA_STORAGE`, otherwise
+    those lessons play nothing.
+  - A large video no longer passes through the API: the studio uploads straight to the
+    ticket's URL, so nginx's `client_max_body_size` only matters for the older
+    multipart path and viva recordings.
 
 The examiner derives its topics from each node's lesson content, so existing
 courses need no authoring. An instructor can override it per node by adding a
