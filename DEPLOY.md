@@ -267,6 +267,26 @@ These are deliberate trade-offs, not bugs:
 - **AI output is a draft.** Generated courses are always created unpublished and
   must be reviewed — like any model output, the content can be wrong.
 
+## Data retention
+
+There is no scheduled pruning job other than the reminder ledger, so this table is the
+policy an operator should be able to answer questions with. Every value below is either
+enforced in code or set by the listed property.
+
+| Data | Table or place | Lifetime |
+|---|---|---|
+| Password-reset token | `password_reset_tokens`, SHA-256 hash only | 30 minutes, then unusable; a newer request supersedes it |
+| Email-verification token | `email_verification_tokens`, SHA-256 hash only | 48 hours; a resend supersedes the older link |
+| Sessions | no token table; only `users.token_version` | a token is valid until it expires (24 h) or the version is bumped by a password change or admin reset |
+| Login throttling | in-memory counters | cleared on restart |
+| Deadline reminder ledger | `deadline_reminders` | `NOTIFICATIONS_RETENTION_DAYS`, default 120 days, so a moved deadline can notify again |
+| Admin audit log | `admin_audit_log` | kept indefinitely; there is no automatic pruning, so export or trim it yourself if a retention limit applies to you |
+| Server errors | in-memory ring buffer | last 100 only, cleared on restart |
+| Application logs | journal or the file you redirect to | whatever your rotation keeps; set a rotation policy and treat logs as containing email addresses |
+| Lesson videos | `uploads/videos` on the app server | until the node or course that owns the file is deleted, or the file is removed from disk |
+| Backups | your `pg_dump` and a copy of `uploads/videos` | your policy; a backup is only as private as the bucket or disk that holds it |
+| Deleted accounts | not implemented | there is no self-service deletion; a request has to be handled by an operator in SQL |
+
 ## Pre-launch checklist
 
 - [ ] `JWT_SECRET` is random and not the development default

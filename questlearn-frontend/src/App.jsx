@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import Accessibility from './pages/Accessibility.jsx';
 import Navbar from './components/common/Navbar.jsx';
 import ProtectedRoute from './components/common/ProtectedRoute.jsx';
 import { useAuth } from './context/AuthContext.jsx';
@@ -56,8 +57,15 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen flex-col">
+      {/* Keyboard users land here first; Tab is how they reach it. */}
+      <a
+        href="#main-content"
+        className="skip-link"
+      >
+        Skip to content
+      </a>
       {user && <Navbar />}
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
         <Suspense fallback={<LoadingScreen />}>
           <Routes>
             <Route path="/" element={<HomeRoute />} />
@@ -77,6 +85,7 @@ export default function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             {/* Opened from a confirmation email; may be signed out. */}
             <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/accessibility" element={<Accessibility />} />
             <Route
               path="/dashboard"
               element={

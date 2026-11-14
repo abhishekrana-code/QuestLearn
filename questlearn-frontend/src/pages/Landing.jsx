@@ -629,7 +629,8 @@ export default function Landing() {
     <div className="min-h-screen bg-background">
       <Header />
 
-      <main>
+      {/* A plain container: the app already renders the one main landmark. */}
+      <div>
         {/* Hero ------------------------------------------------------------ */}
         <section className="relative overflow-hidden">
           <div
@@ -1025,7 +1026,7 @@ export default function Landing() {
             </div>
           </div>
         </section>
-      </main>
+      </div>
 
       <Footer />
     </div>
@@ -1110,6 +1111,11 @@ function Footer() {
                 <a href="#how" className="transition-colors hover:text-foreground">
                   How it works
                 </a>
+              </li>
+              <li>
+                <Link to="/accessibility" className="transition-colors hover:text-foreground">
+                  Accessibility
+                </Link>
               </li>
             </ul>
           </div>

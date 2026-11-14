@@ -117,6 +117,32 @@
     backdrop-filter: blur(4px);
   }
 
+  /* The first stop for a keyboard user. Off-screen until it holds focus, then a
+     normal control sitting over the top-left corner of the page. */
+  .skip-link {
+    position: fixed;
+    left: 1rem;
+    top: 1rem;
+    z-index: 60;
+    transform: translateY(-200%);
+    border-radius: 0.5rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    padding: 0.5rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    box-shadow: var(--shadow-2);
+    transition: transform 120ms var(--ease-out);
+  }
+
+  .skip-link:focus-visible,
+  .skip-link:focus {
+    transform: translateY(0);
+    outline: 2px solid hsl(var(--ring, var(--gold)));
+    outline-offset: 2px;
+  }
+
   /* --- Typography -------------------------------------------------------- */
   .eyebrow {
     display: inline-flex;
