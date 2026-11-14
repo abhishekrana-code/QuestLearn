@@ -243,6 +243,7 @@ so the response cannot be used to probe which state it was in.
 | `POST` | `/cohorts/join` | Student | Join a class by code, which also enrolls in its course |
 | `PATCH` | `/courses/{id}/members-only?membersOnly=` | Instructor (owner), Admin | Hide a course from the catalogue so only its class codes let students in |
 | `GET` | `/courses/{id}/roster/{userId}` | Instructor (owner), Admin | One learner's nodes and graded attempt trail |
+| `GET` | `/courses/{id}/analytics?cohortId=` | Instructor (owner), Admin | Per-node funnel for a course, or for one class |
 | `POST` | `/courses` | Instructor, Admin | Create a draft course |
 | `PATCH` | `/courses/{id}/publish?published=true` | Instructor (owner), Admin | Publish / unpublish |
 | `POST` | `/courses/{id}/modules` | Instructor (owner), Admin | Add a skill node |

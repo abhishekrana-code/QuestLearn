@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  BarChart3,
   Check,
   ChevronRight,
   Clock,
@@ -272,12 +273,20 @@ export default function CourseRoster() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <Link
-        to="/studio/courses"
-        className="no-print mb-4 inline-flex items-center gap-1.5 text-[11px] font-semibold text-fg-muted hover:text-foreground"
-      >
-        <ArrowLeft size={13} /> Course library
-      </Link>
+      <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-2">
+        <Link
+          to="/studio/courses"
+          className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-fg-muted hover:text-foreground"
+        >
+          <ArrowLeft size={13} /> Course library
+        </Link>
+        <Link
+          to={`/studio/courses/${courseId}/analytics`}
+          className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-fg-muted hover:text-foreground"
+        >
+          <BarChart3 size={13} /> Where the course loses people
+        </Link>
+      </div>
 
       <header className="mb-6">
         <p className="eyebrow">Roster</p>

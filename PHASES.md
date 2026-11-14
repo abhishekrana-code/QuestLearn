@@ -94,13 +94,22 @@ live run on disk (ticket, signed upload, attach, playback, video content type, R
 `s3` and no bucket exits 1 naming `MEDIA_S3_BUCKET`, and the seeded demo lesson still
 plays. Not verified: a real bucket, since no account is configured here.
 
-## Phase 4: Teacher analytics
+## Phase 4: Teacher analytics (done, uncommitted)
 
 **Why:** the roster answers "who is stuck now"; the studio cannot answer "where do
 people stop".
-**Scope:** per-node completion funnel (unlocked, started, cleared, attempts, median
-time to clear), per-course drop-off, one endpoint plus a studio panel, integration
-tests on seeded data.
+**Built:** `GET /courses/{id}/analytics` (owner or admin, optional `cohortId`) returns
+learners, started, finished, a per-node funnel (reached, started, cleared, attempts,
+median hours from first attempt to completion) and the node with the biggest
+reached-minus-cleared gap. The studio page at `/studio/courses/{courseId}/analytics`
+shows the bars, a class picker and the drop-off callout, linked from the roster and
+class pages.
+
+**Verified:** `AnalyticsServiceTest` (6: funnel counts, drop-off choice, median from
+first attempt, class scope, empty class, even-count median) and a 14-step live run
+(titled response, consistent counts, drop-off inside the node list, cleared count
+cross-checked against the roster, learner 403, class scope of one learner, unknown
+course 404, test class cleaned up).
 
 ## Phase 5: Dependency majors and CSP tightening
 

@@ -22,6 +22,7 @@ const InstructorStudio = lazy(() => import('./pages/InstructorStudio.jsx'));
 const InstructorCourses = lazy(() => import('./pages/InstructorCourses.jsx'));
 const CourseRoster = lazy(() => import('./pages/CourseRoster.jsx'));
 const LearnerDetail = lazy(() => import('./pages/LearnerDetail.jsx'));
+const CourseAnalytics = lazy(() => import('./pages/CourseAnalytics.jsx'));
 const InstructorCohorts = lazy(() => import('./pages/InstructorCohorts.jsx'));
 const ExploreCourses = lazy(() => import('./pages/ExploreCourses.jsx'));
 const StudentPerformance = lazy(() => import('./pages/StudentPerformance.jsx'));
@@ -139,6 +140,14 @@ export default function App() {
               element={
                 <ProtectedRoute roles={['INSTRUCTOR', 'ADMIN']}>
                   <CourseRoster />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/studio/courses/:courseId/analytics"
+              element={
+                <ProtectedRoute roles={['INSTRUCTOR', 'ADMIN']}>
+                  <CourseAnalytics />
                 </ProtectedRoute>
               }
             />
