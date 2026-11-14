@@ -2,6 +2,7 @@ package com.questlearn.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.questlearn.security.JwtAuthenticationFilter;
+import com.questlearn.security.RequestTraceFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -57,6 +58,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/verify-email").permitAll()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/h2-console/**", "/actuator/health").permitAll()
+                // Metrics describe the whole server, so only an operator may read them.
+                .requestMatchers("/actuator/**").hasRole("ADMIN")
                 // Lesson videos: a <video src> request cannot send a bearer token, and the
                 // stored names are random UUIDs, so the URL itself is the capability.
                 .requestMatchers(HttpMethod.GET, "/api/v1/media/videos/**").permitAll()
@@ -64,25 +67,32 @@ public class SecurityConfig {
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint((request, response, authException) ->
                         writeJson(response, HttpServletResponse.SC_UNAUTHORIZED,
-                                "Authentication required", request.getRequestURI()))
+                                "Authentication required", request))
                 .accessDeniedHandler((request, response, deniedException) ->
                         writeJson(response, HttpServletResponse.SC_FORBIDDEN,
-                                "You do not have permission to perform this action",
-                                request.getRequestURI())))
+                                "You do not have permission to perform this action", request)))
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-    private void writeJson(HttpServletResponse response, int status, String message, String path) {
+    private void writeJson(HttpServletResponse response, int status, String message,
+                           jakarta.servlet.http.HttpServletRequest request) {
         try {
             response.setStatus(status);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            objectMapper.writeValue(response.getOutputStream(), Map.of(
-                    "status", status,
-                    "error", status == 401 ? "Unauthorized" : "Forbidden",
-                    "message", message,
-                    "path", path));
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("status", status);
+            body.put("error", status == 401 ? "Unauthorized" : "Forbidden");
+            body.put("message", message);
+            body.put("path", request.getRequestURI());
+            // The same id is on the response header and in the log line, so a
+            // support report of a 401 or 403 can be traced too.
+            Object requestId = request.getAttribute(RequestTraceFilter.REQUEST_ID_ATTRIBUTE);
+            if (requestId != null) {
+                body.put("requestId", requestId);
+            }
+            objectMapper.writeValue(response.getOutputStream(), body);
         } catch (Exception ignored) {
             // response stream already committed - nothing else we can do
         }
@@ -97,7 +107,7 @@ public class SecurityConfig {
                 .toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
-        configuration.setExposedHeaders(List.of("Authorization"));
+        configuration.setExposedHeaders(List.of("Authorization", "X-Request-Id"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

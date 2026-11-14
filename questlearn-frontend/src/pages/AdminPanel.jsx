@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, Eye, EyeOff, History, KeyRound, Search, ShieldCheck, Users } from 'lucide-react';
+import { Activity, BookOpen, Eye, EyeOff, History, KeyRound, Search, ShieldCheck, Users } from 'lucide-react';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
@@ -22,6 +22,19 @@ const ACTION_LABELS = {
   'course.deleted': 'Course deleted',
 };
 
+function formatUptime(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return 'unknown';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${Math.max(1, Math.floor(seconds))}s`;
+}
+
+function formatLatency(value) {
+  return value === null || value === undefined ? 'n/a' : `${Math.round(value)} ms`;
+}
+
 function formatWhen(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
@@ -41,6 +54,7 @@ export default function AdminPanel() {
   const [pageInfo, setPageInfo] = useState({ total: 0, totalPages: 1, size: PAGE_SIZE });
   const [courses, setCourses] = useState([]);
   const [audit, setAudit] = useState([]);
+  const [telemetry, setTelemetry] = useState(null);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -58,14 +72,16 @@ export default function AdminPanel() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [statsResponse, coursesResponse, auditResponse] = await Promise.all([
+      const [statsResponse, coursesResponse, auditResponse, telemetryResponse] = await Promise.all([
         api.get('/admin/stats'),
         api.get('/courses'),
         api.get('/admin/audit'),
+        api.get('/admin/telemetry'),
       ]);
       setStats(statsResponse.data);
       setCourses(coursesResponse.data);
       setAudit(auditResponse.data);
+      setTelemetry(telemetryResponse.data);
       resetAutoRetry();
     } catch (error) {
       setLoadError(apiError(error, 'Could not load admin data.'));
@@ -142,7 +158,7 @@ export default function AdminPanel() {
       const { data } = await api.post(`/admin/users/${targetUser.id}/reset-password`);
       setMessage({
         type: 'success',
-        text: `Temporary password for ${data.email}: ${data.temporaryPassword} — share it privately. It is shown once and never stored in clear text.`,
+        text: `Temporary password for ${data.email}: ${data.temporaryPassword}. Share it privately. It is shown once and never stored in clear text.`,
       });
       refreshAudit();
     } catch (error) {
@@ -237,6 +253,68 @@ export default function AdminPanel() {
           </div>
         ))}
       </div>
+
+      {telemetry && (
+        <section className="panel-raised mt-6 overflow-hidden" aria-labelledby="telemetry-heading">
+          <div className="flex items-baseline justify-between gap-3 border-b border-line px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <Activity size={14} className="text-gold-text" aria-hidden="true" />
+              <h2 id="telemetry-heading" className="text-sm font-semibold text-foreground">
+                Server health
+              </h2>
+            </div>
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle tabular-nums">
+              up {formatUptime(telemetry.uptimeSeconds)}
+            </span>
+          </div>
+          <dl className="grid grid-cols-2 gap-3 px-5 py-4 sm:grid-cols-4">
+            {[
+              ['Requests served', telemetry.requests],
+              ['Server errors', telemetry.serverErrors],
+              ['p50 latency', formatLatency(telemetry.p50Ms)],
+              ['p95 latency', formatLatency(telemetry.p95Ms)],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
+                  {label}
+                </dt>
+                <dd className="mt-1 text-sm font-semibold tabular-nums text-foreground">
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <ul className="divide-y divide-line border-t border-line">
+            {(telemetry.recentErrors ?? []).length === 0 && (
+              <li className="px-5 py-4 text-xs text-fg-subtle">
+                No server errors since startup. A failure will show its request id here,
+                matching the one the browser and the log line carry.
+              </li>
+            )}
+            {(telemetry.recentErrors ?? []).map((entry) => (
+              <li key={`${entry.requestId}-${entry.at}`} className="px-5 py-3">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span className="text-xs font-semibold tabular-nums text-danger">
+                    {entry.status}
+                  </span>
+                  <span className="min-w-0 truncate text-[11px] text-fg-muted">
+                    {entry.method} {entry.path}
+                  </span>
+                  <span className="ml-auto shrink-0 text-[10px] tabular-nums text-fg-subtle">
+                    {formatWhen(entry.at)}
+                  </span>
+                </div>
+                <p className="mt-0.5 truncate font-mono text-[10px] text-fg-subtle">
+                  {entry.requestId}
+                </p>
+                <p className="mt-0.5 truncate text-[11px] leading-relaxed text-fg-muted">
+                  {entry.message}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.35fr_1fr]">
         <section className="panel-raised overflow-hidden">

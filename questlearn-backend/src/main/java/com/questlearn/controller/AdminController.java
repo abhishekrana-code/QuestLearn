@@ -1,12 +1,14 @@
 package com.questlearn.controller;
 
 import com.questlearn.dto.AdminStatsDto;
+import com.questlearn.dto.AdminTelemetryDto;
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.AuditEntryDto;
 import com.questlearn.dto.TempPasswordResponse;
 import com.questlearn.dto.UpdateRoleRequest;
 import com.questlearn.dto.UserDto;
 import com.questlearn.service.AdminService;
+import com.questlearn.service.TelemetryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -33,6 +35,7 @@ import java.util.List;
 public class AdminController {
 
     private final AdminService adminService;
+    private final TelemetryService telemetryService;
 
     @GetMapping("/users")
     @Operation(summary = "One page of accounts, optionally filtered by name or email")
@@ -81,5 +84,11 @@ public class AdminController {
     @GetMapping("/stats")
     public AdminStatsDto stats() {
         return adminService.stats();
+    }
+
+    @GetMapping("/telemetry")
+    @Operation(summary = "Uptime, request counts, tail latency and the recent server errors")
+    public AdminTelemetryDto telemetry() {
+        return telemetryService.snapshot();
     }
 }
