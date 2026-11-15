@@ -20,7 +20,24 @@ const ACTION_LABELS = {
   'course.archived': 'Course archived',
   'course.restored': 'Course restored',
   'course.deleted': 'Course deleted',
+  'course.roster_imported': 'Roster imported',
+  'module.deadline_set': 'Deadline set',
+  'module.deadline_cleared': 'Deadline cleared',
+  'cohort.deadline_set': 'Class deadline set',
+  'cohort.deadline_cleared': 'Class deadline cleared',
 };
+
+/**
+ * A new action key must never reach the page raw: read it as words and let the
+ * map take over once a nicer phrase exists.
+ */
+function actionLabel(action) {
+  if (ACTION_LABELS[action]) return ACTION_LABELS[action];
+  const words = String(action ?? '')
+    .replace(/[._]/g, ' ')
+    .trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : 'Action';
+}
 
 function formatUptime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return 'unknown';
@@ -139,6 +156,18 @@ export default function AdminPanel() {
   };
 
   const changeRole = async (targetUser, role) => {
+    // Promotion is the one change a mis-scroll can make permanent: an admin can
+    // then change roles, reset passwords and unpublish courses.
+    if (role === 'ADMIN' && targetUser.role !== 'ADMIN') {
+      const confirmed = window.confirm(
+        `Make ${targetUser.name} an admin? Admins can change roles, reset passwords and unpublish courses.`,
+      );
+      if (!confirmed) {
+        // The select is controlled by row state, so re-rendering snaps it back.
+        setUsers((previous) => [...previous]);
+        return;
+      }
+    }
     setBusyId(targetUser.id);
     try {
       const { data } = await api.patch(`/admin/users/${targetUser.id}/role`, { role });
@@ -153,6 +182,12 @@ export default function AdminPanel() {
   };
 
   const resetPassword = async (targetUser) => {
+    // One click signs the person out everywhere and retires their password, so it
+    // asks first, the same way clearing a learner's node progress does.
+    const confirmed = window.confirm(
+      `Reset the password for ${targetUser.name}? Their current sessions are signed out and their old password stops working. You get a one-time temporary password to pass on.`,
+    );
+    if (!confirmed) return;
     setBusyId(`pw-${targetUser.id}`);
     try {
       const { data } = await api.post(`/admin/users/${targetUser.id}/reset-password`);
@@ -263,8 +298,8 @@ export default function AdminPanel() {
                 Server health
               </h2>
             </div>
-            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle tabular-nums">
-              up {formatUptime(telemetry.uptimeSeconds)}
+            <span className="shrink-0 text-[10px] font-semibold tracking-[0.12em] text-fg-subtle tabular-nums">
+              uptime {formatUptime(telemetry.uptimeSeconds)}
             </span>
           </div>
           <dl className="grid grid-cols-2 gap-3 px-5 py-4 sm:grid-cols-4">
@@ -378,6 +413,11 @@ export default function AdminPanel() {
                       value={row.role}
                       disabled={row.id === user.id || busyId === row.id}
                       onChange={(event) => changeRole(row, event.target.value)}
+                      aria-label={
+                        row.id === user.id
+                          ? `Role for ${row.name} (you cannot change your own role)`
+                          : `Role for ${row.name}`
+                      }
                       title={row.id === user.id ? 'You cannot change your own role' : ''}
                     >
                       {ROLE_OPTIONS.map((option) => (
@@ -391,6 +431,7 @@ export default function AdminPanel() {
                       disabled={busyId === `pw-${row.id}`}
                       onClick={() => resetPassword(row)}
                       className="btn-ghost h-9 shrink-0 px-2.5 text-[11px]"
+                      aria-label={`Reset password for ${row.name}`}
                       title="Issue a one-time temporary password"
                     >
                       <KeyRound size={12} />
@@ -432,6 +473,11 @@ export default function AdminPanel() {
                         value={row.role}
                         disabled={row.id === user.id || busyId === row.id}
                         onChange={(event) => changeRole(row, event.target.value)}
+                        aria-label={
+                          row.id === user.id
+                            ? `Role for ${row.name} (you cannot change your own role)`
+                            : `Role for ${row.name}`
+                        }
                         title={row.id === user.id ? 'You cannot change your own role' : ''}
                       >
                         {ROLE_OPTIONS.map((option) => (
@@ -447,6 +493,7 @@ export default function AdminPanel() {
                         disabled={busyId === `pw-${row.id}`}
                         onClick={() => resetPassword(row)}
                         className="btn-ghost px-2.5 py-1.5 text-[11px]"
+                        aria-label={`Reset password for ${row.name}`}
                         title="Issue a one-time temporary password"
                       >
                         <KeyRound size={12} />
@@ -568,7 +615,7 @@ export default function AdminPanel() {
             <li key={entry.id} className="px-5 py-3">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span className="text-xs font-semibold text-foreground">
-                  {ACTION_LABELS[entry.action] ?? entry.action}
+                  {actionLabel(entry.action)}
                 </span>
                 <span className="min-w-0 truncate text-[11px] text-fg-muted">{entry.target}</span>
                 <span className="ml-auto shrink-0 text-[10px] tabular-nums text-fg-subtle">

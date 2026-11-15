@@ -108,6 +108,11 @@ export default function CourseAnalytics() {
             aria-label="Limit these numbers to one class"
           >
             <option value="">Every learner</option>
+            {cohorts.length === 0 && (
+              <option value="" disabled>
+                No classes yet
+              </option>
+            )}
             {cohorts.map((cohort) => (
               <option key={cohort.id} value={cohort.id}>
                 {cohort.name}
