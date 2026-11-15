@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.questlearn.model.AttemptSource;
 import com.questlearn.model.Course;
+import com.questlearn.model.DemoCredential;
 import com.questlearn.model.Enrollment;
 import com.questlearn.model.Module;
 import com.questlearn.model.ModuleAttempt;
@@ -15,12 +16,14 @@ import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.model.UserModuleProgress;
 import com.questlearn.repository.CourseRepository;
+import com.questlearn.repository.DemoCredentialRepository;
 import com.questlearn.repository.EnrollmentRepository;
 import com.questlearn.repository.ModuleAttemptRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.QuizRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
 import com.questlearn.repository.UserRepository;
+import com.questlearn.service.DemoAccounts;
 import com.questlearn.service.GamificationService;
 import com.questlearn.service.MediaStorageService;
 import lombok.RequiredArgsConstructor;
@@ -50,10 +53,14 @@ import java.util.Set;
  * Demo seeder so the project is immediately playable during an evaluation.
  * Runs only when the database is empty.
  *
- * <p>Never runs under the {@code prod} profile: the demo accounts share one known
+ * <p>Never runs under the {@code prod} profile: the demo accounts share one
  * password, so a fresh production database must get its first admin from
  * {@link BootstrapAdminRunner} instead. It is also skipped under {@code it}, so the
  * integration suite owns every row it asserts on.</p>
+ *
+ * <p>The shared password is never a published default: it comes from
+ * {@code DEMO_PASSWORD}, is generated once for a fresh database, or is whatever an
+ * admin rotated to in the console, which always wins over the configuration.</p>
  */
 @Component
 @Profile("!prod & !it")
@@ -75,14 +82,8 @@ public class DataInitializer implements ApplicationRunner {
     /** True when the value above was generated for a brand-new database. */
     private boolean generatedDemoPassword;
 
-    private static final List<String> DEMO_EMAILS = List.of(
-            "admin@questlearn.dev",
-            "instructor@questlearn.dev",
-            "student@questlearn.dev",
-            "mira@questlearn.dev",
-            "sam@questlearn.dev");
-
     private final UserRepository userRepository;
+    private final DemoCredentialRepository demoCredentialRepository;
     private final CourseRepository courseRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final ModuleRepository moduleRepository;
@@ -358,11 +359,17 @@ public class DataInitializer implements ApplicationRunner {
      * is the hole this closes on any machine the internet can reach.
      */
     private void syncDemoPasswords() {
+        // A rotation made in the console outranks the configuration: without this,
+        // the next restart would quietly put DEMO_PASSWORD back.
+        if (demoCredentialRepository.findById(DemoCredential.SINGLETON_ID).isPresent()) {
+            System.out.println("The demo password was rotated in the console; startup leaves it alone.");
+            return;
+        }
         if (demoPassword == null) {
             return;
         }
 
-        for (String email : DEMO_EMAILS) {
+        for (String email : DemoAccounts.EMAILS) {
             userRepository.findByEmailIgnoreCase(email).ifPresent(user -> {
                 if (!passwordEncoder.matches(demoPassword, user.getPasswordHash())) {
                     user.setPasswordHash(passwordEncoder.encode(demoPassword));

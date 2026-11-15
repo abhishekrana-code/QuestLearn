@@ -4,6 +4,8 @@ import com.questlearn.dto.AdminStatsDto;
 import com.questlearn.dto.AdminTelemetryDto;
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.AuditEntryDto;
+import com.questlearn.dto.DemoPasswordRotation;
+import com.questlearn.dto.DemoPasswordStatus;
 import com.questlearn.dto.TempPasswordResponse;
 import com.questlearn.dto.UpdateRoleRequest;
 import com.questlearn.dto.UserDto;
@@ -88,6 +90,18 @@ public class AdminController {
     @Operation(summary = "Recent privileged actions, newest first")
     public List<AuditEntryDto> audit() {
         return adminService.auditTrail();
+    }
+
+    @GetMapping("/demo-password")
+    @Operation(summary = "Whether the shared demo password is a startup value or was rotated here")
+    public DemoPasswordStatus demoPassword() {
+        return adminService.demoPasswordStatus();
+    }
+
+    @PostMapping("/demo-password/rotate")
+    @Operation(summary = "Give every demo account a new shared password, shown once in the response")
+    public DemoPasswordRotation rotateDemoPassword(@AuthenticationPrincipal AppUserPrincipal principal) {
+        return adminService.rotateDemoPassword(principal);
     }
 
     @GetMapping("/stats")

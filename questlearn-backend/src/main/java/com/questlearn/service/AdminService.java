@@ -4,16 +4,20 @@ import com.questlearn.dto.AdminStatsDto;
 import com.questlearn.dto.AdminUserPage;
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.AuditEntryDto;
+import com.questlearn.dto.DemoPasswordRotation;
+import com.questlearn.dto.DemoPasswordStatus;
 import com.questlearn.dto.TempPasswordResponse;
 import com.questlearn.dto.UserDto;
 import com.questlearn.exception.ApiException;
 import com.questlearn.mapper.DtoMapper;
+import com.questlearn.model.DemoCredential;
 import com.questlearn.model.Module;
 import com.questlearn.model.ProgressStatus;
 import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.model.UserModuleProgress;
 import com.questlearn.repository.CourseRepository;
+import com.questlearn.repository.DemoCredentialRepository;
 import com.questlearn.repository.ModuleAttemptRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
@@ -28,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -44,6 +49,7 @@ public class AdminService {
     private final ModuleRepository moduleRepository;
     private final UserModuleProgressRepository progressRepository;
     private final ModuleAttemptRepository attemptRepository;
+    private final DemoCredentialRepository demoCredentialRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
 
@@ -209,6 +215,60 @@ public class AdminService {
                 courseRepository.count(),
                 courseRepository.countByPublishedTrue()
         );
+    }
+
+    /**
+     * What the console can honestly say about the shared demo password: how many
+     * accounts share it, and whether it came from this console or from the startup
+     * configuration. The password itself is a hash here, so it cannot be shown.
+     */
+    @Transactional(readOnly = true)
+    public DemoPasswordStatus demoPasswordStatus() {
+        return demoCredentialRepository.findById(DemoCredential.SINGLETON_ID)
+                .map(row -> new DemoPasswordStatus(DemoAccounts.EMAILS.size(), "ROTATED",
+                        row.getRotatedAt(), row.getRotatedBy()))
+                .orElseGet(() -> new DemoPasswordStatus(DemoAccounts.EMAILS.size(), "STARTUP",
+                        null, null));
+    }
+
+    /**
+     * Gives all five demo accounts a new shared password and remembers that choice,
+     * so the next start does not put the environment value back. The value is
+     * returned once for the admin to hand on; sessions are left alone, because a
+     * password change is not a compromise and ending the demo's own session would
+     * be the first thing that breaks here.
+     */
+    @Transactional
+    public DemoPasswordRotation rotateDemoPassword(AppUserPrincipal principal) {
+        String password = randomPassword();
+        String hash = passwordEncoder.encode(password);
+
+        int updated = 0;
+        for (String email : DemoAccounts.EMAILS) {
+            User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
+            if (user == null) {
+                continue;
+            }
+            user.setPasswordHash(hash);
+            userRepository.save(user);
+            updated += 1;
+        }
+
+        if (updated == 0) {
+            throw ApiException.badRequest("No demo accounts exist on this database");
+        }
+
+        demoCredentialRepository.save(DemoCredential.builder()
+                .id(DemoCredential.SINGLETON_ID)
+                .passwordHash(hash)
+                .rotatedAt(Instant.now())
+                .rotatedBy(principal.email())
+                .build());
+
+        auditService.record(principal, "demo.password_rotated", "demo accounts",
+                "Shared demo password rotated for " + updated + " accounts");
+
+        return new DemoPasswordRotation(password, updated);
     }
 
     private ProgressStatus initialStatus(Long userId, Module module) {

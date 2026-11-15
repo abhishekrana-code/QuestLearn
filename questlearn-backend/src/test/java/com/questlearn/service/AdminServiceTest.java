@@ -3,24 +3,32 @@ package com.questlearn.service;
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.exception.ApiException;
 import com.questlearn.model.Course;
+import com.questlearn.model.DemoCredential;
 import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.repository.CourseRepository;
+import com.questlearn.repository.DemoCredentialRepository;
 import com.questlearn.repository.ModuleAttemptRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
 import com.questlearn.repository.UserRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,11 +39,13 @@ class AdminServiceTest {
     private final ModuleRepository moduleRepository = mock(ModuleRepository.class);
     private final UserModuleProgressRepository progressRepository = mock(UserModuleProgressRepository.class);
     private final ModuleAttemptRepository attemptRepository = mock(ModuleAttemptRepository.class);
+    private final DemoCredentialRepository demoCredentialRepository = mock(DemoCredentialRepository.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
     private final AuditService auditService = mock(AuditService.class);
 
     private final AdminService service = new AdminService(userRepository, courseRepository,
-            moduleRepository, progressRepository, attemptRepository, passwordEncoder, auditService);
+            moduleRepository, progressRepository, attemptRepository, demoCredentialRepository,
+            passwordEncoder, auditService);
 
     private final AppUserPrincipal admin = new AppUserPrincipal(1L, "admin@example.com", Role.ADMIN);
 
@@ -104,6 +114,58 @@ class AdminServiceTest {
                 () -> service.deleteUser(99L, admin));
 
         assertThat(error.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void rotatingTheDemoPasswordUpdatesEveryAccountAndRemembersTheChoice() {
+        when(userRepository.findByEmailIgnoreCase(anyString()))
+                .thenAnswer(call -> Optional.of(user(9L, call.getArgument(0), Role.STUDENT)));
+        when(passwordEncoder.encode(anyString())).thenReturn("new-hash");
+
+        var rotation = service.rotateDemoPassword(admin);
+
+        assertThat(rotation.accounts()).isEqualTo(5);
+        assertThat(rotation.password()).isNotBlank();
+        verify(userRepository, times(5)).save(any(User.class));
+
+        ArgumentCaptor<DemoCredential> saved = ArgumentCaptor.forClass(DemoCredential.class);
+        verify(demoCredentialRepository).save(saved.capture());
+        assertThat(saved.getValue().getId()).isEqualTo(DemoCredential.SINGLETON_ID);
+        assertThat(saved.getValue().getPasswordHash()).isEqualTo("new-hash");
+        assertThat(saved.getValue().getRotatedBy()).isEqualTo("admin@example.com");
+        verify(auditService).record(admin, "demo.password_rotated", "demo accounts",
+                "Shared demo password rotated for 5 accounts");
+    }
+
+    @Test
+    void rotatingOnADatabaseWithoutDemoAccountsChangesNothing() {
+        when(userRepository.findByEmailIgnoreCase(anyString())).thenReturn(Optional.empty());
+
+        ApiException error = assertThrows(ApiException.class,
+                () -> service.rotateDemoPassword(admin));
+
+        assertThat(error.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        verify(demoCredentialRepository, never()).save(any());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void reportsWhetherThePasswordWasRotatedHereOrCameFromStartup() {
+        when(demoCredentialRepository.findById(DemoCredential.SINGLETON_ID)).thenReturn(Optional.empty());
+        assertThat(service.demoPasswordStatus().source()).isEqualTo("STARTUP");
+
+        when(demoCredentialRepository.findById(DemoCredential.SINGLETON_ID))
+                .thenReturn(Optional.of(DemoCredential.builder()
+                        .id(DemoCredential.SINGLETON_ID)
+                        .passwordHash("hash")
+                        .rotatedAt(Instant.parse("2026-11-15T06:00:00Z"))
+                        .rotatedBy("admin@example.com")
+                        .build()));
+
+        var status = service.demoPasswordStatus();
+        assertThat(status.source()).isEqualTo("ROTATED");
+        assertThat(status.rotatedBy()).isEqualTo("admin@example.com");
+        assertThat(status.accounts()).isEqualTo(5);
     }
 
     private User user(Long id, String email, Role role) {

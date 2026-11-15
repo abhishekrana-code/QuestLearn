@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Activity, BookOpen, Eye, EyeOff, History, KeyRound, Search, ShieldCheck, Trash2, Users } from 'lucide-react';
+import {
+  Activity,
+  BookOpen,
+  Copy,
+  Eye,
+  EyeOff,
+  History,
+  KeyRound,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
@@ -25,6 +38,7 @@ const ACTION_LABELS = {
   'module.deadline_cleared': 'Deadline cleared',
   'cohort.deadline_set': 'Class deadline set',
   'cohort.deadline_cleared': 'Class deadline cleared',
+  'demo.password_rotated': 'Demo password rotated',
 };
 
 /**
@@ -73,6 +87,9 @@ export default function AdminPanel() {
   const [courses, setCourses] = useState([]);
   const [audit, setAudit] = useState([]);
   const [telemetry, setTelemetry] = useState(null);
+  const [demoStatus, setDemoStatus] = useState(null);
+  const [rotatedPassword, setRotatedPassword] = useState(null);
+  const [rotating, setRotating] = useState(false);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -92,16 +109,19 @@ export default function AdminPanel() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [statsResponse, coursesResponse, auditResponse, telemetryResponse] = await Promise.all([
-        api.get('/admin/stats'),
-        api.get('/courses'),
-        api.get('/admin/audit'),
-        api.get('/admin/telemetry'),
-      ]);
+      const [statsResponse, coursesResponse, auditResponse, telemetryResponse, demoResponse] =
+        await Promise.all([
+          api.get('/admin/stats'),
+          api.get('/courses'),
+          api.get('/admin/audit'),
+          api.get('/admin/telemetry'),
+          api.get('/admin/demo-password'),
+        ]);
       setStats(statsResponse.data);
       setCourses(coursesResponse.data);
       setAudit(auditResponse.data);
       setTelemetry(telemetryResponse.data);
+      setDemoStatus(demoResponse.data);
       resetAutoRetry();
     } catch (error) {
       setLoadError(apiError(error, 'Could not load admin data.'));
@@ -147,6 +167,42 @@ export default function AdminPanel() {
   const searchQuery = (value) => {
     setQuery(value);
     setPage(0);
+  };
+
+  /**
+   * Replaces the password every demo account shares. Asked first, because the
+   * current value stops working everywhere it was written down.
+   */
+  const rotateDemoPassword = async () => {
+    if (
+      !window.confirm(
+        'Every demo account gets a new shared password, and the current one stops working. Continue?'
+      )
+    ) {
+      return;
+    }
+
+    setRotating(true);
+    try {
+      const { data } = await api.post('/admin/demo-password/rotate');
+      setRotatedPassword(data.password);
+      setDemoStatus((previous) => ({
+        ...previous,
+        accounts: data.accounts,
+        source: 'ROTATED',
+        rotatedAt: new Date().toISOString(),
+        rotatedBy: user?.email ?? previous?.rotatedBy,
+      }));
+      setMessage({
+        type: 'success',
+        text: `Demo password rotated for ${data.accounts} accounts. It is shown once below.`,
+      });
+      refreshAudit();
+    } catch (error) {
+      setMessage({ type: 'error', text: apiError(error, 'Could not rotate the demo password.') });
+    } finally {
+      setRotating(false);
+    }
   };
 
   const refreshAudit = async () => {
@@ -373,6 +429,80 @@ export default function AdminPanel() {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {demoStatus && (
+        <section className="panel-raised mt-6 overflow-hidden" aria-labelledby="demo-password-heading">
+          <div className="flex items-baseline justify-between gap-3 border-b border-line px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <KeyRound size={14} className="text-gold-text" aria-hidden="true" />
+              <h2 id="demo-password-heading" className="text-sm font-semibold text-foreground">
+                Demo logins
+              </h2>
+            </div>
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
+              {demoStatus.source === 'ROTATED' ? 'rotated here' : 'set at startup'}
+            </span>
+          </div>
+
+          <div className="px-5 py-4">
+            <p className="text-[12px] leading-relaxed text-fg-muted">
+              All {demoStatus.accounts} demo accounts share one password. It is stored as a hash, so
+              it cannot be read back here; rotating replaces it for every one of them and shows the
+              new value once.
+            </p>
+            {demoStatus.source === 'ROTATED' && demoStatus.rotatedAt && (
+              <p className="mt-1 text-[11px] text-fg-subtle">
+                Rotated {formatWhen(demoStatus.rotatedAt)}
+                {demoStatus.rotatedBy ? ` by ${demoStatus.rotatedBy}` : ''}.
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={rotateDemoPassword}
+              disabled={rotating}
+              className="btn-ghost mt-3 h-9 px-3 text-xs"
+            >
+              <RefreshCw size={13} aria-hidden="true" />
+              {rotating ? 'Rotating…' : 'Rotate demo password'}
+            </button>
+
+            {rotatedPassword && (
+              <div className="mt-3 rounded-lg border border-gold/40 bg-gold/[0.06] px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gold-text">
+                  New password
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <code className="font-mono text-sm font-semibold text-foreground">
+                    {rotatedPassword}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(rotatedPassword);
+                        setMessage({ type: 'success', text: 'New demo password copied.' });
+                      } catch {
+                        setMessage({
+                          type: 'error',
+                          text: 'The browser refused clipboard access; select the password and copy it by hand.',
+                        });
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-gold-text hover:underline"
+                  >
+                    <Copy size={12} aria-hidden="true" /> Copy
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed text-fg-subtle">
+                  Shown once. Hand it to whoever needs the demo accounts; it is not stored readable
+                  anywhere.
+                </p>
+              </div>
+            )}
+          </div>
         </section>
       )}
 

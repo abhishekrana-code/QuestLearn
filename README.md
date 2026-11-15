@@ -138,6 +138,12 @@ a brand-new database gets a random password printed once in the startup log, and
 database is left untouched rather than reset to a published default. The login page no longer
 carries one-click demo buttons, because they shipped a password with the bundle.
 
+An admin can also rotate the shared password from the console, under **Demo logins** on the
+admin page. The new value is shown once, applied to all five accounts, and recorded in a single
+`demo_credential` row that outranks `DEMO_PASSWORD` on later starts. Only its hash is stored,
+so the console can report where the password came from but never show it again. To hand control
+back to `.env`, delete that row: the next start syncs the accounts to `DEMO_PASSWORD`.
+
 The demo course **“Full-Stack Web Engineering Quest”** ships with six linked nodes and a quiz on
 every node. The demo student starts with two nodes cleared, a 4-day streak, and work in a second
 course, **“Data Structures Detour”** (three nodes, two cleared), so 420 XP, level 3 and both boards, 

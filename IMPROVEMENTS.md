@@ -97,6 +97,12 @@ kept honest: **fixed** means it was changed and verified in this repository;
     did, which changes the URL and needs the backend CORS origin restarted. A
     named tunnel with a real domain, or an ngrok free dev domain, removes both
     problems.
-15. **The demo login is one shared password.** Acceptable for an evaluation, but
-    an admin should be able to see that it is shared and rotate it from the UI
-    instead of editing `.env`.
+15. **The shared demo password can be seen and rotated from the console.** The
+    admin page now has a Demo logins panel: it says how many accounts share one
+    password, whether that value came from startup configuration or from a rotation
+    here, who rotated it and when, and it can replace it. The new password is shown
+    once with a copy button, applied to all five accounts, and kept in a
+    `demo_credential` row that outranks `DEMO_PASSWORD` on the next start. Only the
+    hash is stored, so the old value can never be displayed again. Check: the panel
+    before and after a rotation, `AdminServiceTest`, and a restart that keeps the
+    rotated value.
