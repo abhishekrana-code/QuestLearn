@@ -83,9 +83,12 @@ kept honest: **fixed** means it was changed and verified in this repository;
 
 ## Later
 
-12. **Cohorts have no empty state anywhere else.** The analytics picker was the
-    first place this showed up; the classes page and the roster filter deserve the
-    same look for "no classes yet".
+12. **Every class filter says when there are no classes.** The analytics picker
+    was the first place this showed up. The classes page already had a full empty
+    state, and the roster filter now stays on the page with a disabled "No classes
+    yet" option instead of disappearing, so a teacher can tell the difference
+    between "no classes" and "no filter". Check: open a course roster where no
+    class has been created.
 13. **The browser suite cannot run on this machine.** Playwright fails with
     `browserType.launch: spawn UNKNOWN` while the JVM and browser processes are
     live, so end-to-end coverage is manual. Worth checking on a machine with more

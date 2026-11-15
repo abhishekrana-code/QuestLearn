@@ -329,24 +329,26 @@ export default function CourseRoster() {
             <span className="tabular-nums self-center">{roster.moduleCount} nodes</span>
             <span className="tabular-nums self-center">Average {averageCleared} cleared</span>
 
-            {cohorts.length > 0 && (
-              <label className="flex items-center gap-2 font-semibold">
-                Class
-                <select
-                  className="field w-auto min-w-[9rem] text-[11px]"
-                  value={cohortFilter}
-                  onChange={(event) => setCohortFilter(event.target.value)}
-                  aria-label="Filter the roster by class"
-                >
-                  <option value="">All classes</option>
-                  {cohorts.map((cohort) => (
-                    <option key={cohort.id} value={cohort.id}>
-                      {cohort.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
+            {/* Always shown: a filter that vanishes with no classes reads as a
+                missing feature rather than a course nobody has organised yet. */}
+            <label className="flex items-center gap-2 font-semibold">
+              Class
+              <select
+                className="field w-auto min-w-[9rem] text-[11px]"
+                value={cohortFilter}
+                onChange={(event) => setCohortFilter(event.target.value)}
+                aria-label="Filter the roster by class"
+                disabled={cohorts.length === 0}
+                title={cohorts.length === 0 ? 'Create a class to group this roster' : undefined}
+              >
+                <option value="">{cohorts.length === 0 ? 'No classes yet' : 'All classes'}</option>
+                {cohorts.map((cohort) => (
+                  <option key={cohort.id} value={cohort.id}>
+                    {cohort.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
             {nodes.length > 0 && (
               <label className="flex items-center gap-2 font-semibold">
