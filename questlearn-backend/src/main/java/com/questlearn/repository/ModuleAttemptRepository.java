@@ -20,4 +20,7 @@ public interface ModuleAttemptRepository extends JpaRepository<ModuleAttempt, Lo
 
     List<ModuleAttempt> findByModuleCourseIdAndUserIdInOrderByCreatedAtAsc(
             Long courseId, Collection<Long> userIds);
+
+    /** Removes every attempt a deleted account leaves behind. */
+    void deleteByUserId(Long userId);
 }

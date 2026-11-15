@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -52,6 +53,14 @@ public class AdminController {
                               @Valid @RequestBody UpdateRoleRequest request,
                               @AuthenticationPrincipal AppUserPrincipal principal) {
         return adminService.updateRole(userId, request.role(), principal);
+    }
+
+    @DeleteMapping("/users/{userId}")
+    @Operation(summary = "Delete an account and the work attached to it")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long userId,
+                                           @AuthenticationPrincipal AppUserPrincipal principal) {
+        adminService.deleteUser(userId, principal);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/users/{userId}/reset-password")

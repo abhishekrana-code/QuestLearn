@@ -43,13 +43,16 @@ kept honest: **fixed** means it was changed and verified in this repository;
    only "Every learner" and no explanation. It now shows a disabled "No classes
    yet" option. Check: open a course with no classes and look at the filter.
 
-## Next, highest value first
+7. **Accounts can be deleted.** `DELETE /api/v1/admin/users/{id}` removes the
+   account with its work, and each row has a Delete action that asks first. Two
+   guards are enforced in the service, not just the UI: an admin cannot delete
+   themselves, and the last admin cannot be deleted. An instructor who still owns
+   a course is refused with that reason, because the schema holds the key. Progress
+   and attempts are deleted first (they have no cascade), and the action is
+   audited as "User deleted". Check: the admin list, the audit feed, and
+   `AdminServiceTest` for the four guards and the delete order.
 
-7. **No way to delete or deactivate an account.** The console can change roles,
-   reset passwords and clear progress, but test and smoke accounts accumulate and
-   cannot be removed. Add `DELETE /api/v1/admin/users/{id}` with an audit entry, a
-   confirm in the UI, and a rule that an admin cannot delete themselves or the
-   last remaining admin. This needs a backend change, a test, and a UI action.
+## Next, highest value first
 
 8. **Silent role redirects.** A student who opens `/admin` or `/studio` is bounced
    to the dashboard with no message, and an admin opening `/performance` is

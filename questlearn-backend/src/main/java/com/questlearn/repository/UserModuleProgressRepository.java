@@ -33,4 +33,7 @@ public interface UserModuleProgressRepository extends JpaRepository<UserModulePr
      * a single query instead of one per learner.
      */
     List<UserModuleProgress> findByModuleCourseIdAndUserIdIn(Long courseId, Collection<Long> userIds);
+
+    /** Removes every progress row a deleted account leaves behind. */
+    void deleteByUserId(Long userId);
 }

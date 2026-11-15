@@ -14,6 +14,7 @@ import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.model.UserModuleProgress;
 import com.questlearn.repository.CourseRepository;
+import com.questlearn.repository.ModuleAttemptRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
 import com.questlearn.repository.UserRepository;
@@ -42,6 +43,7 @@ public class AdminService {
     private final CourseRepository courseRepository;
     private final ModuleRepository moduleRepository;
     private final UserModuleProgressRepository progressRepository;
+    private final ModuleAttemptRepository attemptRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
 
@@ -113,6 +115,40 @@ public class AdminService {
         auditService.record(principal, "user.password_reset", user.getEmail(),
                 "One-time temporary password issued; existing sessions revoked");
         return new TempPasswordResponse(user.getId(), user.getEmail(), temporaryPassword);
+    }
+
+    /**
+     * Deletes an account and the work attached to it. Two guards are deliberate:
+     * an admin cannot remove themselves, which would strand the console, and the
+     * last admin cannot be removed at all. An instructor who still owns a course is
+     * refused with the reason, because the database holds that foreign key and a raw
+     * failure would read as a bug rather than a decision.
+     *
+     * <p>Progress rows and attempts have no cascade, so they go first. Enrolments,
+     * class memberships, reset tokens and reminders cascade in the schema.</p>
+     */
+    @Transactional
+    public void deleteUser(Long userId, AppUserPrincipal principal) {
+        if (userId.equals(principal.id())) {
+            throw ApiException.badRequest("You cannot delete your own account");
+        }
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> ApiException.notFound("User not found"));
+
+        if (user.getRole() == Role.ADMIN && userRepository.countByRole(Role.ADMIN) <= 1) {
+            throw ApiException.badRequest("The last admin cannot be deleted");
+        }
+        if (!courseRepository.findByInstructorIdOrderByIdAsc(userId).isEmpty()) {
+            throw ApiException.badRequest(
+                    "Move or delete this instructor's courses before deleting the account");
+        }
+
+        attemptRepository.deleteByUserId(userId);
+        progressRepository.deleteByUserId(userId);
+        userRepository.delete(user);
+
+        auditService.record(principal, "user.deleted", user.getEmail(),
+                "Account deleted: " + user.getName() + " (" + user.getRole() + ")");
     }
 
     /**

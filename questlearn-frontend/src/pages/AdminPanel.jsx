@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Activity, BookOpen, Eye, EyeOff, History, KeyRound, Search, ShieldCheck, Users } from 'lucide-react';
+import { Activity, BookOpen, Eye, EyeOff, History, KeyRound, Search, ShieldCheck, Trash2, Users } from 'lucide-react';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
@@ -79,6 +79,8 @@ export default function AdminPanel() {
   const [loadError, setLoadError] = useState(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [busyId, setBusyId] = useState(null);
+  // Bumped after a delete so the page effect refetches the current page.
+  const [usersVersion, setUsersVersion] = useState(0);
 
   const { paused: retryPaused, reset: resetAutoRetry, retryNow: retryLoadNow } = useAutoRetry({
     active: Boolean(loadError) && !loading,
@@ -138,7 +140,7 @@ export default function AdminPanel() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, page]);
+  }, [query, page, usersVersion]);
 
   // A new search always starts from the first page of the new result set.
   const searchQuery = (value) => {
@@ -176,6 +178,24 @@ export default function AdminPanel() {
       refreshAudit();
     } catch (error) {
       setMessage({ type: 'error', text: apiError(error, 'Could not change that role.') });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const deleteAccount = async (targetUser) => {
+    const confirmed = window.confirm(
+      `Delete ${targetUser.name} (${targetUser.email})? Their progress, attempts and enrolments go with the account, and this cannot be undone.`,
+    );
+    if (!confirmed) return;
+    setBusyId(`del-${targetUser.id}`);
+    try {
+      await api.delete(`/admin/users/${targetUser.id}`);
+      setMessage({ type: 'success', text: `${targetUser.name}'s account was deleted.` });
+      setUsersVersion((previous) => previous + 1);
+      load();
+    } catch (error) {
+      setMessage({ type: 'error', text: apiError(error, 'Could not delete that account.') });
     } finally {
       setBusyId(null);
     }
@@ -437,6 +457,25 @@ export default function AdminPanel() {
                       <KeyRound size={12} />
                       Reset
                     </button>
+                    <button
+                      type="button"
+                      disabled={row.id === user.id || busyId === `del-${row.id}`}
+                      onClick={() => deleteAccount(row)}
+                      className="btn-ghost h-9 shrink-0 px-2.5 text-[11px] text-danger"
+                      aria-label={
+                        row.id === user.id
+                          ? `Delete ${row.name} (you cannot delete your own account)`
+                          : `Delete ${row.name}`
+                      }
+                      title={
+                        row.id === user.id
+                          ? 'You cannot delete your own account'
+                          : 'Delete this account and its work'
+                      }
+                    >
+                      <Trash2 size={12} />
+                      Delete
+                    </button>
                   </div>
                   <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
                     Level {row.currentLevel}
@@ -498,6 +537,25 @@ export default function AdminPanel() {
                       >
                         <KeyRound size={12} />
                         Reset
+                      </button>
+                      <button
+                        type="button"
+                        disabled={row.id === user.id || busyId === `del-${row.id}`}
+                        onClick={() => deleteAccount(row)}
+                        className="btn-ghost ml-1 px-2.5 py-1.5 text-[11px] text-danger"
+                        aria-label={
+                          row.id === user.id
+                            ? `Delete ${row.name} (you cannot delete your own account)`
+                            : `Delete ${row.name}`
+                        }
+                        title={
+                          row.id === user.id
+                            ? 'You cannot delete your own account'
+                            : 'Delete this account and its work'
+                        }
+                      >
+                        <Trash2 size={12} />
+                        Delete
                       </button>
                     </td>
                   </tr>
