@@ -61,12 +61,19 @@ import java.util.Set;
 public class DataInitializer implements ApplicationRunner {
 
     /**
-     * The five seeded accounts all share this password. A local checkout keeps the
-     * built-in default; anything the internet can reach sets DEMO_PASSWORD, and
-     * {@link #syncDemoPasswords()} rewrites existing rows to match on every start.
+     * The five seeded accounts all share one password. Set DEMO_PASSWORD to choose it;
+     * without it a fresh database gets a random one and an existing database keeps
+     * whatever it has. {@link #syncDemoPasswords()} only rewrites rows when a password
+     * was configured deliberately.
      */
-    @Value("${questlearn.demo.password:password123}")
+    @Value("${questlearn.demo.password:}")
+    private String configuredDemoPassword;
+
+    /** Resolved once per start by {@link #resolveDemoPassword(boolean)}. */
     private String demoPassword;
+
+    /** True when the value above was generated for a brand-new database. */
+    private boolean generatedDemoPassword;
 
     private static final List<String> DEMO_EMAILS = List.of(
             "admin@questlearn.dev",
@@ -89,7 +96,10 @@ public class DataInitializer implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) throws Exception {
-        if (userRepository.count() == 0) {
+        boolean freshDatabase = userRepository.count() == 0;
+        resolveDemoPassword(freshDatabase);
+
+        if (freshDatabase) {
             seedDemoData();
         }
         syncDemoPasswords();
@@ -315,11 +325,31 @@ public class DataInitializer implements ApplicationRunner {
     }
 
     /**
-     * The password is printed only while it is the published default. Once it comes
-     * from DEMO_PASSWORD the log says so instead of copying a real secret into it.
+     * Decides what the demo accounts get. A configured DEMO_PASSWORD always wins and
+     * is synced on every start. Without one, a fresh database is seeded with a random
+     * password that is printed once, and an existing database is never rewritten: a
+     * generated value could not be reproduced on the next start anyway, and silently
+     * replacing it would lock out whoever wrote it down.
+     */
+    private void resolveDemoPassword(boolean freshDatabase) {
+        DemoPassword.Resolution resolution = DemoPassword.resolve(configuredDemoPassword, freshDatabase);
+        demoPassword = resolution.password();
+        generatedDemoPassword = resolution.generated();
+
+        if (resolution.untouched()) {
+            System.out.println("DEMO_PASSWORD is not set; the demo account passwords are left as they are.");
+        }
+    }
+
+    /**
+     * The generated password is printed because it exists nowhere else. A value from
+     * DEMO_PASSWORD is described instead of copied, so a real secret stays out of the log.
      */
     private String demonstrationPasswordNote() {
-        return "password123".equals(demoPassword) ? demoPassword : "set by DEMO_PASSWORD";
+        if (generatedDemoPassword) {
+            return demoPassword + "   (generated for this new database; set DEMO_PASSWORD to pick one)";
+        }
+        return "set by DEMO_PASSWORD";
     }
 
     /**
@@ -328,6 +358,10 @@ public class DataInitializer implements ApplicationRunner {
      * is the hole this closes on any machine the internet can reach.
      */
     private void syncDemoPasswords() {
+        if (demoPassword == null) {
+            return;
+        }
+
         for (String email : DEMO_EMAILS) {
             userRepository.findByEmailIgnoreCase(email).ifPresent(user -> {
                 if (!passwordEncoder.matches(demoPassword, user.getPasswordHash())) {

@@ -127,14 +127,16 @@ Open <http://localhost:5173>. Vite reads `SERVER_PORT` from the backend `.env` a
 
 | Role | Email | Password |
 | :--- | :--- | :--- |
-| Student | `student@questlearn.dev` | `DEMO_PASSWORD`, else `password123` |
-| Instructor | `instructor@questlearn.dev` | `DEMO_PASSWORD`, else `password123` |
-| Admin | `admin@questlearn.dev` | `DEMO_PASSWORD`, else `password123` |
+| Student | `student@questlearn.dev` | `DEMO_PASSWORD`, else generated once |
+| Instructor | `instructor@questlearn.dev` | `DEMO_PASSWORD`, else generated once |
+| Admin | `admin@questlearn.dev` | `DEMO_PASSWORD`, else generated once |
 
 All five seeded accounts share that password. Set `DEMO_PASSWORD` in `.env` before any
 instance is reachable from the internet: the seeder rewrites the existing demo rows to the
-configured value on each start, so changing the variable is enough. The login page no longer
-carries one-click demo buttons, because they shipped the default password with the bundle.
+configured value on each start, so changing the variable is enough. With no `DEMO_PASSWORD`,
+a brand-new database gets a random password printed once in the startup log, and an existing
+database is left untouched rather than reset to a published default. The login page no longer
+carries one-click demo buttons, because they shipped a password with the bundle.
 
 The demo course **“Full-Stack Web Engineering Quest”** ships with six linked nodes and a quiz on
 every node. The demo student starts with two nodes cleared, a 4-day streak, and work in a second

@@ -73,12 +73,13 @@ kept honest: **fixed** means it was changed and verified in this repository;
     403 and INSTRUCTOR still needs its invite code. Check: register without a
     role and confirm the response says STUDENT, then try `"role":"ADMIN"`.
 
-## Next, highest value first
-
-11. **A fresh database still defaults to `password123`.** `DEMO_PASSWORD` fixes an
-    existing install, but a new clone seeds the old default. Refuse to start the
-    demo seeder outside localhost without `DEMO_PASSWORD`, or generate one and
-    print it once.
+11. **No published password guards a fresh database.** A new clone used to seed
+    `password123`. Now a configured `DEMO_PASSWORD` still wins and is synced on
+    each start, a brand-new database without one gets a random password printed
+    once in the startup log, and an existing database without one is left exactly
+    as it is, because a generated value cannot be reproduced on the next start.
+    Check: `DemoPasswordTest`, and the startup log of a database with the variable
+    unset. Rotating the value in `.env` still rewrites every demo row.
 
 ## Later
 
