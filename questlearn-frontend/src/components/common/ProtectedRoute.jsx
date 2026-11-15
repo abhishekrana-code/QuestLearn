@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
+import NoAccess from './NoAccess.jsx';
 
 export default function ProtectedRoute({ roles, children }) {
   const { user, booting } = useAuth();
@@ -19,8 +20,10 @@ export default function ProtectedRoute({ roles, children }) {
     return <Navigate to="/login" replace />;
   }
 
+  // A silent redirect looks like a dead link: the person typed an address and
+  // landed somewhere else with no explanation. Say what happened and keep the URL.
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to="/" replace />;
+    return <NoAccess roles={roles} />;
   }
 
   return children;

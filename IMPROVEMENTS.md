@@ -52,13 +52,15 @@ kept honest: **fixed** means it was changed and verified in this repository;
    audited as "User deleted". Check: the admin list, the audit feed, and
    `AdminServiceTest` for the four guards and the delete order.
 
-## Next, highest value first
+8. **Role mismatches explain themselves.** A student opening `/admin` or
+   `/studio`, an admin opening `/performance`, or a teacher opening `/admin` used
+   to be bounced to a different screen with no message, which reads as a dead
+   link. They now stay on the address they typed and see "This page is for
+   teachers" with who they are signed in as, plus a link to their own home and a
+   Go back button. Check: open `/admin` as a student, `/performance` as an admin,
+   and `/admin` as a teacher.
 
-8. **Silent role redirects.** A student who opens `/admin` or `/studio` is bounced
-   to the dashboard with no message, and an admin opening `/performance` is
-   bounced to `/admin` even though an admin can open a course tree. Decide the
-   rule per route, then show a short "That page is for teachers" notice instead of
-   a silent redirect.
+## Next, highest value first
 
 9. **Server health counters reset on every restart.** After a restart the panel
    read "Requests served 1" while the app had handled many. Either label the
