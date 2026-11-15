@@ -93,10 +93,15 @@ kept honest: **fixed** means it was changed and verified in this repository;
     `browserType.launch: spawn UNKNOWN` while the JVM and browser processes are
     live, so end-to-end coverage is manual. Worth checking on a machine with more
     memory, or lowering Playwright's worker and viewport footprint.
-14. **The public link is a temporary tunnel.** A quick tunnel expires, and today it
-    did, which changes the URL and needs the backend CORS origin restarted. A
-    named tunnel with a real domain, or an ngrok free dev domain, removes both
-    problems.
+14. **The public link is stable.** A quick tunnel expired twice, each time with a
+    new address and a backend restart to match. The demo now publishes through
+    Tailscale Funnel at `https://questlearn.taileb48b2.ts.net`, which needs no
+    domain, shows no interstitial, and keeps the same name. The hostname is
+    written once into Vite's `allowedHosts` and into `CORS_ORIGINS` /
+    `APP_BASE_URL` in `.env`, so a restart changes nothing. A logon task starts the
+    app after a reboot, and the Funnel registration lives in the Tailscale
+    service. Check: `tailscale funnel status`, and the URL after a service
+    restart.
 15. **The shared demo password can be seen and rotated from the console.** The
     admin page now has a Demo logins panel: it says how many accounts share one
     password, whether that value came from startup configuration or from a rotation

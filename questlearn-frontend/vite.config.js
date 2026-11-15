@@ -73,7 +73,16 @@ export default defineConfig({
     // DNS-rebinding page from reading this dev server. A tunnel arrives with its
     // own hostname, so allow only the tunnel providers' domains rather than
     // turning the check off with `true`.
-    allowedHosts: ['.trycloudflare.com', '.ngrok-free.dev', '.ngrok-free.app', '.ngrok.app', '.ts.net'],
+    // The explicit Tailscale name is the stable public address for this machine;
+    // the wildcard entries cover quick tunnels used while testing.
+    allowedHosts: [
+      'questlearn.taileb48b2.ts.net',
+      '.trycloudflare.com',
+      '.ngrok-free.dev',
+      '.ngrok-free.app',
+      '.ngrok.app',
+      '.ts.net',
+    ],
     proxy: {
       '/api': {
         target: apiTarget,

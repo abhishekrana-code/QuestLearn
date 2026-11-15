@@ -123,6 +123,48 @@ npm run dev
 Open <http://localhost:5173>. Vite reads `SERVER_PORT` from the backend `.env` and proxies `/api` to
 `http://localhost:8091`.
 
+### 4. Public demo URL (Tailscale Funnel)
+
+The demo is published at **<https://questlearn.taileb48b2.ts.net>** through Tailscale Funnel. It is
+free, needs no domain, carries no interstitial page, and the name is stable: Funnel only exposes
+port 5180, and Vite's existing `/api` proxy means one public port serves the whole application.
+
+Prerequisites, all one-time and done in the Tailscale admin console while signed in as the tailnet
+owner:
+
+- HTTPS certificates enabled under **DNS** (without it `tailscale cert` answers "does not support
+  getting TLS certs").
+- The `funnel` node attribute present, either from the Funnel enable link or in the policy file:
+  `"nodeAttrs": [{ "target": ["autogroup:member"], "attr": ["funnel"] }]`.
+- MagicDNS enabled, which is the default.
+
+```powershell
+# Name the device: this is the first label of the public URL.
+& 'C:\Program Files\Tailscale\tailscale.exe' set --hostname questlearn
+
+# Publish the frontend. --bg keeps it registered with the Tailscale service.
+& 'C:\Program Files\Tailscale\tailscale.exe' funnel --bg 5180
+
+# What is public right now, and how to stop it.
+& 'C:\Program Files\Tailscale\tailscale.exe' funnel status
+& 'C:\Program Files\Tailscale\tailscale.exe' funnel reset
+```
+
+The hostname is named explicitly in `questlearn-frontend/vite.config.js` (`allowedHosts`) and in
+`CORS_ORIGINS` / `APP_BASE_URL` in `questlearn-backend/.env`, so nothing needs editing when the
+tunnel restarts. That is the difference from a quick tunnel, whose address changes every launch.
+
+Two scripts make the demo survive a reboot:
+
+- `scripts/questlearn-up.ps1` starts the backend and frontend only if they are not already
+  answering, waits for health on 8091, and reapplies the Funnel. Logs go to `logs/`.
+- `scripts/register-logon-task.ps1` registers the logon task `QuestLearn demo` that calls it. Run it
+  once from an Administrator prompt; the task stores an absolute path, so run it again if the
+  repository moves.
+
+Funnel itself survives a reboot because `--bg` stores the configuration in the Tailscale service,
+which starts automatically; the logon task is what brings the two app processes back.
+
 ### Demo accounts (seeded on first start)
 
 | Role | Email | Password |
