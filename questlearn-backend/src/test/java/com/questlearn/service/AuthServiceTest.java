@@ -76,6 +76,17 @@ class AuthServiceTest {
     }
 
     @Test
+    void studentSignUpWithoutARoleBecomesAStudent() {
+        when(userRepository.existsByEmailIgnoreCase("leo@questlearn.dev")).thenReturn(false);
+
+        AuthResponse response = authService.register(new RegisterRequest(
+                "Leo the Learner", "leo@questlearn.dev", "secret123", null, null));
+
+        assertEquals(Role.STUDENT, response.user().role(),
+                "an omitted role must not be rejected, and must never grant more than STUDENT");
+    }
+
+    @Test
     void adminAccountsCannotBeSelfRegistered() {
         ApiException error = assertThrows(ApiException.class, () -> authService.register(
                 new RegisterRequest("Aria", "aria@questlearn.dev", "secret123", Role.ADMIN, null)));

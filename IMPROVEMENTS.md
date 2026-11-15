@@ -68,9 +68,12 @@ kept honest: **fixed** means it was changed and verified in this repository;
    process, and the uptime badge spells its unit ("uptime 22 min", not "1M").
    Check: the Server health panel after a restart.
 
-10. **`POST /api/v1/auth/register` requires `role`.** The web form never asks for
-    it, so any outside client gets 400 "Role is required". Make it optional and
-    default to STUDENT, keeping the explicit value for tests.
+10. **Registration no longer demands a role.** `POST /api/v1/auth/register` used
+    to answer 400 "Role is required" to any client that only sent name, email and
+    password. The field is optional now and an omission becomes STUDENT, which is
+    the only role open to self-registration anyway: ADMIN is still refused with
+    403 and INSTRUCTOR still needs its invite code. Check: register without a
+    role and confirm the response says STUDENT, then try `"role":"ADMIN"`.
 
 11. **A fresh database still defaults to `password123`.** `DEMO_PASSWORD` fixes an
     existing install, but a new clone seeds the old default. Refuse to start the

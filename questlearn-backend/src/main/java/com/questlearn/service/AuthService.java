@@ -52,13 +52,17 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        if (request.role() == Role.ADMIN) {
+        // A missing role is the common case for a plain client, and STUDENT is the
+        // only role open to self-registration, so defaulting is not a privilege.
+        Role role = request.role() == null ? Role.STUDENT : request.role();
+
+        if (role == Role.ADMIN) {
             throw ApiException.forbidden("Admin accounts cannot be self-registered");
         }
-        if (request.role() == Role.INSTRUCTOR) {
+        if (role == Role.INSTRUCTOR) {
             assertInstructorInviteCode(request.inviteCode());
         }
-        if (request.role() == Role.STUDENT) {
+        if (role == Role.STUDENT) {
             assertStudentInviteCode(request.inviteCode());
         }
 
@@ -71,7 +75,7 @@ public class AuthService {
                 .name(request.name().trim())
                 .email(email)
                 .passwordHash(passwordEncoder.encode(request.password()))
-                .role(request.role())
+                .role(role)
                 .totalXp(0)
                 .currentLevel(1)
                 .streakDays(0)
