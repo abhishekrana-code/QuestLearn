@@ -90,6 +90,30 @@ export default defineConfig({
       },
     },
   },
+  // The public demo serves the built app rather than the dev server: no hot-reload
+  // websocket behind a tunnel, no dev overlay, smaller payloads. Preview keeps the
+  // same /api proxy and host allowlist, so the Funnel setup is unchanged.
+  preview: {
+    // Bind all interfaces: Tailscale's Funnel proxies to 127.0.0.1, and a preview
+    // that listened only on ::1 answered the tunnel with a 502.
+    host: true,
+    port: 5180,
+    strictPort: true,
+    allowedHosts: [
+      'questlearn.taileb48b2.ts.net',
+      '.trycloudflare.com',
+      '.ngrok-free.dev',
+      '.ngrok-free.app',
+      '.ngrok.app',
+      '.ts.net',
+    ],
+    proxy: {
+      '/api': {
+        target: apiTarget,
+        changeOrigin: true,
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,

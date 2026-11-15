@@ -129,6 +129,13 @@ The demo is published at **<https://questlearn.taileb48b2.ts.net>** through Tail
 free, needs no domain, carries no interstitial page, and the name is stable: Funnel only exposes
 port 5180, and Vite's existing `/api` proxy means one public port serves the whole application.
 
+The public port serves the **production build** through `vite preview`, not the dev server: no
+hot-reload websocket through the tunnel, no dev overlay, and much smaller payloads. `preview` in
+`vite.config.js` owns the port (5180), the host allowlist and the same `/api` proxy, and
+`npm run preview` takes no port argument so there is only one place to change it. Rebuild after
+editing frontend code with `npm run build`; `scripts/questlearn-up.ps1` does that on every start
+unless `QUESTLEARN_SKIP_BUILD=1` is set.
+
 Prerequisites, all one-time and done in the Tailscale admin console while signed in as the tailnet
 owner:
 

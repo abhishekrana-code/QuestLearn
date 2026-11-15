@@ -1,5 +1,8 @@
 # Starts the QuestLearn demo stack and its public Tailscale Funnel.
 #
+# The frontend is served from its production build through `vite preview` on 5180,
+# which proxies /api to the backend on 8091.
+#
 # Safe to run twice: each piece is skipped when it is already answering. The
 # Windows logon task calls this file, so a reboot puts the demo back without
 # anyone typing a command.
@@ -49,17 +52,39 @@ if (-not (Test-Url 'http://localhost:8091/actuator/health')) {
     }
 }
 
-# Vite serves the app and proxies /api to 8091, which is why one public port
-# covers the whole application.
+# The public URL serves the built app, not the dev server: no HMR websocket through
+# the tunnel and no dev overlay on a demo. Preview keeps the /api proxy, so one
+# public port still carries the whole application. The build is cheap and rerun on
+# every start, which means a stale dist can never be what visitors see.
+#
+# Set QUESTLEARN_SKIP_BUILD=1 to start the existing dist untouched.
 if (-not (Test-Url 'http://localhost:5180/')) {
+    $frontend = Join-Path $root 'questlearn-frontend'
+
+    if ($env:QUESTLEARN_SKIP_BUILD -ne '1') {
+        # Through cmd and Start-Process, because Windows PowerShell turns npm's
+        # stderr notices into terminating errors under ErrorActionPreference=Stop.
+        $build = Start-Process -FilePath 'cmd.exe' `
+            -ArgumentList '/c', 'npm run build' `
+            -WorkingDirectory $frontend `
+            -NoNewWindow `
+            -Wait `
+            -PassThru `
+            -RedirectStandardOutput (Join-Path $logs 'frontend.build.log') `
+            -RedirectStandardError (Join-Path $logs 'frontend.build.err.log')
+        if ($build.ExitCode -ne 0) {
+            Write-Error "Frontend build failed, see $logs\frontend.build.log"
+        }
+    }
+
     Start-Process -FilePath 'cmd.exe' `
-        -ArgumentList '/c', 'npm run dev -- --host 0.0.0.0 --port 5180 --strictPort' `
-        -WorkingDirectory (Join-Path $root 'questlearn-frontend') `
+        -ArgumentList '/c', 'npm run preview' `
+        -WorkingDirectory $frontend `
         -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $logs 'frontend.log') `
         -RedirectStandardError (Join-Path $logs 'frontend.err.log')
     if (-not (Wait-Url 'http://localhost:5180/')) {
-        Write-Error 'QuestLearn frontend did not answer on 5180.'
+        Write-Error 'QuestLearn frontend preview did not answer on 5180.'
     }
 }
 
