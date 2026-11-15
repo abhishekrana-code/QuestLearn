@@ -35,9 +35,9 @@ kept honest: **fixed** means it was changed and verified in this repository;
    turned into words instead of printed raw. Check: the admin activity list reads
    as sentences only.
 
-5. **The uptime badge was unreadable ("1M", uppercased).** It now reads
-   "uptime 1m" with no case transform, so minutes and months cannot be confused.
-   Check: the Server health header.
+5. **The uptime badge was uppercased into nonsense ("1M").** The label no longer
+   forces a case transform, so it reads as a plain span; the unit itself is
+   covered by item 9. Check: the Server health header shows lowercase text.
 
 6. **The analytics class filter was silently empty.** With no classes it offered
    only "Every learner" and no explanation. It now shows a disabled "No classes
@@ -60,8 +60,6 @@ kept honest: **fixed** means it was changed and verified in this repository;
    Go back button. Check: open `/admin` as a student, `/performance` as an admin,
    and `/admin` as a teacher.
 
-## Next, highest value first
-
 9. **Server health counters can no longer be misread.** A restart made the panel
    read "Requests served 1" while the app had handled many. The counts are now
    labelled "since restart", a line of text says they begin at zero with the
@@ -74,6 +72,8 @@ kept honest: **fixed** means it was changed and verified in this repository;
     the only role open to self-registration anyway: ADMIN is still refused with
     403 and INSTRUCTOR still needs its invite code. Check: register without a
     role and confirm the response says STUDENT, then try `"role":"ADMIN"`.
+
+## Next, highest value first
 
 11. **A fresh database still defaults to `password123`.** `DEMO_PASSWORD` fixes an
     existing install, but a new clone seeds the old default. Refuse to start the
