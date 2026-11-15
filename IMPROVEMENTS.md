@@ -62,10 +62,11 @@ kept honest: **fixed** means it was changed and verified in this repository;
 
 ## Next, highest value first
 
-9. **Server health counters reset on every restart.** After a restart the panel
-   read "Requests served 1" while the app had handled many. Either label the
-   numbers as "since restart" or move them to a counter that survives, so nobody
-   reads a fresh process as low traffic.
+9. **Server health counters can no longer be misread.** A restart made the panel
+   read "Requests served 1" while the app had handled many. The counts are now
+   labelled "since restart", a line of text says they begin at zero with the
+   process, and the uptime badge spells its unit ("uptime 22 min", not "1M").
+   Check: the Server health panel after a restart.
 
 10. **`POST /api/v1/auth/register` requires `role`.** The web form never asks for
     it, so any outside client gets 400 "Role is required". Make it optional and

@@ -43,9 +43,10 @@ function formatUptime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return 'unknown';
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m`;
-  return `${Math.max(1, Math.floor(seconds))}s`;
+  // Units are spelled out: a bare "1m" reads as either a minute or a month.
+  if (hours > 0) return `${hours} h ${minutes} min`;
+  if (minutes > 0) return `${minutes} min`;
+  return `${Math.max(1, Math.floor(seconds))} s`;
 }
 
 function formatLatency(value) {
@@ -324,8 +325,8 @@ export default function AdminPanel() {
           </div>
           <dl className="grid grid-cols-2 gap-3 px-5 py-4 sm:grid-cols-4">
             {[
-              ['Requests served', telemetry.requests],
-              ['Server errors', telemetry.serverErrors],
+              ['Requests since restart', telemetry.requests],
+              ['Server errors since restart', telemetry.serverErrors],
               ['p50 latency', formatLatency(telemetry.p50Ms)],
               ['p95 latency', formatLatency(telemetry.p95Ms)],
             ].map(([label, value]) => (
@@ -339,6 +340,10 @@ export default function AdminPanel() {
               </div>
             ))}
           </dl>
+          <p className="px-5 pb-4 text-[11px] leading-relaxed text-fg-subtle">
+            Request counts and latencies restart from zero when the server does, so a
+            freshly restarted process is not low traffic.
+          </p>
           <ul className="divide-y divide-line border-t border-line">
             {(telemetry.recentErrors ?? []).length === 0 && (
               <li className="px-5 py-4 text-xs text-fg-subtle">
