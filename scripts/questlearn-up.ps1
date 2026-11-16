@@ -18,6 +18,8 @@ $logs = Join-Path $root 'logs'
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
 $tailscale = 'C:\Program Files\Tailscale\tailscale.exe'
 
+. (Join-Path $PSScriptRoot 'questlearn-common.ps1')
+
 function Test-Url {
     param([string]$Url)
     try {
@@ -41,13 +43,12 @@ function Wait-Url {
 # The backend reads its own .env through spring.config.import, so CORS origins,
 # the database and the demo password all come from one file.
 if (-not (Test-Url 'http://localhost:8091/actuator/health')) {
-    Start-Process -FilePath 'java' `
-        -ArgumentList '-jar', 'target/questlearn-1.0.0.jar', '--server.port=8091' `
+    # The shared starter is what applies the heap cap, so the logon task cannot
+    # bring up a backend with the JVM's default quarter-of-RAM maximum.
+    Start-Backend -Jar 'target\questlearn-1.0.0.jar' `
         -WorkingDirectory (Join-Path $root 'questlearn-backend') `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput (Join-Path $logs 'backend.log') `
-        -RedirectStandardError (Join-Path $logs 'backend.err.log')
-    if (-not (Wait-Url 'http://localhost:8091/actuator/health')) {
+        -LogDirectory $logs
+    if (-not (Wait-BackendHealth)) {
         Write-Error 'QuestLearn backend did not become healthy on 8091.'
     }
 }

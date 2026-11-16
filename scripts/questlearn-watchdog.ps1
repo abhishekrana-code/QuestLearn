@@ -106,7 +106,7 @@ function Send-OutageAlert {
         "Watchdog:    $logFile",
         '',
         'To start it by hand:',
-        '  cd questlearn-backend; java -jar target\questlearn-1.0.0.jar --server.port=8091'
+        '  cd questlearn-backend; java -Xms256m -Xmx768m -jar target\questlearn-1.0.0.jar --server.port=8091'
     ) -join [Environment]::NewLine
 
     $subject = if ($Outcome.Recovered) { "[QuestLearn] Backend restarted on $($env:COMPUTERNAME)" }
