@@ -227,6 +227,25 @@ Maven JVM of roughly 250 to 300MB resident beside the app. That would move the d
 the logon task does not use, for a faster loop on a machine with limited headroom. The watcher keeps
 one run model and one resident JVM at the cost of about twenty extra seconds per backend change.
 
+**A watchdog restarts the backend if it dies while nobody is looking.** A task named **QuestLearn
+watchdog** runs `scripts/questlearn-watchdog.ps1` at startup as SYSTEM, polls
+`/actuator/health` every 30 seconds, and only acts once the API has been unhealthy for two minutes,
+so the 27 second rebuild from the Java watcher and the 30 second restore never look like a death.
+When it acts it stops the process that owns 8091, starts the jar again, waits up to two minutes for
+health, and emails the same address the backup check uses, saying whether the restart worked. It
+keeps a five minute cooldown between attempts, so a backend that keeps dying produces one mail per
+attempt rather than a storm, and a lock file makes a second copy exit immediately.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-watchdog.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\register-watchdog-task.ps1   # elevated
+```
+
+It writes to `logs\watchdog.log` and to `logs\backend.log` for the JVM it starts. Proven by killing
+the backend outright: the watchdog timed the failure, restarted the jar, reported `healthy again after
+11.3 seconds`, and the alert arrived by SMTP. A second manual run while the scheduled one was alive
+printed `Another QuestLearn watchdog is already running.` and exited without touching anything.
+
 ### Backups and restore
 
 A Windows task named **QuestLearn backup** runs `scripts/questlearn-backup.ps1` daily at 02:30
