@@ -7,6 +7,10 @@ import { expect, test } from '@playwright/test';
  * The seeded accounts can be rotated with DEMO_PASSWORD (DataInitializer rewrites
  * them on start), so the teacher login reads the same root .env the backend does
  * instead of assuming the published default.
+ *
+ * <p>There is no fallback password on purpose. A database seeded without
+ * DEMO_PASSWORD gets a random password, so guessing one only produces a confusing
+ * login timeout; failing here says what is actually wrong.</p>
  */
 function demoPassword() {
   if (process.env.DEMO_PASSWORD) return process.env.DEMO_PASSWORD;
@@ -16,9 +20,11 @@ function demoPassword() {
     const value = match?.[1]?.trim();
     if (value) return value;
   } catch {
-    /* no root .env: fall through to the default */
+    /* no root .env: reported below */
   }
-  return 'password123';
+  throw new Error(
+    'DEMO_PASSWORD is not set and no root .env provides one, so the smoke suite cannot sign in as the seeded instructor. Set DEMO_PASSWORD in the environment or in the root .env.',
+  );
 }
 
 /**
