@@ -172,10 +172,15 @@ Two scripts make the demo survive a reboot:
 Funnel itself survives a reboot because `--bg` stores the configuration in the Tailscale service,
 which starts automatically; the logon task is what brings the two app processes back.
 
-**Publishing a frontend change** takes one command:
+**Publishing a frontend change** takes one command, either from the repository root or from the
+frontend folder:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-publish.ps1
+
+cd questlearn-frontend
+npm run publish
+npm run publish -- -SkipBuild
 ```
 
 It rebuilds the bundle, stops only the process that owns port 5180, starts preview again, and then
