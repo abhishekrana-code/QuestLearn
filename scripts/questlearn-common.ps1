@@ -85,6 +85,16 @@ function Start-Backend {
     # process, which needs elevation when the watchdog starts it as SYSTEM. Record
     # the command here instead, in its own file: backend.log is truncated by the
     # next start, so a line there would not survive to be read afterwards.
+    # Keep the log of the run being replaced: a slow start is only diagnosable from
+    # the log it wrote, and the redirect below truncates that file on every start.
+    foreach ($pair in @(@('backend.log', 'backend.previous.log'), @('backend.err.log', 'backend.previous.err.log'))) {
+        $current = Join-Path $LogDirectory $pair[0]
+        if (Test-Path $current) {
+            try { Copy-Item -Path $current -Destination (Join-Path $LogDirectory $pair[1]) -Force }
+            catch { Write-Warning "Could not keep $($pair[0]): $($_.Exception.Message)" }
+        }
+    }
+
     $rendered = ($arguments | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
     $line = '[{0:yyyy-MM-dd HH:mm:ss}] java {1}    (port {2}, working dir {3})' -f (Get-Date), $rendered, $Port, $WorkingDirectory
     try {
@@ -100,6 +110,23 @@ function Start-Backend {
         -RedirectStandardError (Join-Path $LogDirectory 'backend.err.log')
 }
 
+# True when a QuestLearn JVM exists at all. The port only opens at the end of a
+# start, so a process with no listener is still loading classes rather than gone.
+# A process owned by another account can hide its command line, which reads as
+# "not starting" and falls back to the old stop-and-restart behaviour.
+function Test-BackendStartInProgress {
+    param([string]$JarHint = 'questlearn')
+    try {
+        $java = Get-CimInstance Win32_Process -Filter "Name = 'java.exe'" -ErrorAction Stop
+    } catch {
+        return $false
+    }
+    foreach ($process in $java) {
+        if ($process.CommandLine -and $process.CommandLine -like "*$JarHint*") { return $true }
+    }
+    return $false
+}
+
 function Wait-PortFree {
     param([int]$Port = 8091, [int]$Seconds = 15)
     $deadline = (Get-Date).AddSeconds($Seconds)
@@ -111,7 +138,7 @@ function Wait-PortFree {
 }
 
 function Wait-BackendHealth {
-    param([int]$Port = 8091, [int]$Seconds = 90)
+    param([int]$Port = 8091, [int]$Seconds = 150)
     $deadline = (Get-Date).AddSeconds($Seconds)
     while ((Get-Date) -lt $deadline) {
         if (Test-BackendHealth -Port $Port) { return $true }

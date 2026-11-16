@@ -22,7 +22,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$RestartTimeoutSeconds = 120
+# A start takes about 10s on an idle machine and was measured at 71s under load.
+# 180s leaves room for a much worse window before a start is called a failure.
+$RestartTimeoutSeconds = 180
 
 $root = Split-Path -Parent $PSScriptRoot
 $backend = Join-Path $root 'questlearn-backend'
@@ -72,6 +74,23 @@ function Send-Alert {
 
 # Stop and start one backend, then report whether health came back.
 function Restart-Backend {
+    # A JVM that exists but is not answering has not finished starting. Killing it
+    # throws away that work and starts from zero, so wait for it first; only stop
+    # and restart if it has had the full timeout and still is not answering.
+    if (Test-BackendStartInProgress) {
+        Write-Log 'A backend process exists but is not answering; waiting for it to finish starting.'
+        $waitTimer = [System.Diagnostics.Stopwatch]::StartNew()
+        while ($waitTimer.Elapsed.TotalSeconds -lt $RestartTimeoutSeconds) {
+            Start-Sleep -Seconds 3
+            if (Test-BackendHealth) {
+                Write-Log ('Backend healthy again after {0:N0} seconds, without a restart.' -f $waitTimer.Elapsed.TotalSeconds)
+                return @{ Stopped = 'nothing, the start in progress was allowed to finish'; Recovered = $true; Seconds = [math]::Round($waitTimer.Elapsed.TotalSeconds, 0) }
+            }
+            if (-not (Test-BackendStartInProgress)) { break }
+        }
+        Write-Log 'The start in progress did not become healthy; stopping it and starting again.'
+    }
+
     $stopped = Stop-Backend
     Write-Log "Stopped: $stopped"
     Start-Backend -Jar $jar -WorkingDirectory $backend -LogDirectory $logs

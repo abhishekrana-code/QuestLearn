@@ -246,7 +246,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\register-watchdog-ta
 It writes to `logs\watchdog.log` and to `logs\backend.log` for the JVM it starts. Every script that
 starts a backend records the exact command in `logs\backend.start.log`, one timestamped line per
 start, so the heap flags and jar path can be read without querying the process (which needs
-elevation when the watchdog starts it as SYSTEM). Proven by killing
+elevation when the watchdog starts it as SYSTEM). The log of the run a start replaces is kept as
+`logs\backend.previous.log`, because a start truncates `backend.log` and a slow start is diagnosed
+from the log it wrote.
+
+A start takes about 10s on an idle machine and was measured at 51s and 71s when the laptop was busy,
+so the waits are generous by design. The watcher waits 150s for a rebuilt backend to answer, and the
+watchdog gives a restart 180s. The watchdog also checks before restarting whether a QuestLearn JVM
+exists at all: a process with no listener yet is still loading classes, so it waits for that start to
+finish instead of killing it and starting again from zero.
+
+Proven by killing
 the backend outright: the watchdog timed the failure, restarted the jar, reported `Backend healthy
 again after 11 seconds`, and the alert arrived by SMTP. A second manual run while the scheduled one was alive
 printed `Another QuestLearn watchdog is already running.` and exited without touching anything.

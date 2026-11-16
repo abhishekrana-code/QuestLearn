@@ -8,9 +8,10 @@
 # because polling a few hundred files every two seconds is cheap and survives
 # editors that replace files instead of writing them in place.
 #
-# On this machine a changed backend costs about 20s to package and 12s to start,
-# so expect roughly half a minute before the public URL serves the new code, and
-# expect the API to answer 502 for the middle of that.
+# On this machine a changed backend costs about 20s to package and 10s to start
+# when idle, but starts have been measured at 51s and 71s while the laptop was
+# busy, which is why the wait below allows 150s. Expect the API to answer 502
+# between the stop and the new jar answering.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-watch-java.ps1
 
