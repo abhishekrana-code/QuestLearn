@@ -9,6 +9,7 @@ hs_err_pid*
 
 # Runtime logs
 *.log
+logs/
 
 # Nightly database and uploads backups (contain password hashes)
 backups/
