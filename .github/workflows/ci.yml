@@ -132,10 +132,12 @@ jobs:
           exit 1
       - name: Prove the seeded demo login works
         run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8091/api/v1/auth/login \n            -H 'Content-Type: application/json' \n            -d "{\"email\":\"instructor@questlearn.dev\",\"password\":\"$DEMO_PASSWORD\"}")
+          body="{\"email\":\"instructor@questlearn.dev\",\"password\":\"$DEMO_PASSWORD\"}"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8091/api/v1/auth/login -H 'Content-Type: application/json' -d "$body")
           if [ "$code" != "200" ]; then
             echo "The seeded instructor could not sign in with DEMO_PASSWORD (HTTP $code)."
-            echo "The smoke suite signs in as this account, so it would fail too."
+            echo "Password lines from the API log, so a generated password is visible here:"
+            grep -i "password" api-e2e.log | tail -3
             exit 1
           fi
           echo "Seeded instructor sign-in works."
