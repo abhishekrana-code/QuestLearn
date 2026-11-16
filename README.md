@@ -278,17 +278,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-verify-ba
 
 It takes the newest backup, creates `questlearn_restorecheck`, runs `pg_restore` into it, counts
 `users`, `courses` and the seeded `@questlearn.dev` accounts, reads the Flyway schema version, then
-drops the scratch database. It exits 0 only when the dump restored and the counts are above their
-floors (`-MinUsers`, `-MinCourses`, `-MinDemoUsers`, default 3, 1 and 1). A failure exits 1, writes
+drops the scratch database. It also expands `uploads.zip` into a temporary folder and compares the
+extracted file count and total bytes against `manifest.json`, because videos live on disk and a
+perfect dump can still sit beside an empty or broken archive. It exits 0 only when the dump
+restored, the counts are above their floors (`-MinUsers`, `-MinCourses`, `-MinDemoUsers`, default
+3, 1 and 1), and the uploads archive matches the manifest. A failure exits 1, writes
 the reason to `logs\verify-backup.log` and leaves `backups\VERIFY-FAILED.txt`, which the next
 good run deletes. The newest backup must also be younger than `-MaxAgeHours` (48 by default), so a
 nightly task that silently stopped is reported as a failure rather than passing forever on an old
 file.
 
-All four paths were exercised: a good run reported `15 users, 2 courses, 14 demo accounts, schema
-version 9`; a deliberately truncated dump failed on `pg_restore`; a one hour age limit rejected the
-same backup as stale; and a following good run cleared the marker. A run takes about ten seconds on
-a dump this size. `-KeepScratch` leaves the database in place to inspect it after a failure.
+The paths were exercised by hand: a good run reported `15 users, 2 courses, 14 demo accounts,
+schema version 9` and `1 file(s), 0.03 MB` of uploads matching the manifest; a deliberately
+truncated dump failed on `pg_restore`; a one hour age limit rejected the same backup as stale; and
+a following good run cleared the marker. For the archive, four separate runs confirmed a missing
+`uploads.zip`, a corrupted one (`could not be expanded`), a zip with more files than the manifest,
+and a zip whose single file was the wrong size all exit 1 with the mismatch named. A run takes
+about ten seconds on a dump this size. `-KeepScratch` leaves the database in place to inspect it
+after a failure.
 
 The restore was tested once against the real database: a throwaway account was registered through
 the API (16 users, probe visible in the admin search), the restore ran from the dump, and afterwards

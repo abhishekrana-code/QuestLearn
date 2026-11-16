@@ -14,6 +14,8 @@
 #     which means the nightly task has quietly stopped
 #   - the dump is missing, or pg_restore exits non-zero
 #   - users, courses or the seeded demo accounts come back below their floors
+#   - uploads.zip is missing while the manifest records videos, cannot be expanded,
+#     or its expanded file count or total size differs from the manifest
 #
 # Exit code 0 means the dump was restored and the counts looked right.
 
@@ -128,12 +130,19 @@ try {
     # of the newest run is checked before the dump itself.
     $created = (Get-Item $dump).LastWriteTime
     $manifestPath = Join-Path $source 'manifest.json'
+    $manifest = $null
     if (Test-Path $manifestPath) {
         try {
-            $created = [datetime]::Parse((Get-Content $manifestPath -Raw | ConvertFrom-Json).createdAt).ToLocalTime()
+            $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+            $created = [datetime]::Parse($manifest.createdAt).ToLocalTime()
         } catch {
             Write-Log 'manifest.json could not be read; falling back to the dump file time.'
         }
+    }
+    if (-not $manifest) {
+        # The uploads archive is compared against the manifest, so a backup without
+        # one cannot be verified even if its dump happens to restore.
+        throw 'manifest.json is missing or unreadable, so the uploads archive cannot be checked.'
     }
     $ageHours = [math]::Round(((Get-Date) - $created).TotalHours, 1)
     $checks['ageHours'] = $ageHours
@@ -173,7 +182,45 @@ try {
         throw "Only $demoUsers seeded demo account(s) restored, below the floor of $MinDemoUsers."
     }
 
-    Write-Log 'Backup verified: the dump restores and holds the expected data.'
+    # The videos are not in the database, so a perfect dump can still sit beside an
+    # empty or broken archive. Expand it and hold it to what the manifest recorded.
+    $uploadsZip = Join-Path $source 'uploads.zip'
+    $expectedFiles = [int]$manifest.uploadCount
+    $expectedBytes = [long]$manifest.uploadBytes
+    if ($manifest.hasUploads) {
+        if (-not (Test-Path $uploadsZip)) {
+            throw "The manifest records $expectedFiles upload(s) but uploads.zip is missing."
+        }
+        $scratch = Join-Path ([System.IO.Path]::GetTempPath()) ('questlearn-uploads-check-' + [guid]::NewGuid().ToString('N'))
+        try {
+            try {
+                Expand-Archive -Path $uploadsZip -DestinationPath $scratch -Force -ErrorAction Stop
+            } catch {
+                throw "uploads.zip could not be expanded: $($_.Exception.Message)"
+            }
+            $extracted = @(Get-ChildItem -Path $scratch -Recurse -File)
+            $actualFiles = $extracted.Count
+            $actualBytes = [long](($extracted | Measure-Object Length -Sum).Sum)
+            $checks['uploadFiles'] = $actualFiles
+            $checks['uploadBytes'] = $actualBytes
+            Write-Log ('Uploads: {0} file(s), {1:N2} MB expanded; manifest recorded {2} file(s), {3:N2} MB' -f
+                $actualFiles, ($actualBytes / 1MB), $expectedFiles, ($expectedBytes / 1MB))
+            if ($actualFiles -ne $expectedFiles) {
+                throw "uploads.zip holds $actualFiles file(s) but the manifest recorded $expectedFiles."
+            }
+            if ($actualBytes -ne $expectedBytes) {
+                throw "uploads.zip holds $actualBytes byte(s) but the manifest recorded $expectedBytes."
+            }
+        } finally {
+            Remove-Item -Path $scratch -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    } elseif (Test-Path $uploadsZip) {
+        Write-Log 'The manifest records no uploads but uploads.zip exists; nothing to compare.'
+    } else {
+        Write-Log 'The manifest records no uploads and there is no archive, which is consistent.'
+    }
+
+    Write-Log 'Backup verified: the dump restores, the counts match, and the uploads archive matches the manifest.'
 } catch {
     $failure = $_.Exception.Message
     Write-Log "BACKUP CHECK FAILED: $failure"
