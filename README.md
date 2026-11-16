@@ -288,6 +288,16 @@ good run deletes. The newest backup must also be younger than `-MaxAgeHours` (48
 nightly task that silently stopped is reported as a failure rather than passing forever on an old
 file.
 
+**A failure also emails you**, because a marker file and a log nobody opens are not a warning. The
+check sends one message through the transport the app already uses: Resend when `RESEND_API_KEY`
+is set, otherwise SMTP with the `MAIL_*` variables. The recipient is `BACKUP_ALERT_EMAIL`, then
+`ALERT_EMAIL`, then `MAIL_USERNAME` (the mailbox that owns the SMTP credentials), then `MAIL_FROM`;
+add `BACKUP_ALERT_EMAIL` to `questlearn-backend\.env` to send these to a personal inbox instead of
+the sending account. The mail carries the backup folder, the reason, the log and marker paths, and
+the `-KeepScratch` command to inspect it. Addresses are printed masked and no credentials are
+logged. A passing run sends nothing, so the inbox only speaks when something is wrong. If no
+transport is configured the check still exits 1 and the log says the alert could not be sent.
+
 The paths were exercised by hand: a good run reported `15 users, 2 courses, 14 demo accounts,
 schema version 9` and `1 file(s), 0.03 MB` of uploads matching the manifest; a deliberately
 truncated dump failed on `pg_restore`; a one hour age limit rejected the same backup as stale; and
@@ -295,7 +305,11 @@ a following good run cleared the marker. For the archive, four separate runs con
 `uploads.zip`, a corrupted one (`could not be expanded`), a zip with more files than the manifest,
 and a zip whose single file was the wrong size all exit 1 with the mismatch named. A run takes
 about ten seconds on a dump this size. `-KeepScratch` leaves the database in place to inspect it
-after a failure.
+after a failure. The alert channel was proven separately: a test message arrived through
+`smtp.gmail.com`, an induced failure produced a second one and logged the masked recipient, and the
+same induced failure was run by the scheduled task as SYSTEM, where it also delivered the email and
+left `LastTaskResult 1`. `scripts/questlearn-notify.ps1` can send a message on its own, which is how
+the channel is tested without breaking a backup.
 
 The restore was tested once against the real database: a throwaway account was registered through
 the API (16 users, probe visible in the admin search), the restore ran from the dump, and afterwards

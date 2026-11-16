@@ -248,6 +248,41 @@ if ($failure) {
         "Log: $logFile"
     )
     Set-Content -Path $failMarker -Value $summary -Encoding utf8
+
+    # A marker file nobody opens is not a warning. The alert goes out through the
+    # same transport the app uses for its own mail, so a dead backup reaches the
+    # person who can do something about it rather than waiting to be discovered.
+    $notifier = Join-Path $PSScriptRoot 'questlearn-notify.ps1'
+    if (Test-Path $notifier) {
+        $body = @(
+            'The weekly QuestLearn backup check failed, so the newest backup is not proven usable.',
+            '',
+            "Backup folder: $Name",
+            "Reason: $failure",
+            '',
+            "Full log: $logFile",
+            "Marker:    $failMarker",
+            '',
+            'To inspect it, run:',
+            '  powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-verify-backup.ps1 -KeepScratch',
+            '',
+            "This message was sent by $($env:COMPUTERNAME) at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')."
+        ) -join [Environment]::NewLine
+        try {
+            $alertOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File $notifier `
+                -Subject "[QuestLearn] Backup check failed on $($env:COMPUTERNAME)" -Body $body 2>&1
+            $alertCode = $LASTEXITCODE
+            foreach ($line in $alertOutput) { Write-Log "Alert: $line" }
+            if ($alertCode -ne 0) {
+                Write-Log 'The alert could not be delivered; the marker and log are the only record.'
+            }
+        } catch {
+            Write-Log "The alert could not be sent: $($_.Exception.Message)"
+        }
+    } else {
+        Write-Log "No notifier at $notifier, so no alert was sent."
+    }
+
     exit 1
 }
 
