@@ -243,7 +243,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-watchdog.
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\register-watchdog-task.ps1   # elevated
 ```
 
-It writes to `logs\watchdog.log` and to `logs\backend.log` for the JVM it starts. Proven by killing
+It writes to `logs\watchdog.log` and to `logs\backend.log` for the JVM it starts. Every script that
+starts a backend records the exact command in `logs\backend.start.log`, one timestamped line per
+start, so the heap flags and jar path can be read without querying the process (which needs
+elevation when the watchdog starts it as SYSTEM). Proven by killing
 the backend outright: the watchdog timed the failure, restarted the jar, reported `Backend healthy
 again after 11 seconds`, and the alert arrived by SMTP. A second manual run while the scheduled one was alive
 printed `Another QuestLearn watchdog is already running.` and exited without touching anything.

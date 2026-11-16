@@ -79,8 +79,21 @@ function Start-Backend {
         [string]$LogDirectory,
         [int]$Port = 8091
     )
+    $arguments = $BackendHeapArguments + @('-jar', $Jar, "--server.port=$Port")
+
+    # The heap flags and the jar path were only visible by querying the running
+    # process, which needs elevation when the watchdog starts it as SYSTEM. Record
+    # the command here instead, in its own file: backend.log is truncated by the
+    # next start, so a line there would not survive to be read afterwards.
+    $rendered = ($arguments | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
+    $line = '[{0:yyyy-MM-dd HH:mm:ss}] java {1}    (port {2}, working dir {3})' -f (Get-Date), $rendered, $Port, $WorkingDirectory
+    try {
+        $startLog = Join-Path $LogDirectory 'backend.start.log'
+        [System.IO.File]::AppendAllText($startLog, $line + [Environment]::NewLine, (New-Object System.Text.UTF8Encoding($false)))
+    } catch { Write-Warning "Could not record the start command: $($_.Exception.Message)" }
+
     Start-Process -FilePath 'java' `
-        -ArgumentList ($BackendHeapArguments + @('-jar', $Jar, "--server.port=$Port")) `
+        -ArgumentList $arguments `
         -WorkingDirectory $WorkingDirectory `
         -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $LogDirectory 'backend.log') `
