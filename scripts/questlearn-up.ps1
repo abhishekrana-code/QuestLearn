@@ -54,29 +54,27 @@ if (-not (Test-Url 'http://localhost:8091/actuator/health')) {
 
 # The public URL serves the built app, not the dev server: no HMR websocket through
 # the tunnel and no dev overlay on a demo. Preview keeps the /api proxy, so one
-# public port still carries the whole application. The build is cheap and rerun on
-# every start, which means a stale dist can never be what visitors see.
-#
-# Set QUESTLEARN_SKIP_BUILD=1 to start the existing dist untouched.
-if (-not (Test-Url 'http://localhost:5180/')) {
-    $frontend = Join-Path $root 'questlearn-frontend'
+# public port still carries the whole application, and it reads dist from disk on
+# each request, which is what lets the watcher below publish without a restart.
+$frontend = Join-Path $root 'questlearn-frontend'
 
-    if ($env:QUESTLEARN_SKIP_BUILD -ne '1') {
-        # Through cmd and Start-Process, because Windows PowerShell turns npm's
-        # stderr notices into terminating errors under ErrorActionPreference=Stop.
-        $build = Start-Process -FilePath 'cmd.exe' `
-            -ArgumentList '/c', 'npm run build' `
-            -WorkingDirectory $frontend `
-            -NoNewWindow `
-            -Wait `
-            -PassThru `
-            -RedirectStandardOutput (Join-Path $logs 'frontend.build.log') `
-            -RedirectStandardError (Join-Path $logs 'frontend.build.err.log')
-        if ($build.ExitCode -ne 0) {
-            Write-Error "Frontend build failed, see $logs\frontend.build.log"
-        }
+if (-not (Test-Path (Join-Path $frontend 'dist\index.html'))) {
+    # Through cmd and Start-Process, because Windows PowerShell turns npm's stderr
+    # notices into terminating errors under ErrorActionPreference=Stop.
+    $build = Start-Process -FilePath 'cmd.exe' `
+        -ArgumentList '/c', 'npm run build' `
+        -WorkingDirectory $frontend `
+        -NoNewWindow `
+        -Wait `
+        -PassThru `
+        -RedirectStandardOutput (Join-Path $logs 'frontend.build.log') `
+        -RedirectStandardError (Join-Path $logs 'frontend.build.err.log')
+    if ($build.ExitCode -ne 0) {
+        Write-Error "Frontend build failed, see $logs\frontend.build.log"
     }
+}
 
+if (-not (Test-Url 'http://localhost:5180/')) {
     Start-Process -FilePath 'cmd.exe' `
         -ArgumentList '/c', 'npm run preview' `
         -WorkingDirectory $frontend `
@@ -86,6 +84,21 @@ if (-not (Test-Url 'http://localhost:5180/')) {
     if (-not (Wait-Url 'http://localhost:5180/')) {
         Write-Error 'QuestLearn frontend preview did not answer on 5180.'
     }
+}
+
+# The watcher rebuilds dist whenever a frontend file changes, so an edit reaches
+# the public URL in about a second without anyone running a publish command.
+# It is skipped when one is already running, so this script stays safe to re-run.
+$watchers = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like '*vite*build*--watch*' }
+if (-not $watchers) {
+    Start-Process -FilePath 'cmd.exe' `
+        -ArgumentList '/c', 'npm run watch' `
+        -WorkingDirectory $frontend `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $logs 'frontend.watch.log') `
+        -RedirectStandardError (Join-Path $logs 'frontend.watch.err.log')
+    Write-Output 'Frontend watcher started: edits publish on save.'
 }
 
 # --bg keeps the Funnel registered with the Tailscale service, so it resumes

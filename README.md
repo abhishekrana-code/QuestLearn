@@ -172,8 +172,13 @@ Two scripts make the demo survive a reboot:
 Funnel itself survives a reboot because `--bg` stores the configuration in the Tailscale service,
 which starts automatically; the logon task is what brings the two app processes back.
 
-**Publishing a frontend change** takes one command, either from the repository root or from the
-frontend folder:
+**Publishing a frontend change happens on save.** `npm run watch` runs `vite build --watch`, which
+rewrites `dist` within a second or two of an edit, and `vite preview` reads that directory from
+disk on each request, so the public URL picks the change up without a restart and without a
+separate publish step. `scripts/questlearn-up.ps1` starts the watcher (once) alongside preview, so
+a reboot puts it back too.
+
+The manual route still exists for builds made elsewhere, or when the watcher is not running:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-publish.ps1
@@ -185,8 +190,15 @@ npm run publish -- -SkipBuild
 
 It rebuilds the bundle, stops only the process that owns port 5180, starts preview again, and then
 fetches the new bundle through the public URL to prove it is live. The backend and the Funnel are
-not touched, because the Funnel proxies to the port rather than to a process. Use `-SkipBuild` to
-restart the existing `dist`, and restart the backend separately for server-side changes.
+not touched, because the Funnel proxies to the port rather than to a process. Restart the backend
+separately for server-side changes.
+
+What the automatic publish costs: a second node process sits in `watch` mode while you work, and
+every save triggers a full rebuild of about one to two seconds, so a half-finished multi-file edit
+can be visible for that long. A build that fails leaves the last good bundle serving, because Vite
+does not overwrite `dist` with a broken build, so a typo never publishes a blank page. If you would
+rather freeze the demo, stop the watcher process and run `npm run publish` only when you want to
+ship.
 
 ### Demo accounts (seeded on first start)
 

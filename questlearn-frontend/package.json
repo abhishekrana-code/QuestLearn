@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "watch": "vite build --watch",
     "preview": "vite preview",
     "publish": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/questlearn-publish.ps1",
     "test": "vitest run",
