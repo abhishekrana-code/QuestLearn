@@ -233,8 +233,10 @@ watchdog** runs `scripts/questlearn-watchdog.ps1` at startup as SYSTEM, polls
 so the 27 second rebuild from the Java watcher and the 30 second restore never look like a death.
 When it acts it stops the process that owns 8091, starts the jar again, waits up to two minutes for
 health, and emails the same address the backup check uses, saying whether the restart worked. It
-keeps a five minute cooldown between attempts, so a backend that keeps dying produces one mail per
-attempt rather than a storm, and a lock file makes a second copy exit immediately.
+sends one mail per outage, plus a follow-up only if the first said the backend was still down and it
+later came back, so a backend that cannot start does not mail on every attempt. A lock file makes a
+second copy exit immediately. The only knobs are `-IntervalSeconds` and `-FailMinutes`; a restart
+attempt resets the failure window, which is what keeps a crash loop to one attempt per window.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-watchdog.ps1
@@ -242,8 +244,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\register-watchdog-ta
 ```
 
 It writes to `logs\watchdog.log` and to `logs\backend.log` for the JVM it starts. Proven by killing
-the backend outright: the watchdog timed the failure, restarted the jar, reported `healthy again after
-11.3 seconds`, and the alert arrived by SMTP. A second manual run while the scheduled one was alive
+the backend outright: the watchdog timed the failure, restarted the jar, reported `Backend healthy
+again after 11 seconds`, and the alert arrived by SMTP. A second manual run while the scheduled one was alive
 printed `Another QuestLearn watchdog is already running.` and exited without touching anything.
 
 ### Backups and restore

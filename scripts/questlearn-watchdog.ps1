@@ -6,25 +6,23 @@
 # unhealthy for two minutes, so a rebuild by questlearn-watch-java.ps1 (about 27
 # seconds) or a restore (about 30) never looks like a death.
 #
-# When it does act: stop the process that owns 8091, start the jar again, wait up to
-# two minutes for health, then email the same address the backup check uses, saying
-# what happened and whether the restart worked. Restarts are rate limited, so a
-# backend that dies repeatedly produces one mail per attempt rather than a storm,
-# and one thread is enough because there is a single-instance guard.
+# When it acts: stop the process that owns 8091, start the jar again, wait up to two
+# minutes for health, then email the same address the backup check uses. One email
+# per outage, plus a follow-up only if the first one said the backend was still down
+# and it later came back, so a backend that cannot start does not mail on every
+# attempt.
 #
-#   -IntervalSeconds 30      how often health is polled
-#   -FailMinutes 2           unhealthy for this long before a restart
-#   -CooldownMinutes 5       minimum gap between restart attempts
-#   -RestartTimeoutSeconds   how long to wait for health after starting the jar
+#   -IntervalSeconds 30   how often health is polled
+#   -FailMinutes 2        unhealthy for this long before a restart
 
 param(
     [int]$IntervalSeconds = 30,
-    [int]$FailMinutes = 2,
-    [int]$RestartTimeoutSeconds = 120,
-    [int]$CooldownMinutes = 5
+    [int]$FailMinutes = 2
 )
 
 $ErrorActionPreference = 'Stop'
+
+$RestartTimeoutSeconds = 120
 
 $root = Split-Path -Parent $PSScriptRoot
 $backend = Join-Path $root 'questlearn-backend'
@@ -51,7 +49,9 @@ try {
 function Write-Log {
     param([string]$Message)
     $line = '[{0:yyyy-MM-dd HH:mm:ss}] {1}' -f (Get-Date), $Message
-    Write-Output $line
+    # Console, not the pipeline: inside Restart-Backend the pipeline is the function's
+    # return value, so Write-Output there swallowed the log lines into the result.
+    [Console]::Out.WriteLine($line)
     Add-Content -Path $logFile -Value $line -Encoding utf8
 }
 
@@ -64,39 +64,9 @@ function Test-Health {
     }
 }
 
-function Stop-Backend {
-    # Only the process that owns 8091 is stopped, never a pattern match on names.
-    $owners = Get-NetTCPConnection -LocalPort 8091 -State Listen -ErrorAction SilentlyContinue |
-        Select-Object -ExpandProperty OwningProcess -Unique
-    $stopped = @()
-    foreach ($ownerPid in $owners) {
-        try {
-            $name = (Get-Process -Id $ownerPid -ErrorAction SilentlyContinue).ProcessName
-            Stop-Process -Id $ownerPid -Force -ErrorAction Stop
-            $stopped += "$name ($ownerPid)"
-        } catch {
-            Write-Log "Could not stop pid $ownerPid : $($_.Exception.Message)"
-        }
-    }
-    return $stopped
-}
-
-function Start-Backend {
-    Start-Process -FilePath 'java' `
-        -ArgumentList '-jar', $jar, '--server.port=8091' `
-        -WorkingDirectory $backend `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput (Join-Path $logs 'backend.log') `
-        -RedirectStandardError (Join-Path $logs 'backend.err.log')
-}
-
 function Send-Alert {
     param([string]$Subject, [string]$Body)
     $notifier = Join-Path $PSScriptRoot 'questlearn-notify.ps1'
-    if (-not (Test-Path $notifier)) {
-        Write-Log "No notifier at $notifier, so no alert was sent."
-        return
-    }
     try {
         $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $notifier -Subject $Subject -Body $Body 2>&1
         $code = $LASTEXITCODE
@@ -107,101 +77,114 @@ function Send-Alert {
     }
 }
 
-if (-not (Test-Path $jar)) {
-    Write-Log "No jar at $jar, so a restart would not be able to start anything. Waiting anyway."
-}
-
-Write-Log "Watchdog started: polling $healthUrl every ${IntervalSeconds}s, acting after $FailMinutes minute(s) of failure."
-
-$unhealthySince = $null
-$lastRestart = $null
-$restartCount = 0
-
-while ($true) {
-    $healthy = Test-Health
-    $now = Get-Date
-
-    if ($healthy) {
-        if ($unhealthySince) {
-            $downFor = [math]::Round(($now - $unhealthySince).TotalMinutes, 1)
-            Write-Log "Backend healthy again after $downFor minute(s) without a restart."
-            $unhealthySince = $null
-        }
-        Start-Sleep -Seconds $IntervalSeconds
-        continue
+# Stop and start one backend, then report whether health came back.
+function Restart-Backend {
+    # Only the process that owns 8091 is stopped, never a pattern match on names.
+    $owners = @(Get-NetTCPConnection -LocalPort 8091 -State Listen -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty OwningProcess -Unique)
+    $stopped = 'nothing was listening on 8091'
+    if ($owners.Count -gt 0) {
+        $stopped = ($owners | ForEach-Object {
+            $name = (Get-Process -Id $_ -ErrorAction SilentlyContinue).ProcessName
+            "$name ($_)"
+        }) -join ', '
+        Write-Log "Stopping $stopped"
+        $owners | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
     }
 
-    if (-not $unhealthySince) {
-        $unhealthySince = $now
-        Write-Log 'Health check failed; starting the failure timer.'
-        Start-Sleep -Seconds $IntervalSeconds
-        continue
-    }
-
-    $minutesDown = ($now - $unhealthySince).TotalMinutes
-    if ($minutesDown -lt $FailMinutes) {
-        Start-Sleep -Seconds $IntervalSeconds
-        continue
-    }
-
-    if ($lastRestart -and (($now - $lastRestart).TotalMinutes -lt $CooldownMinutes)) {
-        Write-Log ('Unhealthy for {0:N1} minute(s), but the last restart was {1:N1} minute(s) ago; waiting.' -f
-            $minutesDown, ($now - $lastRestart).TotalMinutes)
-        Start-Sleep -Seconds $IntervalSeconds
-        continue
-    }
-
-    $restartCount++
-    $lastRestart = $now
-    Write-Log ('Restarting after {0:N1} minute(s) unhealthy (attempt {1}).' -f $minutesDown, $restartCount)
-    $stopped = Stop-Backend
-    Start-Backend
+    Start-Process -FilePath 'java' `
+        -ArgumentList '-jar', $jar, '--server.port=8091' `
+        -WorkingDirectory $backend `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $logs 'backend.log') `
+        -RedirectStandardError (Join-Path $logs 'backend.err.log')
 
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
-    $recovered = $false
     while ($timer.Elapsed.TotalSeconds -lt $RestartTimeoutSeconds) {
         Start-Sleep -Seconds 3
-        if (Test-Health) { $recovered = $true; break }
+        if (Test-Health) {
+            Write-Log ('Backend healthy again after {0:N0} seconds.' -f $timer.Elapsed.TotalSeconds)
+            return @{ Stopped = $stopped; Recovered = $true; Seconds = [math]::Round($timer.Elapsed.TotalSeconds, 0) }
+        }
     }
-    $timer.Stop()
-    $recoveredIn = [math]::Round($timer.Elapsed.TotalSeconds, 1)
+    Write-Log "Backend still unhealthy $RestartTimeoutSeconds seconds after the restart."
+    return @{ Stopped = $stopped; Recovered = $false; Seconds = $RestartTimeoutSeconds }
+}
 
-    if ($recovered) {
-        Write-Log "Backend healthy again after $recoveredIn seconds."
-    } else {
-        Write-Log "Backend still unhealthy $RestartTimeoutSeconds seconds after the restart."
-    }
-
-    $stoppedText = if ($stopped.Count -gt 0) { $stopped -join ', ' } else { 'nothing was listening on 8091' }
+function Send-OutageAlert {
+    param($Outcome, [double]$MinutesDown, [int]$Attempt)
+    $state = if ($Outcome.Recovered) { 'The QuestLearn backend stopped answering and was restarted successfully.' }
+             else { 'The QuestLearn backend stopped answering and is STILL DOWN after a restart attempt.' }
     $body = @(
-        $(if ($recovered) { 'The QuestLearn backend stopped answering and was restarted successfully.' }
-          else { 'The QuestLearn backend stopped answering and is STILL DOWN after a restart attempt.' }),
+        $state,
         '',
         "Machine:     $($env:COMPUTERNAME)",
         "Health URL:  $healthUrl",
-        ('Down for:    {0:N1} minute(s) before restarting' -f $minutesDown),
-        "Stopped:     $stoppedText",
-        $(if ($recovered) { "Recovered:   health returned after $recoveredIn seconds" }
-          else { "Recovery:    no healthy answer within $RestartTimeoutSeconds seconds" }),
-        "Attempt:     $restartCount since this watchdog started",
+        ('Down for:    {0:N1} minute(s) before restarting' -f $MinutesDown),
+        "Stopped:     $($Outcome.Stopped)",
+        "Recovery:    $(if ($Outcome.Recovered) { "healthy after $($Outcome.Seconds) seconds" } else { "no healthy answer within $RestartTimeoutSeconds seconds" })",
+        "Attempt:     $Attempt for this outage",
         '',
         "Backend log: $(Join-Path $logs 'backend.log')",
         "Watchdog:    $logFile",
         '',
-        'If it is still down, the jar or its configuration needs a look:',
-        "  cd questlearn-backend; java -jar target\questlearn-1.0.0.jar --server.port=8091"
+        'To start it by hand:',
+        '  cd questlearn-backend; java -jar target\questlearn-1.0.0.jar --server.port=8091'
     ) -join [Environment]::NewLine
 
-    $subject = if ($recovered) {
-        "[QuestLearn] Backend restarted on $($env:COMPUTERNAME)"
-    } else {
-        "[QuestLearn] Backend is still down on $($env:COMPUTERNAME)"
-    }
+    $subject = if ($Outcome.Recovered) { "[QuestLearn] Backend restarted on $($env:COMPUTERNAME)" }
+               else { "[QuestLearn] Backend is still down on $($env:COMPUTERNAME)" }
     Send-Alert -Subject $subject -Body $body
+}
 
-    # Clear the timer rather than resetting it to now: the next unhealthy poll starts a
-    # fresh window, and the recovery message above is not repeated as a stray
-    # "healthy again without a restart" line.
-    $unhealthySince = $null
+Write-Log "Watchdog started: polling $healthUrl every ${IntervalSeconds}s, restarting after $FailMinutes minute(s) of failure."
+
+$unhealthySince = $null
+$attempts = 0
+$alerted = $false
+$alertedWhileDown = $false
+
+while ($true) {
+    $now = Get-Date
+
+    if (Test-Health) {
+        if ($unhealthySince) {
+            Write-Log ('Backend healthy again after {0:N1} minute(s) without a restart.' -f ($now - $unhealthySince).TotalMinutes)
+            if ($alerted -and $alertedWhileDown) {
+                Send-Alert -Subject "[QuestLearn] Backend back up on $($env:COMPUTERNAME)" -Body (
+                    @(
+                        'The QuestLearn backend is answering again after an outage that a restart did not fix.',
+                        '',
+                        "Machine:     $($env:COMPUTERNAME)",
+                        "Health URL:  $healthUrl",
+                        "Attempts:    $attempts",
+                        "Watchdog:    $logFile"
+                    ) -join [Environment]::NewLine)
+            }
+        }
+        $unhealthySince = $null
+        $attempts = 0
+        $alerted = $false
+        $alertedWhileDown = $false
+    } elseif (-not $unhealthySince) {
+        $unhealthySince = $now
+        Write-Log 'Health check failed; starting the failure timer.'
+    } elseif (($now - $unhealthySince).TotalMinutes -ge $FailMinutes) {
+        $attempts++
+        $minutesDown = ($now - $unhealthySince).TotalMinutes
+        Write-Log ('Restarting after {0:N1} minute(s) unhealthy (attempt {1}).' -f $minutesDown, $attempts)
+        $outcome = Restart-Backend
+        if (-not $alerted) {
+            Send-OutageAlert -Outcome $outcome -MinutesDown $minutesDown -Attempt $attempts
+            $alerted = $true
+            $alertedWhileDown = -not $outcome.Recovered
+        } else {
+            Write-Log 'Already alerted about this outage; not emailing again.'
+        }
+        # The next attempt needs another full failure window, which is what keeps a
+        # crash loop to one restart per FailMinutes instead of one per poll.
+        $unhealthySince = $null
+    }
+
     Start-Sleep -Seconds $IntervalSeconds
 }
