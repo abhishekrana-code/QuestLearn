@@ -10,6 +10,9 @@ hs_err_pid*
 # Runtime logs
 *.log
 
+# Nightly database and uploads backups (contain password hashes)
+backups/
+
 # Databases created by the optional H2 profile
 questlearn-backend/data/
 *.mv.db

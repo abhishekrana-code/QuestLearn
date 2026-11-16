@@ -227,6 +227,56 @@ Maven JVM of roughly 250 to 300MB resident beside the app. That would move the d
 the logon task does not use, for a faster loop on a machine with limited headroom. The watcher keeps
 one run model and one resident JVM at the cost of about twenty extra seconds per backend change.
 
+### Backups and restore
+
+A Windows task named **QuestLearn backup** runs `scripts/questlearn-backup.ps1` daily at 02:30
+as SYSTEM, so it does not depend on the demo account being signed in. It writes one timestamped
+folder under `backups\` per run:
+
+```
+backups\20261116-134035\
+  questlearn.dump     pg_dump custom format
+  uploads.zip         questlearn-backend\uploads (lesson videos)
+  manifest.json       what was captured and how big it was
+```
+
+The task keeps the newest seven runs and deletes older ones, which is about a week of history for
+a data set measured in kilobytes. Credentials are read from `questlearn-backend\.env`, the same
+file the backend uses, and the password is passed to `pg_dump` through the environment so it never
+appears in a process list. `backups\` is gitignored because the dumps contain password hashes.
+
+The folder sits inside the project, so OneDrive also syncs it to the cloud account, which is a
+copy on another disk. That is not a substitute for an off-machine copy if you ever outgrow this
+setup.
+
+Run a backup by hand at any time, or keep more than seven:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-backup.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-backup.ps1 -Keep 14
+```
+
+**Restoring is one command** and restores the newest run, or a named one with `-Name`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-restore.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-restore.ps1 -Name 20261116-133558
+```
+
+It stops the process that owns 8091, runs `pg_restore --clean --if-exists` so the schema is
+replaced rather than merged, swaps `uploads` for the archived copy, starts the backend and waits
+for `/actuator/health`. Anything written after the chosen dump is gone, and the API answers 502
+while it runs, which is about half a minute including startup.
+
+The restore was tested once against the real database: a throwaway account was registered through
+the API (16 users, probe visible in the admin search), the restore ran from the dump, and afterwards
+the probe was gone, the count was back to 15, both courses were present, the demo accounts could
+still sign in, and the public URL answered 200. The first two attempts failed and are worth
+knowing about if you edit these scripts: PowerShell turns `pg_restore`'s stderr progress into a
+terminating error under `ErrorActionPreference = 'Stop'`, and `Start-Process` re-quotes argument
+arrays until the space in `C:\Program Files\PostgreSQL\18\bin` splits the command. The script now
+writes a one-line `.cmd` file and runs that.
+
 ### Demo accounts (seeded on first start)
 
 | Role | Email | Password |
