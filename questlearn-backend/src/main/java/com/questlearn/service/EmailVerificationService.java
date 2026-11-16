@@ -7,6 +7,7 @@ import com.questlearn.model.User;
 import com.questlearn.repository.EmailVerificationTokenRepository;
 import com.questlearn.repository.UserRepository;
 import com.questlearn.security.OneTimeTokens;
+import com.questlearn.util.Emails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -124,7 +125,7 @@ public class EmailVerificationService {
     }
 
     private boolean allowRequest(String email) {
-        String key = email.trim().toLowerCase(java.util.Locale.ROOT);
+        String key = Emails.normalise(email);
         Instant cutoff = Instant.now().minus(Duration.ofHours(1));
         if (recentRequests.size() > 10_000) {
             recentRequests.clear();

@@ -33,6 +33,7 @@ import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.QuizRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
 import com.questlearn.repository.UserRepository;
+import com.questlearn.util.Emails;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -322,7 +323,7 @@ public class CourseService {
             if (raw == null) {
                 continue;
             }
-            String email = raw.trim().toLowerCase(Locale.ROOT);
+            String email = Emails.normalise(raw);
             if (email.isEmpty() || !seen.add(email)) {
                 continue;
             }

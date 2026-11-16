@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { shortDate } from '../utils/dates.js';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, Clock, Lock, RotateCcw, Unlock } from 'lucide-react';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
@@ -27,11 +28,6 @@ function stamp(iso) {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function shortDate(iso) {
-  if (!iso) return 'Not set';
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
 function NodeCard({ node, canReset, resetting, onReset }) {

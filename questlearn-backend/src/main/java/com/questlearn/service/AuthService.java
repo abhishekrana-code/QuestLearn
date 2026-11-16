@@ -12,6 +12,7 @@ import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.repository.UserRepository;
 import com.questlearn.security.JwtUtil;
+import com.questlearn.util.Emails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -66,7 +67,7 @@ public class AuthService {
             assertStudentInviteCode(request.inviteCode());
         }
 
-        String email = request.email().trim().toLowerCase();
+        String email = Emails.normalise(request.email());
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw ApiException.conflict("An account with that email already exists");
         }
@@ -91,7 +92,7 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
-        String email = request.email().trim().toLowerCase();
+        String email = Emails.normalise(request.email());
         loginAttemptService.assertNotLocked(email);
 
         User user = userRepository.findByEmailIgnoreCase(email)

@@ -23,27 +23,7 @@ $pgBin = 'C:\Program Files\PostgreSQL\18\bin'
 $jar = Join-Path $backend 'target\questlearn-1.0.0.jar'
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
 
-function Read-DotEnv {
-    param([string]$Path)
-    $values = @{}
-    if (-not (Test-Path $Path)) { throw "Cannot find $Path" }
-    foreach ($line in Get-Content $Path) {
-        $trimmed = $line.Trim()
-        if (-not $trimmed -or $trimmed.StartsWith('#') -or -not $trimmed.Contains('=')) { continue }
-        $index = $trimmed.IndexOf('=')
-        $values[$trimmed.Substring(0, $index).Trim()] = $trimmed.Substring($index + 1).Trim()
-    }
-    return $values
-}
-
-function Test-Health {
-    try {
-        $response = Invoke-WebRequest -Uri 'http://localhost:8091/actuator/health' -UseBasicParsing -TimeoutSec 3
-        return $response.StatusCode -eq 200
-    } catch {
-        return $false
-    }
-}
+. (Join-Path $PSScriptRoot 'questlearn-common.ps1')
 
 if (-not $Name) {
     $latest = Get-ChildItem -Path $backups -Directory -ErrorAction SilentlyContinue |
@@ -59,43 +39,24 @@ $dump = Join-Path $source 'questlearn.dump'
 $uploadsZip = Join-Path $source 'uploads.zip'
 if (-not (Test-Path $dump)) { throw "No questlearn.dump in $source" }
 
-$config = Read-DotEnv (Join-Path $backend '.env')
-$match = [regex]::Match($config['DB_URL'], 'jdbc:postgresql://([^:/]+)(?::(\d+))?/([^?;]+)')
-if (-not $match.Success) { throw 'Cannot read a host and database out of DB_URL' }
-
-$dbHost = $match.Groups[1].Value
-$dbPort = if ($match.Groups[2].Success) { $match.Groups[2].Value } else { '5432' }
-$dbName = $match.Groups[3].Value
+$database = Get-QuestLearnDatabase -EnvFile (Join-Path $backend '.env')
+$dbHost = $database.Host
+$dbPort = $database.Port
+$dbName = $database.Name
 
 Write-Output "Restoring $Name into $dbName on ${dbHost}:$dbPort"
 
-# The backend holds connections and the schema, so it stops first. Only the
-# process that owns 8091 is stopped.
-$owners = Get-NetTCPConnection -LocalPort 8091 -State Listen -ErrorAction SilentlyContinue |
-    Select-Object -ExpandProperty OwningProcess -Unique
-foreach ($ownerPid in $owners) {
-    Write-Output "Stopping backend (pid $ownerPid)"
-    Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue
-}
-$deadline = (Get-Date).AddSeconds(15)
-while ((Get-Date) -lt $deadline) {
-    if (-not (Get-NetTCPConnection -LocalPort 8091 -State Listen -ErrorAction SilentlyContinue)) { break }
-    Start-Sleep -Milliseconds 250
-}
+# The backend holds connections and the schema, so it stops first.
+Write-Output "Stopping backend: $(Stop-Backend)"
+Wait-PortFree -Seconds 15 | Out-Null
 
 # pg_restore writes progress to stderr, and PowerShell turns native stderr into a
 # terminating error while ErrorActionPreference is Stop, so the work is done in a
 # cmd child whose output goes straight to a log file. PGPASSWORD is inherited.
-$env:PGPASSWORD = $config['DB_PASSWORD']
-$restoreLog = Join-Path $logs 'restore.log'
-# A batch file avoids two levels of quoting: Start-Process re-quotes its argument
-# array, and the PostgreSQL path contains a space.
-$restoreCmd = Join-Path $logs 'restore.cmd'
-$restoreLine = '"{0}" --host {1} --port {2} --username "{3}" --dbname {4} --clean --if-exists --no-owner --single-transaction --verbose "{5}" > "{6}" 2>&1' -f
-    "$pgBin\pg_restore.exe", $dbHost, $dbPort, $config['DB_USERNAME'], $dbName, $dump, $restoreLog
-Set-Content -Path $restoreCmd -Value $restoreLine -Encoding ascii
-
-$restore = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $restoreCmd -NoNewWindow -Wait -PassThru
+$env:PGPASSWORD = $database.Password
+$restoreLine = '"{0}" --host {1} --port {2} --username "{3}" --dbname {4} --clean --if-exists --no-owner --single-transaction --verbose "{5}"' -f
+    "$pgBin\pg_restore.exe", $dbHost, $dbPort, $database.User, $dbName, $dump
+$restore = Invoke-CmdLine -Arguments $restoreLine -OutputFile (Join-Path $logs 'restore.log') -CmdFile (Join-Path $logs 'restore.cmd')
 Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
 if ($restore.ExitCode -ne 0) { throw "pg_restore failed with exit code $($restore.ExitCode), see logs\restore.log" }
 Write-Output 'Database restored.'
@@ -117,20 +78,7 @@ if (Test-Path $uploadsZip) {
 
 if (-not (Test-Path $jar)) { throw "No jar at $jar; build it with mvn -DskipTests package before restoring" }
 
-Start-Process -FilePath 'java' `
-    -ArgumentList '-jar', $jar, '--server.port=8091' `
-    -WorkingDirectory $backend `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput (Join-Path $logs 'backend.log') `
-    -RedirectStandardError (Join-Path $logs 'backend.err.log')
-
-$deadline = (Get-Date).AddSeconds(90)
-$healthy = $false
-while ((Get-Date) -lt $deadline) {
-    if (Test-Health) { $healthy = $true; break }
-    Start-Sleep -Seconds 1
-}
-
-if (-not $healthy) { throw 'Backend did not become healthy after the restore, see logs\backend.log' }
+Start-Backend -Jar $jar -WorkingDirectory $backend -LogDirectory $logs
+if (-not (Wait-BackendHealth)) { throw 'Backend did not become healthy after the restore, see logs\backend.log' }
 Write-Output 'Backend healthy. Restore complete.'
 Write-Output "Public URL: https://questlearn.taileb48b2.ts.net"

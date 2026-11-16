@@ -25,18 +25,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $root 'questlearn-backend\.env'
 
-function Read-DotEnv {
-    param([string]$Path)
-    $values = @{}
-    if (-not (Test-Path $Path)) { return $values }
-    foreach ($line in Get-Content $Path) {
-        $trimmed = $line.Trim()
-        if (-not $trimmed -or $trimmed.StartsWith('#') -or -not $trimmed.Contains('=')) { continue }
-        $index = $trimmed.IndexOf('=')
-        $values[$trimmed.Substring(0, $index).Trim()] = $trimmed.Substring($index + 1).Trim()
-    }
-    return $values
-}
+. (Join-Path $PSScriptRoot 'questlearn-common.ps1')
 
 function Mask-Address {
     param([string]$Address)

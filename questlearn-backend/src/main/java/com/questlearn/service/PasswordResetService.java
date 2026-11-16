@@ -6,6 +6,7 @@ import com.questlearn.model.User;
 import com.questlearn.repository.PasswordResetTokenRepository;
 import com.questlearn.repository.UserRepository;
 import com.questlearn.security.OneTimeTokens;
+import com.questlearn.util.Emails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -70,7 +71,7 @@ public class PasswordResetService {
      */
     @Transactional
     public void request(String email) {
-        String normalised = email.trim().toLowerCase(Locale.ROOT);
+        String normalised = Emails.normalise(email);
         if (!allowRequest(normalised)) {
             throw ApiException.tooManyRequests(
                     "Too many reset requests for this email. Try again in an hour.");

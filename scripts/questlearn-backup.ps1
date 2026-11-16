@@ -24,29 +24,14 @@ $backend = Join-Path $root 'questlearn-backend'
 $backups = Join-Path $root 'backups'
 $pgBin = 'C:\Program Files\PostgreSQL\18\bin'
 
-function Read-DotEnv {
-    param([string]$Path)
-    $values = @{}
-    if (-not (Test-Path $Path)) { throw "Cannot find $Path" }
-    foreach ($line in Get-Content $Path) {
-        $trimmed = $line.Trim()
-        if (-not $trimmed -or $trimmed.StartsWith('#') -or -not $trimmed.Contains('=')) { continue }
-        $index = $trimmed.IndexOf('=')
-        $values[$trimmed.Substring(0, $index).Trim()] = $trimmed.Substring($index + 1).Trim()
-    }
-    return $values
-}
+. (Join-Path $PSScriptRoot 'questlearn-common.ps1')
 
-$config = Read-DotEnv (Join-Path $backend '.env')
-$url = $config['DB_URL']
-$match = [regex]::Match($url, 'jdbc:postgresql://([^:/]+)(?::(\d+))?/([^?;]+)')
-if (-not $match.Success) { throw "Cannot read a host and database out of DB_URL" }
-
-$dbHost = $match.Groups[1].Value
-$dbPort = if ($match.Groups[2].Success) { $match.Groups[2].Value } else { '5432' }
-$dbName = $match.Groups[3].Value
-$dbUser = $config['DB_USERNAME']
-$dbPassword = $config['DB_PASSWORD']
+$database = Get-QuestLearnDatabase -EnvFile (Join-Path $backend '.env')
+$dbHost = $database.Host
+$dbPort = $database.Port
+$dbName = $database.Name
+$dbUser = $database.User
+$dbPassword = $database.Password
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $target = Join-Path $backups $stamp

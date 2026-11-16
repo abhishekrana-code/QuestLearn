@@ -40,50 +40,7 @@ function Get-SourceStamp {
     return '{0}|{1}' -f $newest.LastWriteTimeUtc.Ticks, $newest.FullName
 }
 
-function Test-Health {
-    try {
-        $response = Invoke-WebRequest -Uri 'http://localhost:8091/actuator/health' -UseBasicParsing -TimeoutSec 2
-        return $response.StatusCode -eq 200
-    } catch {
-        return $false
-    }
-}
-
-# Only the process that owns 8091 is stopped, never a pattern match on names, so
-# an unrelated Java process on this machine cannot be hit by a typo.
-function Stop-Backend {
-    $owners = Get-NetTCPConnection -LocalPort 8091 -State Listen -ErrorAction SilentlyContinue |
-        Select-Object -ExpandProperty OwningProcess -Unique
-    foreach ($ownerPid in $owners) {
-        Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue
-    }
-    $deadline = (Get-Date).AddSeconds(10)
-    while ((Get-Date) -lt $deadline) {
-        if (-not (Get-NetTCPConnection -LocalPort 8091 -State Listen -ErrorAction SilentlyContinue)) {
-            return
-        }
-        Start-Sleep -Milliseconds 250
-    }
-}
-
-function Start-Backend {
-    Start-Process -FilePath 'java' `
-        -ArgumentList '-jar', $jar, '--server.port=8091' `
-        -WorkingDirectory $backend `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput (Join-Path $logs 'backend.log') `
-        -RedirectStandardError (Join-Path $logs 'backend.err.log')
-}
-
-function Wait-Health {
-    param([int]$Seconds = 90)
-    $deadline = (Get-Date).AddSeconds($Seconds)
-    while ((Get-Date) -lt $deadline) {
-        if (Test-Health) { return $true }
-        Start-Sleep -Seconds 1
-    }
-    return $false
-}
+. (Join-Path $PSScriptRoot 'questlearn-common.ps1')
 
 function Rebuild-And-Restart {
     if (-not (Test-Path $jar)) {
@@ -97,7 +54,8 @@ function Rebuild-And-Restart {
     if (Test-Path $jar) {
         Copy-Item -Path $jar -Destination $jarBackup -Force
     }
-    Stop-Backend
+    Stop-Backend | Out-Null
+    Wait-PortFree -Seconds 10 | Out-Null
 
     Write-Output ('[{0:HH:mm:ss}] change detected, packaging...' -f (Get-Date))
     $buildTimer = [System.Diagnostics.Stopwatch]::StartNew()
@@ -124,9 +82,9 @@ function Rebuild-And-Restart {
         Write-Output ('[{0:HH:mm:ss}] packaged in {1}s' -f (Get-Date), $buildSeconds)
     }
 
-    Start-Backend
+    Start-Backend -Jar $jar -WorkingDirectory $backend -LogDirectory $logs
     $startupTimer = [System.Diagnostics.Stopwatch]::StartNew()
-    $healthy = Wait-Health
+    $healthy = Wait-BackendHealth
     $startupTimer.Stop()
     $startupSeconds = [math]::Round($startupTimer.Elapsed.TotalSeconds, 1)
 

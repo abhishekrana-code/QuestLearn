@@ -49,38 +49,7 @@ function Write-Log {
     Add-Content -Path $logFile -Value $line -Encoding utf8
 }
 
-function Read-DotEnv {
-    param([string]$Path)
-    $values = @{}
-    if (-not (Test-Path $Path)) { throw "Cannot find $Path" }
-    foreach ($line in Get-Content $Path) {
-        $trimmed = $line.Trim()
-        if (-not $trimmed -or $trimmed.StartsWith('#') -or -not $trimmed.Contains('=')) { continue }
-        $index = $trimmed.IndexOf('=')
-        $values[$trimmed.Substring(0, $index).Trim()] = $trimmed.Substring($index + 1).Trim()
-    }
-    return $values
-}
-
-# Native tools write progress to stderr, and PowerShell turns native stderr into a
-# terminating error while ErrorActionPreference is Stop. Every call therefore goes
-# through a one-line batch file that redirects both streams to a file, the same
-# approach the restore script needs for the space in "C:\Program Files".
-function Invoke-Native {
-    param(
-        [string]$Arguments,
-        [string]$OutputFile,
-        [string]$What
-    )
-    $cmdFile = Join-Path $logs 'verify-step.cmd'
-    Set-Content -Path $cmdFile -Value ("@echo off`r`n" + $Arguments + ' > "' + $OutputFile + '" 2>&1') -Encoding ascii
-    $process = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $cmdFile -NoNewWindow -Wait -PassThru
-    $text = if (Test-Path $OutputFile) { (Get-Content $OutputFile -Raw) } else { '' }
-    if ($process.ExitCode -ne 0) {
-        throw "$What failed with exit code $($process.ExitCode). Output: $($text.Trim())"
-    }
-    return $text
-}
+. (Join-Path $PSScriptRoot 'questlearn-common.ps1')
 
 function Invoke-Sql {
     param([string]$Database, [string]$Sql)
@@ -93,19 +62,20 @@ function Invoke-Sql {
     Set-Content -Path $sqlFile -Value $Sql -Encoding ascii
     $arguments = '"{0}" -w -h {1} -p {2} -U "{3}" -d {4} -tA -f "{5}"' -f
         $psql, $dbHost, $dbPort, $dbUser, $Database, $sqlFile
-    $text = Invoke-Native -Arguments $arguments -OutputFile $outFile -What "psql on $Database"
-    return $text.Trim()
+    $result = Invoke-CmdLine -Arguments $arguments -OutputFile $outFile -CmdFile (Join-Path $logs 'verify-step.cmd')
+    if ($result.ExitCode -ne 0) {
+        throw "psql on $Database failed with exit code $($result.ExitCode). Output: $($result.Output.Trim())"
+    }
+    return $result.Output.Trim()
 }
 
-$config = Read-DotEnv (Join-Path $backend '.env')
-$match = [regex]::Match($config['DB_URL'], 'jdbc:postgresql://([^:/]+)(?::(\d+))?/([^?;]+)')
-if (-not $match.Success) { throw 'Cannot read a host and database out of DB_URL' }
-$dbHost = $match.Groups[1].Value
-$dbPort = if ($match.Groups[2].Success) { $match.Groups[2].Value } else { '5432' }
-$dbUser = $config['DB_USERNAME']
+$database = Get-QuestLearnDatabase -EnvFile (Join-Path $backend '.env')
+$dbHost = $database.Host
+$dbPort = $database.Port
+$dbUser = $database.User
 
 $script:queryCount = 0
-$env:PGPASSWORD = $config['DB_PASSWORD']
+$env:PGPASSWORD = $database.Password
 $scratchCreated = $false
 $checks = [ordered]@{}
 $failure = $null
@@ -159,8 +129,11 @@ try {
     Write-Log "Restoring $dumpSizeMb MB into $ScratchDatabase"
     $restoreArgs = '"{0}" --host {1} --port {2} --username "{3}" --dbname {4} --no-owner --verbose "{5}"' -f
         $pgRestore, $dbHost, $dbPort, $dbUser, $ScratchDatabase, $dump
-    $restoreOutput = Invoke-Native -Arguments $restoreArgs -OutputFile (Join-Path $logs 'verify-restore.log') -What 'pg_restore'
-    $errors = ($restoreOutput -split "`r?`n" | Where-Object { $_ -match '^pg_restore: error:' })
+    $restore = Invoke-CmdLine -Arguments $restoreArgs -OutputFile (Join-Path $logs 'verify-restore.log') -CmdFile (Join-Path $logs 'verify-restore.cmd')
+    if ($restore.ExitCode -ne 0) {
+        throw "pg_restore failed with exit code $($restore.ExitCode). Output: $($restore.Output.Trim())"
+    }
+    $errors = @($restore.Output -split "`r?`n" | Where-Object { $_ -match '^pg_restore: error:' })
     if ($errors.Count -gt 0) {
         throw "pg_restore reported $($errors.Count) error(s), first: $($errors[0])"
     }

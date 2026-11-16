@@ -1,6 +1,7 @@
 package com.questlearn.service;
 
 import com.questlearn.exception.ApiException;
+import com.questlearn.util.Emails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -82,7 +83,7 @@ public class LoginAttemptService {
     }
 
     private String key(String email) {
-        return email == null ? "" : email.trim().toLowerCase();
+        return Emails.normalise(email);
     }
 
     private record Attempt(int failures, Instant lockUntil, Instant lastFailure) {

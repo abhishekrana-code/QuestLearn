@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { shortDate } from '../utils/dates.js';
 import { Link } from 'react-router-dom';
 import {
   ArrowUpRight,
@@ -549,10 +550,7 @@ export default function StudentPerformance() {
                                               {attempt.score}%
                                             </span>
                                             <span className="font-normal opacity-70">
-                                              {new Date(attempt.at).toLocaleDateString(
-                                                undefined,
-                                                { day: 'numeric', month: 'short' },
-                                              )}
+                                              {shortDate(attempt.at)}
                                             </span>
                                           </li>
                                         ))}

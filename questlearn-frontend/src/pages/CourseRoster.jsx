@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { shortDate } from '../utils/dates.js';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -65,11 +66,6 @@ function emailsFromCsv(text) {
     .flatMap((line) => line.split(/[;,\t]/))
     .map((cell) => cell.replace(/["']/g, '').trim().toLowerCase())
     .filter((cell) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cell));
-}
-
-function shortDate(iso) {
-  if (!iso) return 'Not set';
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
 /**

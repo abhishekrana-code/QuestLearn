@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
+import { shortDate } from '../utils/dates.js';
 import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -69,7 +70,7 @@ function timeAgo(iso) {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.round(hours / 24);
   if (days < 7) return `${days}d ago`;
-  return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return shortDate(then);
 }
 
 export default function SkillTreePage() {

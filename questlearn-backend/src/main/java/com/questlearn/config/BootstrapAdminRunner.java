@@ -3,6 +3,7 @@ package com.questlearn.config;
 import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.repository.UserRepository;
+import com.questlearn.util.Emails;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -74,7 +75,7 @@ public class BootstrapAdminRunner implements ApplicationRunner {
                     + MIN_PASSWORD_LENGTH + " characters.");
         }
 
-        String normalisedEmail = email.toLowerCase();
+        String normalisedEmail = Emails.normalise(email);
         if (userRepository.existsByEmailIgnoreCase(normalisedEmail)) {
             throw new IllegalStateException("A non-admin account already uses " + normalisedEmail
                     + "; choose a different BOOTSTRAP_ADMIN_EMAIL or promote that account.");

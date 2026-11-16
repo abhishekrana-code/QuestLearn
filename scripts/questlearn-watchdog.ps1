@@ -55,14 +55,7 @@ function Write-Log {
     Add-Content -Path $logFile -Value $line -Encoding utf8
 }
 
-function Test-Health {
-    try {
-        $response = Invoke-WebRequest -Uri $healthUrl -UseBasicParsing -TimeoutSec 5
-        return $response.StatusCode -eq 200
-    } catch {
-        return $false
-    }
-}
+. (Join-Path $PSScriptRoot 'questlearn-common.ps1')
 
 function Send-Alert {
     param([string]$Subject, [string]$Body)
@@ -79,30 +72,14 @@ function Send-Alert {
 
 # Stop and start one backend, then report whether health came back.
 function Restart-Backend {
-    # Only the process that owns 8091 is stopped, never a pattern match on names.
-    $owners = @(Get-NetTCPConnection -LocalPort 8091 -State Listen -ErrorAction SilentlyContinue |
-        Select-Object -ExpandProperty OwningProcess -Unique)
-    $stopped = 'nothing was listening on 8091'
-    if ($owners.Count -gt 0) {
-        $stopped = ($owners | ForEach-Object {
-            $name = (Get-Process -Id $_ -ErrorAction SilentlyContinue).ProcessName
-            "$name ($_)"
-        }) -join ', '
-        Write-Log "Stopping $stopped"
-        $owners | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
-    }
-
-    Start-Process -FilePath 'java' `
-        -ArgumentList '-jar', $jar, '--server.port=8091' `
-        -WorkingDirectory $backend `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput (Join-Path $logs 'backend.log') `
-        -RedirectStandardError (Join-Path $logs 'backend.err.log')
+    $stopped = Stop-Backend
+    Write-Log "Stopped: $stopped"
+    Start-Backend -Jar $jar -WorkingDirectory $backend -LogDirectory $logs
 
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
     while ($timer.Elapsed.TotalSeconds -lt $RestartTimeoutSeconds) {
         Start-Sleep -Seconds 3
-        if (Test-Health) {
+        if (Test-BackendHealth) {
             Write-Log ('Backend healthy again after {0:N0} seconds.' -f $timer.Elapsed.TotalSeconds)
             return @{ Stopped = $stopped; Recovered = $true; Seconds = [math]::Round($timer.Elapsed.TotalSeconds, 0) }
         }
@@ -147,7 +124,7 @@ $alertedWhileDown = $false
 while ($true) {
     $now = Get-Date
 
-    if (Test-Health) {
+    if (Test-BackendHealth) {
         if ($unhealthySince) {
             Write-Log ('Backend healthy again after {0:N1} minute(s) without a restart.' -f ($now - $unhealthySince).TotalMinutes)
             if ($alerted -and $alertedWhileDown) {
