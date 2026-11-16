@@ -101,6 +101,19 @@ if (-not $watchers) {
     Write-Output 'Frontend watcher started: edits publish on save.'
 }
 
+# Java edits rebuild and restart the backend through this watcher. It is skipped
+# when one is already running, so re-running this script never starts a second.
+$javaWatchers = Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like '*questlearn-watch-java*' }
+if (-not $javaWatchers) {
+    Start-Process -FilePath 'powershell' `
+        -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'questlearn-watch-java.ps1') `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $logs 'backend.watch.log') `
+        -RedirectStandardError (Join-Path $logs 'backend.watch.err.log')
+    Write-Output 'Backend watcher started: Java edits rebuild and restart on 8091.'
+}
+
 # --bg keeps the Funnel registered with the Tailscale service, so it resumes
 # after a reboot instead of waiting for this script to run again.
 if (Test-Path $tailscale) {

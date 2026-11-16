@@ -200,6 +200,33 @@ does not overwrite `dist` with a broken build, so a typo never publishes a blank
 rather freeze the demo, stop the watcher process and run `npm run publish` only when you want to
 ship.
 
+**Backend edits rebuild and restart on their own too**, through `scripts/questlearn-watch-java.ps1`,
+which `questlearn-up.ps1` starts once and which polls `questlearn-backend/src/main` every two
+seconds:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-watch-java.ps1
+```
+
+It stops the process that owns 8091, runs `mvn -DskipTests package`, starts the jar again and waits
+for `/actuator/health`. Measured on this 8GB laptop: about 14 to 16 seconds to package, 12 seconds
+to become healthy, so roughly **27 seconds between saving a Java file and the API serving it**.
+The backend is down for that whole window and the API answers 502 meanwhile; static frontend assets
+keep being served. A failing build does not take the demo down: the previous jar is copied aside
+before the build and restored if Maven exits non-zero.
+
+Memory cost, measured rather than estimated: the backend JVM's working set is about 410MB idle,
+total Java memory peaked at about 600MB during a rebuild, and the watcher is an 86MB PowerShell
+process polling timestamps. Because the old JVM is stopped before Maven starts, the build does not
+stack two big JVMs on an 8GB machine.
+
+Spring Boot DevTools was the alternative and was rejected for this setup. It restarts the context in
+three to five seconds, but only when the app runs under `mvn spring-boot:run`, because DevTools is
+excluded from the packaged jar, and it still needs something to recompile on save, which means a
+Maven JVM of roughly 250 to 300MB resident beside the app. That would move the demo onto a run model
+the logon task does not use, for a faster loop on a machine with limited headroom. The watcher keeps
+one run model and one resident JVM at the cost of about twenty extra seconds per backend change.
+
 ### Demo accounts (seeded on first start)
 
 | Role | Email | Password |
