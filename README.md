@@ -268,6 +268,28 @@ replaced rather than merged, swaps `uploads` for the archived copy, starts the b
 for `/actuator/health`. Anything written after the chosen dump is gone, and the API answers 502
 while it runs, which is about half a minute including startup.
 
+**The dumps are verified weekly**, because a backup nobody has restored is only a hope. A second
+task, **QuestLearn backup check**, runs on Sunday at 03:30 as SYSTEM and does this in a throwaway
+database, without touching the live one or port 8091:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-verify-backup.ps1
+```
+
+It takes the newest backup, creates `questlearn_restorecheck`, runs `pg_restore` into it, counts
+`users`, `courses` and the seeded `@questlearn.dev` accounts, reads the Flyway schema version, then
+drops the scratch database. It exits 0 only when the dump restored and the counts are above their
+floors (`-MinUsers`, `-MinCourses`, `-MinDemoUsers`, default 3, 1 and 1). A failure exits 1, writes
+the reason to `logs\verify-backup.log` and leaves `backups\VERIFY-FAILED.txt`, which the next
+good run deletes. The newest backup must also be younger than `-MaxAgeHours` (48 by default), so a
+nightly task that silently stopped is reported as a failure rather than passing forever on an old
+file.
+
+All four paths were exercised: a good run reported `15 users, 2 courses, 14 demo accounts, schema
+version 9`; a deliberately truncated dump failed on `pg_restore`; a one hour age limit rejected the
+same backup as stale; and a following good run cleared the marker. A run takes about ten seconds on
+a dump this size. `-KeepScratch` leaves the database in place to inspect it after a failure.
+
 The restore was tested once against the real database: a throwaway account was registered through
 the API (16 users, probe visible in the admin search), the restore ran from the dump, and afterwards
 the probe was gone, the count was back to 15, both courses were present, the demo accounts could
