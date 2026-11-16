@@ -673,11 +673,15 @@ Submission body for `POST /modules/{id}/complete`:
 3. **Ship a jar for the live demo.** Package once, close the IDE, then run:
    ```bash
    mvn clean package -DskipTests
-   java -Xmx512m -jar target/questlearn-1.0.0.jar
+   java -Xms256m -Xmx768m -jar target/questlearn-1.0.0.jar
    ```
    Closing IntelliJ/VS Code frees roughly 1–2.5 GB.
 4. **Keep the frontend production-built** for the demo (`npm run build`, then `npm run preview`);
    Vite's dev server with React StrictMode is convenient but heavier.
+   The startup scripts already pass `-Xms256m -Xmx768m` (`$BackendHeapArguments` in
+   `scripts\questlearn-common.ps1`), so a backend the watcher, the watchdog or a restore starts
+   cannot take a 2GB default heap on an 8GB machine.
+
 5. **Everything is offline.** No font CDN: headings and body use system stacks. Icons come from the bundled `lucide-react`
    package and the Lottie JSON files live in `src/assets/animations/`.
 

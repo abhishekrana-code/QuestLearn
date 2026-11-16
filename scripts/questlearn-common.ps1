@@ -66,6 +66,12 @@ function Stop-Backend {
     return ($names -join ', ')
 }
 
+# A jar started without flags gets a maximum heap of a quarter of physical memory,
+# which is about 2GB on this 8GB laptop and competes with Postgres, the preview
+# server and Chrome. A 768MB ceiling is well above what the demo needs and keeps a
+# runaway allocation from pushing the machine into the page file.
+$BackendHeapArguments = @('-Xms256m', '-Xmx768m')
+
 function Start-Backend {
     param(
         [string]$Jar,
@@ -74,7 +80,7 @@ function Start-Backend {
         [int]$Port = 8091
     )
     Start-Process -FilePath 'java' `
-        -ArgumentList '-jar', $Jar, "--server.port=$Port" `
+        -ArgumentList ($BackendHeapArguments + @('-jar', $Jar, "--server.port=$Port")) `
         -WorkingDirectory $WorkingDirectory `
         -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $LogDirectory 'backend.log') `
