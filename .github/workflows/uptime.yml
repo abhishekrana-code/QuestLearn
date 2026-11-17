@@ -40,6 +40,10 @@ jobs:
       # page but cannot log in, to prove the outage path without taking the demo
       # down.
       DEMO_HOST: example.com
+      # There is no checkout in this job, so gh cannot infer the repository from a
+      # git remote and has to be told. Without this both issue steps fail with
+      # "unable to determine repository", which is how the first drill failed.
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Page and a real login answer through the Funnel
         run: |
@@ -74,10 +78,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -uo pipefail
-          ids=$(gh issue list --state open --search '"Demo is not answering" in:title' \
-            --json number --jq '.[].number' 2>/dev/null || true)
-          for id in $ids; do
-            gh issue close "$id" --comment "The demo answered again from GitHub's runners; closing this automatically." || true
+          if ! list=$(gh issue list --state open --search '"Demo is not answering" in:title' \
+              --json number --jq '.[].number' 2>&1); then
+            echo "::error title=Could not list outage issues::${list//$'\n'/ }"
+            exit 1
+          fi
+          for id in $list; do
+            if ! close=$(gh issue close "$id" \
+                --comment "The demo answered again from GitHub's runners; closing this automatically." 2>&1); then
+              echo "::error title=Could not close issue $id::${close//$'\n'/ }"
+              exit 1
+            fi
           done
 
       - name: Open an outage issue when it stays down
@@ -86,13 +97,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -uo pipefail
-          existing=$(gh issue list --state open --search '"Demo is not answering" in:title' \
-            --json number --jq 'length' 2>/dev/null || echo 0)
+          if ! existing=$(gh issue list --state open --search '"Demo is not answering" in:title' \
+              --json number --jq 'length' 2>&1); then
+            echo "::error title=Could not list outage issues::${existing//$'\n'/ }"
+            exit 1
+          fi
           if [ "${existing:-0}" != "0" ]; then
             echo "An outage issue is already open; not filing another."
             exit 0
           fi
-          gh issue create \
+          if ! created=$(gh issue create \
             --title "Demo is not answering" \
             --assignee "${{ github.repository_owner }}" \
             --body "$(printf '%s\n' \
@@ -108,4 +122,8 @@ jobs:
               "" \
               "Run \`scripts\questlearn-up.ps1\` to restore anything that is missing; it skips what already answers." \
               "" \
-              "This issue closes itself on the next successful probe.")"
+              "This issue closes itself on the next successful probe.")" 2>&1); then
+            echo "::error title=Could not open the outage issue::${created//$'\n'/ }"
+            exit 1
+          fi
+          echo "Opened: $created"
