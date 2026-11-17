@@ -293,6 +293,13 @@ because the failure it was written for happened: the Funnel was up, the preview 
 public URL returned 502, and every local check still said healthy. Free scheduled workflows need a
 public repository; on a private one each run spends a billed minute.
 
+The outage path was drilled end to end on 2026-11-17 by pointing the probe at a host that served a
+page but rejected the login, so the demo stayed up: the failing run opened one issue assigned to the
+owner, a second failing run did not duplicate it, and the next passing run closed it with a comment.
+Two things that drill caught: `gh` fails with "unable to determine repository" unless `GH_REPO` is
+set, because this job has no checkout, and GitHub can hold the first scheduled run of a new workflow
+for up to an hour, so a commit that touches this file is what proves it quickly (`on.push`).
+
 ### Backups and restore
 
 A Windows task named **QuestLearn backup** runs `scripts/questlearn-backup.ps1` daily at 02:30
