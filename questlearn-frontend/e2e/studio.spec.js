@@ -54,12 +54,28 @@ test('resetting a learner uses the app dialog, not window.confirm', async ({ pag
     ).json()
   ).token;
   const headers = { Authorization: `Bearer ${token}` };
-  const roster = await (await request.get('/api/v1/courses/1/roster', { headers })).json();
-  const learner = roster.learners.find((item) => item.clearedNodes > 0);
 
-  expect(learner, 'the demo roster must still contain cleared work').toBeTruthy();
+  // The seeded learner with cleared work sits in the second course, and a new
+  // database has nobody else enrolled, so the course cannot be hardcoded: find the
+  // first owned course whose roster actually has something to reset. (An earlier
+  // version assumed course 1 had such a learner, which was only true on a laptop
+  // where previous runs had left one behind.)
+  const courses = await (await request.get('/api/v1/courses', { headers })).json();
+  let target = null;
+  for (const course of courses) {
+    const roster = await (
+      await request.get(`/api/v1/courses/${course.id}/roster`, { headers })
+    ).json();
+    const learner = (roster.learners ?? []).find((item) => item.clearedNodes > 0);
+    if (learner) {
+      target = { course, learner };
+      break;
+    }
+  }
+
+  expect(target, 'a course roster must contain a learner with cleared work').toBeTruthy();
   await signIn(page, 'instructor@questlearn.dev');
-  await page.goto(`/studio/courses/1/roster/${learner.userId}`);
+  await page.goto(`/studio/courses/${target.course.id}/roster/${target.learner.userId}`);
 
   await page.getByRole('button', { name: 'Reset' }).first().click();
   const dialog = page.getByRole('dialog');
