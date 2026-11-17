@@ -341,7 +341,7 @@ needed, and pick a status code. All paths are under `/api/v1` (declared per clas
 
 | Function | What it does |
 | --- | --- |
-| `getSkillTree(courseId, principal)` | View check. For non-instructors, creates a progress row per missing node (roots `UNLOCKED`, rest `LOCKED`), then returns the tree with status, best score, attempts, quiz type, video, effective due date and deadline state. The first open is the enrollment side effect. |
+| `getSkillTree(courseId, principal)` | View check. For non-instructors, creates a progress row per missing node (roots `UNLOCKED`, rest `LOCKED`), then returns the tree with status, best score, attempts, quiz type, video, effective due date and deadline state. The first open creates the progress rows only: joining stays with `POST /courses/{courseId}/enroll`, and a non-enrolled learner gets no nodes to open. |
 | `nextNode(principal)` | Students only. Among joined (enrolled), published, non-archived courses, picks the first uncleared node whose parent is cleared. Ordering: overdue → due soon → earliest date → newest enrollment → tree order → title. Returns `null` (204) when nothing qualifies. |
 | `urgency(module, overrides)` | 0 overdue, 1 due soon, 2 otherwise/no date. |
 | `datedOrLast(module, overrides)` | Due date or `Instant.MAX`, so undated nodes sort last. |
