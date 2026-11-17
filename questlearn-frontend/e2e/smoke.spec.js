@@ -67,6 +67,10 @@ test.beforeAll(async ({ request }) => {
 });
 
 test.afterAll(async ({ request }) => {
+  // A failed beforeAll leaves no fixture, and the cleanup would then throw a
+  // TypeError about it instead of showing the error that actually broke the run.
+  if (!fixture) return;
+
   // Every account this suite made is removed again, so the leaderboard and the
   // admin list do not fill up with "Smoke Student …" rows. Their progress has to go
   // with them: a course with progress cannot be deleted.
