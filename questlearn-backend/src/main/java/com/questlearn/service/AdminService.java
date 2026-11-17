@@ -4,6 +4,7 @@ import com.questlearn.dto.AdminStatsDto;
 import com.questlearn.dto.AdminUserPage;
 import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.AuditEntryDto;
+import com.questlearn.dto.DemoAccountSummary;
 import com.questlearn.dto.DemoPasswordRotation;
 import com.questlearn.dto.DemoPasswordStatus;
 import com.questlearn.dto.TempPasswordResponse;
@@ -224,10 +225,19 @@ public class AdminService {
      */
     @Transactional(readOnly = true)
     public DemoPasswordStatus demoPasswordStatus() {
+        // Built from the rows rather than the constant: if an admin deletes one of
+        // the five, the console should say four and stop listing the missing one.
+        List<DemoAccountSummary> logins = DemoAccounts.EMAILS.stream()
+                .map(email -> userRepository.findByEmailIgnoreCase(email).orElse(null))
+                .filter(user -> user != null)
+                .map(user -> new DemoAccountSummary(
+                        user.getName(), user.getEmail(), user.getRole().name()))
+                .toList();
+
         return demoCredentialRepository.findById(DemoCredential.SINGLETON_ID)
-                .map(row -> new DemoPasswordStatus(DemoAccounts.EMAILS.size(), "ROTATED",
+                .map(row -> new DemoPasswordStatus(logins.size(), logins, "ROTATED",
                         row.getRotatedAt(), row.getRotatedBy()))
-                .orElseGet(() -> new DemoPasswordStatus(DemoAccounts.EMAILS.size(), "STARTUP",
+                .orElseGet(() -> new DemoPasswordStatus(logins.size(), logins, "STARTUP",
                         null, null));
     }
 

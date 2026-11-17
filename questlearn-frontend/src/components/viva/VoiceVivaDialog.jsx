@@ -712,15 +712,25 @@ export default function VoiceVivaDialog({ module, viva, standing, onClose, onGra
                     <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">
                       Written answer
                     </p>
+                    {/*
+                      The hard cap is not the target. Showing "0/4000" next to
+                      "250-600 characters" made the guidance read as three
+                      different answers, so the count stands alone and the
+                      remaining room only appears when it is nearly gone.
+                    */}
                     <span className="ml-auto text-[10px] tabular-nums text-fg-subtle">
-                      {written.trim().length}/{MAX_WRITTEN_CHARS}
+                      {written.trim().length} characters
+                      {written.trim().length > MAX_WRITTEN_CHARS * 0.8
+                        ? ` · ${MAX_WRITTEN_CHARS - written.trim().length} left`
+                        : ''}
                     </span>
                   </div>
                   <label htmlFor="viva-answer" className="sr-only">
                     Your answer to the examiner
                   </label>
                   <p className="mt-1.5 text-[10px] text-fg-subtle">
-                    Aim for 3-5 sentences - roughly {TARGET_WRITTEN_CHARS}-600 characters.
+                    Aim for 3-5 sentences - roughly {TARGET_WRITTEN_CHARS}-600 characters
+                    ({MAX_WRITTEN_CHARS.toLocaleString()} maximum).
                     {attempts > 0 ? ` Your best so far is ${bestScore}%.` : ''}
                   </p>
                   <textarea

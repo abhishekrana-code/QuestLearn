@@ -149,7 +149,7 @@ export default function InstructorCohorts() {
           to={`/studio/courses/${courseId}/analytics`}
           className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-fg-muted hover:text-foreground"
         >
-          <BarChart3 size={13} /> Where the class stops
+          <BarChart3 size={13} /> Where learners stop
         </Link>
       </div>
 
@@ -191,32 +191,37 @@ export default function InstructorCohorts() {
 
       {course && (
         <div className="panel mb-3 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          {/*
+            The switch describes the course, so its label is the state being
+            switched on: "Open to the catalogue". Reading it the other way
+            round (off = open) made the panel contradict itself.
+          */}
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">
-              {course.membershipRequired ? 'Members only' : 'Open to the catalogue'}
+            <p id="catalogue-visibility" className="text-sm font-semibold text-foreground">
+              Open to the catalogue
             </p>
             <p className="mt-0.5 max-w-xl text-[11px] leading-relaxed text-fg-subtle">
               {course.membershipRequired
-                ? 'Students only see this course after their class code adds them to it.'
-                : 'Any student can find this course in the catalogue and join it without a code.'}
+                ? 'Off — only students who type one of your class codes can join, and the course is hidden from the catalogue.'
+                : 'On — any student can find this course in the catalogue and join it without a code.'}
             </p>
           </div>
           <button
             type="button"
             role="switch"
-            aria-checked={course.membershipRequired}
-            aria-label="Only let invited classes open this course"
+            aria-checked={!course.membershipRequired}
+            aria-labelledby="catalogue-visibility"
             onClick={toggleGating}
             disabled={gatingBusy}
             className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors ${
               course.membershipRequired
-                ? 'border-gold/40 bg-gold/70'
-                : 'border-line bg-muted'
+                ? 'border-line bg-muted'
+                : 'border-gold/40 bg-gold/70'
             } ${gatingBusy ? 'opacity-60' : ''}`}
           >
             <span
               className={`absolute top-0.5 h-4.5 w-4.5 rounded-full bg-card shadow transition-all ${
-                course.membershipRequired ? 'left-[1.45rem]' : 'left-0.5'
+                course.membershipRequired ? 'left-0.5' : 'left-[1.45rem]'
               }`}
               style={{ height: '1.1rem', width: '1.1rem' }}
             />

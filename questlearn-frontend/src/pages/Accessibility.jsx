@@ -41,9 +41,11 @@ export default function Accessibility() {
             activity feeds.
           </li>
           <li>
-            <strong className="text-foreground">Forms.</strong> Every field has a label,
-            errors are announced and tied to the field, and a live region reports save and
-            submit results.
+            <strong className="text-foreground">Forms.</strong> Every field has a label.
+            Sign-in ties a failure to the email and password fields, announces it and
+            returns focus to the first one; the account and password forms announce their
+            errors too. Action banners report save, import and reset results in a live
+            region.
           </li>
         </ul>
       </section>

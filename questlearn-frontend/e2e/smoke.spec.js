@@ -31,9 +31,9 @@ function demoPassword() {
  * Two journeys, end to end, through the real UI and the real API.
  *
  * <p>The first creates a brand-new account rather than borrowing a demo one: a smoke
- * test that signs in as a seeded user cannot catch a broken registration, and it
- * leaves the demo data alone. The account is unique per run, so a local database
- * simply collects a few test students.</p>
+ * test that signs in as a seeded user cannot catch a broken registration. The
+ * account is unique per run and deleted again afterwards, so the leaderboard and
+ * roster no longer collect smoke accounts.</p>
  *
  * <p>Every step is the thing a person would do: type the form, press Join course,
  * answer the quiz, then sign in as the teacher and find the name on the roster.</p>
@@ -51,6 +51,7 @@ const student = {
   password: 'password123',
 };
 const INSTRUCTOR = { email: 'instructor@questlearn.dev', password: demoPassword() };
+const ADMIN = { email: 'admin@questlearn.dev', password: demoPassword() };
 const COURSE = 'Full-Stack Web Engineering Quest';
 const GATED_COURSE = 'Data Structures Detour';
 const gatedClass = { name: `12C Smoke ${run}` };
@@ -93,9 +94,20 @@ async function signOut(page) {
   await page.goto('/');
   // The account menu's accessible name is initials plus first name, e.g. "SS Smoke".
   // Matching on that leaves the theme buttons ("Light", "Dark", "System") alone.
-  await page.getByRole('button', { name: /^[A-Z]{2} \S+$/ }).first().click();
-  // Inside the dropdown, Sign out is a menu item, not a plain button.
-  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  const account = page.getByRole('button', { name: /^[A-Z]{2} \S+$/ }).first();
+  const signOutItem = page.getByRole('menuitem', { name: 'Sign out' });
+  // The dashboard's last fetch can land while the menu is open and re-render the
+  // header, detaching the item. Re-opened rather than waited on, so a slow reply
+  // does not turn into a 90-second timeout.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await account.click();
+    try {
+      await signOutItem.click({ timeout: 5_000 });
+      break;
+    } catch (error) {
+      if (attempt === 2) throw error;
+    }
+  }
   await expect(page).toHaveURL(/\/login/);
 }
 
@@ -131,6 +143,8 @@ test('a new student signs up, joins a course, clears a node, and reaches the ros
   await page
     .getByRole('button', { name: 'B It supplies a text alternative for screen readers' })
     .click();
+  // The hint belongs to an unanswered question; after the second answer it must go.
+  await expect(page.getByText('Pick one answer to continue.')).toHaveCount(0);
   await page.getByRole('button', { name: 'Submit answers' }).click();
   await expect(page.getByText('Node cleared')).toBeVisible();
   await expect(page.getByText(/Score 100%/)).toBeVisible();
@@ -147,6 +161,27 @@ test('a new student signs up, joins a course, clears a node, and reaches the ros
 });
 
 test.afterAll(async ({ request }) => {
+  // Every account this suite made is removed again, so the leaderboard and the
+  // admin list do not fill up with "Smoke Student 1794…" rows.
+  try {
+    const adminToken = await apiSignIn(request, ADMIN);
+    const adminHeaders = { Authorization: `Bearer ${adminToken}` };
+    for (const address of [student.email, classStudent.email]) {
+      const found = await (
+        await request.get(`/api/v1/admin/users?query=${encodeURIComponent(address)}`, {
+          headers: adminHeaders,
+        })
+      ).json();
+      const match = (found.users ?? []).find((user) => user.email === address);
+      if (match) {
+        await request.delete(`/api/v1/admin/users/${match.id}`, { headers: adminHeaders });
+      }
+    }
+  } catch {
+    // A cleanup failure should not turn a green journey red; the API rejects a
+    // deleted admin, for example, and that is already visible elsewhere.
+  }
+
   if (!instructorToken) return;
   const headers = { Authorization: `Bearer ${instructorToken}` };
   if (gatedCohortId) {
@@ -172,8 +207,10 @@ test('a class code is the only way into a members-only course', async ({ page, r
 
   await signIn(page, INSTRUCTOR);
   await page.goto(`/studio/courses/${gatedCourseId}/cohorts`);
-  await page.getByRole('switch', { name: 'Only let invited classes open this course' }).click();
-  await expect(page.getByText('Members only', { exact: true })).toBeVisible();
+  await page.getByRole('switch', { name: 'Open to the catalogue' }).click();
+  await expect(
+    page.getByText(/only students who type one of your class codes/),
+  ).toBeVisible();
 
   // 2. A class, with its code read back off the page the teacher sees.
   await page.getByLabel('Class name').fill(gatedClass.name);

@@ -212,13 +212,19 @@ export default function StudentPerformance() {
       .sort((a, b) => b.percent - a.percent || a.name.localeCompare(b.name));
   }, [courses, trees]);
 
+  // "Focus next" means a score actually worth revisiting. Listing everything
+  // below 100% turned 96% into homework and buried the one topic that needed it.
+  const FOCUS_BELOW = 80;
+
   const weakestTopics = useMemo(
     () =>
       subjects
         .flatMap((subject) => subject.topics)
         .filter(
           (node) =>
-            node.quizType && (node.score > 0 || node.status === 'COMPLETED') && node.score < 100,
+            node.quizType &&
+            (node.score > 0 || node.status === 'COMPLETED') &&
+            node.score < FOCUS_BELOW,
         )
         .sort((a, b) => a.score - b.score || a.title.localeCompare(b.title))
         .slice(0, 6),
@@ -340,7 +346,7 @@ export default function StudentPerformance() {
                   <Target size={15} className="text-warning" /> Focus next
                 </h2>
                 <p className="text-[11px] text-fg-subtle">
-                  Quiz scores below 100% across every subject
+                  Quiz scores below {FOCUS_BELOW}% across every subject
                 </p>
               </div>
               <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -459,7 +465,7 @@ export default function StudentPerformance() {
                         }`}
                       />
                       {openTopic === subject.name
-                        ? 'Hide topics'
+                        ? `Hide ${subject.topics.length} topics`
                         : `Show ${subject.topics.length} topics`}
                     </button>
 

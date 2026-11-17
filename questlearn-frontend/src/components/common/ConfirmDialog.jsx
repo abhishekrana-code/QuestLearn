@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
+import { useDialogFocus } from '../../hooks/useDialogFocus.js';
 
 /**
  * A small confirmation dialog for destructive actions.
@@ -19,18 +20,19 @@ export default function ConfirmDialog({
   onConfirm,
   onClose,
 }) {
+  const dialogRef = useRef(null);
+
+  // Escape closes unless the action is already running; focus stays inside and
+  // comes back to the button that opened the dialog.
+  useDialogFocus(dialogRef, { onEscape: () => !busy && onClose() });
+
   useEffect(() => {
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape' && !busy) onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      window.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [busy, onClose]);
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-6">
@@ -41,9 +43,12 @@ export default function ConfirmDialog({
         className="absolute inset-0 cursor-default scrim"
       />
       <motion.div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-message"
+        tabIndex={-1}
         initial={{ opacity: 0, y: 18, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
@@ -73,9 +78,14 @@ export default function ConfirmDialog({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
-          <p className="text-xs leading-relaxed text-fg-muted">{message}</p>
+          <p id="confirm-dialog-message" className="text-xs leading-relaxed text-fg-muted">
+            {message}
+          </p>
           {error && (
-            <div className="mt-3 flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/[0.08] px-3 py-2.5 text-xs leading-relaxed text-danger">
+            <div
+              role="alert"
+              className="mt-3 flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/[0.08] px-3 py-2.5 text-xs leading-relaxed text-danger"
+            >
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               {error}
             </div>
@@ -83,7 +93,13 @@ export default function ConfirmDialog({
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-line bg-muted/40 px-4 py-2.5 sm:px-5">
-          <button type="button" onClick={onClose} disabled={busy} className="btn-ghost text-xs">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            autoFocus
+            className="btn-ghost text-xs"
+          >
             {cancelLabel}
           </button>
           <button type="button" onClick={onConfirm} disabled={busy} className="btn-danger text-xs">

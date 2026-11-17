@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import { shortDate } from '../utils/dates.js';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -75,6 +75,9 @@ function timeAgo(iso) {
 
 export default function SkillTreePage() {
   const { courseId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedNodeId = searchParams.get('node');
+  const deepLinkHandled = useRef(null);
   const { user } = useAuth();
   const { award } = useGamification();
 
@@ -162,6 +165,29 @@ export default function SkillTreePage() {
       setDetailLoading(false);
     }
   };
+
+  // The dashboard's "continue" link names the node it wants opened. Act on it
+  // once the tree arrives, then clear the parameter so a refresh does not force
+  // the briefing open again. A stale or still-locked id gets an explanation
+  // instead of a silently empty panel.
+  useEffect(() => {
+    if (!tree || !requestedNodeId) return;
+    const key = `${courseId}:${requestedNodeId}`;
+    if (deepLinkHandled.current === key) return;
+    deepLinkHandled.current = key;
+    setSearchParams({}, { replace: true });
+
+    const node = tree.nodes.find((candidate) => String(candidate.id) === requestedNodeId);
+    if (!node) {
+      setToast('That node is not part of this course any more.');
+      return;
+    }
+    if (node.status === 'LOCKED') {
+      setToast('Finish the earlier nodes to unlock this one.');
+      return;
+    }
+    openNode(node);
+  }, [tree, requestedNodeId, courseId, setSearchParams, openNode]);
 
   /**
    * Applies a graded viva: celebrate the XP, then refresh the tree and briefing.
@@ -753,6 +779,8 @@ export default function SkillTreePage() {
       <AnimatePresence>
         {toast && (
           <motion.div
+            role="status"
+            aria-live="polite"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}

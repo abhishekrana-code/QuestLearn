@@ -5,6 +5,7 @@ import com.questlearn.dto.CompleteModuleRequest;
 import com.questlearn.dto.CourseLeaderboardEntry;
 import com.questlearn.dto.LeaderboardEntry;
 import com.questlearn.dto.ModuleDetailDto;
+import com.questlearn.dto.NextNodeDto;
 import com.questlearn.dto.OverallLeaderboardEntry;
 import com.questlearn.dto.SkillTreeDto;
 import com.questlearn.dto.XpAwardResponse;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,6 +47,13 @@ public class ProgressController {
     public ModuleDetailDto moduleDetail(@PathVariable Long moduleId,
                                         @AuthenticationPrincipal AppUserPrincipal principal) {
         return progressService.getModuleDetail(moduleId, principal);
+    }
+
+    @GetMapping("/me/next")
+    @Operation(summary = "The next unlocked node to continue, or 204 when nothing is left")
+    public ResponseEntity<NextNodeDto> nextNode(@AuthenticationPrincipal AppUserPrincipal principal) {
+        NextNodeDto next = progressService.nextNode(principal);
+        return next == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(next);
     }
 
     @PostMapping("/modules/{moduleId}/complete")

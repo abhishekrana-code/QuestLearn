@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { shortDate } from '../utils/dates.js';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, Clock, Lock, RotateCcw, Unlock } from 'lucide-react';
+import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
@@ -101,6 +102,8 @@ export default function LearnerDetail() {
   const { user } = useAuth();
   const [learner, setLearner] = useState(null);
   const [resetting, setResetting] = useState(null);
+  const [confirmNode, setConfirmNode] = useState(null);
+  const [confirmError, setConfirmError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -132,20 +135,20 @@ export default function LearnerDetail() {
     if (!error && !loading) resetAutoRetry();
   }, [error, loading, resetAutoRetry]);
 
+  // The dialog explains the cost before anything is deleted; the old native
+  // window.confirm could not be styled, read by a screen reader as part of the
+  // page, or show the server's refusal without closing.
   const resetNode = async (node) => {
-    const confirmed = window.confirm(
-      `Reset ${learner?.name ?? 'this learner'}'s progress on "${node.title}"?\n\n` +
-        'The node goes back to where it started and the XP they earned for it is removed.',
-    );
-    if (!confirmed) return;
     setResetting(node.moduleId);
+    setConfirmError(null);
     setNotice(null);
     try {
       await api.delete(`/admin/users/${userId}/modules/${node.moduleId}/progress`);
       setNotice({ type: 'success', text: `"${node.title}" was reset.` });
+      setConfirmNode(null);
       setLoadAttempt((previous) => previous + 1);
     } catch (resetError) {
-      setNotice({ type: 'error', text: apiError(resetError, 'Could not reset that node.') });
+      setConfirmError(apiError(resetError, 'Could not reset that node.'));
     } finally {
       setResetting(null);
     }
@@ -179,6 +182,8 @@ export default function LearnerDetail() {
 
       {notice && (
         <div
+          role={notice.type === 'error' ? 'alert' : 'status'}
+          aria-live={notice.type === 'error' ? 'assertive' : 'polite'}
           className={`mb-4 rounded-lg border px-4 py-2.5 text-[12px] ${
             notice.type === 'error'
               ? 'border-danger/30 bg-danger/[0.07] text-danger'
@@ -215,11 +220,30 @@ export default function LearnerDetail() {
                 node={node}
                 canReset={user?.role === 'ADMIN' || user?.role === 'INSTRUCTOR'}
                 resetting={resetting === node.moduleId}
-                onReset={resetNode}
+                onReset={() => {
+                  setConfirmError(null);
+                  setConfirmNode(node);
+                }}
               />
             ))}
           </div>
         </>
+      )}
+
+      {confirmNode && (
+        <ConfirmDialog
+          title={`Reset "${confirmNode.title}"?`}
+          message={`${learner?.name ?? 'This learner'} loses every attempt on this node and the XP earned for it. The node returns to where it started; their other work is untouched.`}
+          confirmLabel="Reset node"
+          busy={resetting === confirmNode.moduleId}
+          error={confirmError}
+          onConfirm={() => resetNode(confirmNode)}
+          onClose={() => {
+            if (resetting) return;
+            setConfirmNode(null);
+            setConfirmError(null);
+          }}
+        />
       )}
     </div>
   );

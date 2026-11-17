@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
+  CalendarClock,
   Check,
   Eye,
   EyeOff,
@@ -25,9 +26,16 @@ import { generateCourse as requestGeneratedCourse, getAiStatus } from '../servic
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import EmailVerificationBanner from '../components/common/EmailVerificationBanner.jsx';
 import api, { apiError } from '../services/api.js';
-import { formatDeadline } from '../services/deadlines.js';
+import { formatDeadline, fromDateTimeInput } from '../services/deadlines.js';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import { EMPTY_LESSON, lessonPayload } from '../services/lesson.js';
+
+/** The wire values are for the API; a teacher should never have to read them. */
+const QUIZ_TYPE_LABELS = {
+  MULTIPLE_CHOICE: 'Multiple choice',
+  CODE_ORDER: 'Code order',
+  DRAG_DROP: 'Drag & drop',
+};
 
 const QUIZ_TEMPLATES = {
   MULTIPLE_CHOICE: JSON.stringify(
@@ -84,6 +92,23 @@ const STEPS = [
   { id: 'publish', label: 'Publish', hint: 'Preview it, then make it live for students.' },
 ];
 
+/**
+ * The map is a pixel grid, but a teacher should never have to compute pixels.
+ * New nodes drop into the next slot of a three-column layout; the two fields
+ * stay editable for the rare tree that needs a nudge.
+ */
+const NODE_SLOT_ORIGIN = 90;
+const NODE_SLOT_X = 220;
+const NODE_SLOT_Y = 170;
+
+function nextNodeSlot(nodes) {
+  const index = nodes.length;
+  return {
+    x: NODE_SLOT_ORIGIN + (index % 3) * NODE_SLOT_X,
+    y: NODE_SLOT_ORIGIN + Math.floor(index / 3) * NODE_SLOT_Y,
+  };
+}
+
 /** Step ids double as the ?step= value, so a link can open the studio anywhere. */
 const STEP_IDS = STEPS.map((item) => item.id);
 
@@ -123,8 +148,10 @@ export default function InstructorStudio() {
     summary: '',
     xpReward: 100,
     parentModuleId: '',
-    positionX: 0,
-    positionY: 0,
+    positionX: NODE_SLOT_ORIGIN,
+    positionY: NODE_SLOT_ORIGIN,
+    // Optional: an empty value leaves the node self-paced.
+    dueAt: '',
     content: EMPTY_LESSON,
   });
   const [editingNode, setEditingNode] = useState(null);
@@ -352,7 +379,9 @@ export default function InstructorStudio() {
     if (!selectedId) return;
     setBusy(true);
     try {
-      await api.post(`/courses/${selectedId}/modules`, {
+      // The deadline lives on its own endpoint, so the node is created first and
+      // dated second. A failed date must not look like a failed node.
+      const { data: created } = await api.post(`/courses/${selectedId}/modules`, {
         title: moduleForm.title,
         summary: moduleForm.summary,
         xpReward: Number(moduleForm.xpReward),
@@ -361,18 +390,40 @@ export default function InstructorStudio() {
         positionY: Number(moduleForm.positionY),
         content: lessonPayload(moduleForm.content),
       });
+
+      let dateWarning = null;
+      const dueAt = fromDateTimeInput(moduleForm.dueAt);
+      if (dueAt) {
+        try {
+          await api.put(`/courses/${selectedId}/modules/${created.id}/deadline`, { dueAt });
+        } catch (deadlineError) {
+          dateWarning = apiError(deadlineError, 'the due date could not be saved');
+        }
+      }
+
+      // The next node takes the slot after this one, so the form stays usable
+      // without the teacher editing coordinates between adds.
+      const slot = nextNodeSlot([...nodes, created]);
       setModuleForm({
         title: '',
         summary: '',
         xpReward: 100,
         parentModuleId: moduleForm.parentModuleId,
-        positionX: Number(moduleForm.positionX) + 1,
-        positionY: Number(moduleForm.positionY) + 1,
+        positionX: slot.x,
+        positionY: slot.y,
+        dueAt: '',
         content: EMPTY_LESSON,
       });
       await loadNodes(selectedId);
       await loadCourses(selectedId);
-      notify('success', 'Skill node added to the tree.');
+      if (dateWarning) {
+        notify('error', `Node added, but ${dateWarning}. Set the date from the node table.`);
+      } else {
+        notify(
+          'success',
+          dueAt ? 'Skill node added with a due date.' : 'Skill node added to the tree.',
+        );
+      }
     } catch (error) {
       notify('error', apiError(error, 'Could not add the node.'));
     } finally {
@@ -444,6 +495,10 @@ export default function InstructorStudio() {
 
       {message && (
         <div
+          // The same banner carries both success and failure, so the live region
+          // follows the type: failures interrupt, confirmations wait their turn.
+          role={message.type === 'error' ? 'alert' : 'status'}
+          aria-live={message.type === 'error' ? 'assertive' : 'polite'}
           className={`mb-5 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${
             message.type === 'error'
               ? 'border-danger/30 bg-danger/[0.07] text-danger'
@@ -827,7 +882,7 @@ export default function InstructorStudio() {
 
                   <div>
                     <label className="label" htmlFor="module-x">
-                      Column (X)
+                      Horizontal position
                     </label>
                     <input
                       id="module-x"
@@ -843,7 +898,7 @@ export default function InstructorStudio() {
 
                   <div>
                     <label className="label" htmlFor="module-y">
-                      Row (Y)
+                      Vertical position
                     </label>
                     <input
                       id="module-y"
@@ -855,6 +910,30 @@ export default function InstructorStudio() {
                         setModuleForm({ ...moduleForm, positionY: event.target.value })
                       }
                     />
+                  </div>
+
+                  <p className="-mt-1 text-[10px] leading-4 text-fg-subtle sm:col-span-2">
+                    New nodes are placed on the map automatically. Change these numbers only
+                    when two nodes overlap.
+                  </p>
+
+                  <div className="sm:col-span-2">
+                    <label className="label" htmlFor="module-due">
+                      Due date <span className="font-normal text-fg-subtle">(optional)</span>
+                    </label>
+                    <input
+                      id="module-due"
+                      type="datetime-local"
+                      className="field"
+                      value={moduleForm.dueAt}
+                      onChange={(event) =>
+                        setModuleForm({ ...moduleForm, dueAt: event.target.value })
+                      }
+                    />
+                    <p className="mt-1.5 text-[10px] leading-4 text-fg-subtle">
+                      Leave blank for a self-paced node. You can change it later from the Due
+                      column below.
+                    </p>
                   </div>
 
                   <div className="sm:col-span-2 rounded-lg border border-line bg-muted/30 p-3">
@@ -901,12 +980,25 @@ export default function InstructorStudio() {
                               {nodes.find((candidate) => candidate.id === node.parentId)?.title ??
                                 'None'}
                             </td>
-                            <td className="py-2 pr-3 text-fg-muted">
-                              {node.dueAt ? (
-                                formatDeadline(node.dueAt)
-                              ) : (
-                                <span className="text-fg-subtle">Self-paced</span>
-                              )}
+                            <td className="py-2 pr-3">
+                              {/* The date is editable in the node dialog, so say so from the table. */}
+                              <button
+                                type="button"
+                                onClick={() => setEditingNode(node)}
+                                aria-label={
+                                  node.dueAt
+                                    ? `Change the due date for ${node.title}`
+                                    : `Add a due date for ${node.title}`
+                                }
+                                className={`inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] transition-colors duration-150 hover:bg-muted ${
+                                  node.dueAt
+                                    ? 'text-fg-muted hover:text-gold-text'
+                                    : 'text-fg-subtle hover:text-gold-text'
+                                }`}
+                              >
+                                <CalendarClock size={11} aria-hidden="true" />
+                                {node.dueAt ? formatDeadline(node.dueAt) : 'Add date'}
+                              </button>
                             </td>
                             <td className="py-2 pr-3 tabular-nums text-fg-subtle">
                               {node.positionX},{node.positionY}
@@ -914,7 +1006,9 @@ export default function InstructorStudio() {
                             <td className="py-2 pr-3 font-semibold tabular-nums text-gold-text">
                               {node.xpReward}
                             </td>
-                            <td className="py-2 pr-3 text-fg-muted">{node.quizType ?? 'none'}</td>
+                            <td className="py-2 pr-3 text-fg-muted">
+                              {node.quizType ? (QUIZ_TYPE_LABELS[node.quizType] ?? 'Quiz') : 'No quiz'}
+                            </td>
                             <td className="py-2 text-right">
                               <button
                                 type="button"

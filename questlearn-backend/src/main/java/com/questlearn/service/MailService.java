@@ -9,6 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.InterruptedIOException;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -18,14 +21,27 @@ import java.util.List;
  * The one place that writes and sends QuestLearn's transactional email.
  *
  * <p>Password recovery and address verification share it, so both links use the
- * same from-address, origin and delivery path. Sending never breaks the request
- * that triggered it: a provider failure is logged and the caller carries on, and
- * an unconfigured deployment writes the message to the server log instead.</p>
+ * same from-address, origin and delivery path. A provider failure is logged and
+ * reported through the return value rather than thrown, so a mail outage never
+ * breaks the request that triggered it: sign-up carries on, while an explicit
+ * resend can tell the learner the link was not sent. A failure that looks
+ * transient — the host did not resolve, a connection was refused or reset, or a
+ * connect/read timed out — is retried once after a short pause, so a brief network
+ * hiccup does not lose the link. An unconfigured deployment writes the message to
+ * the server log instead.</p>
  */
 @Service
 public class MailService {
 
     private static final Logger log = LoggerFactory.getLogger(MailService.class);
+
+    /**
+     * One retry rides out the failure seen on this machine: a DNS lookup that
+     * briefly stopped resolving. Two attempts with a short pause stay inside a
+     * request the browser is still waiting on, while a third would not buy more.
+     */
+    private static final int MAX_ATTEMPTS = 2;
+    private static final long RETRY_PAUSE_MS = 500;
 
     private final EmailSender sender;
     private final String fromAddress;
@@ -45,7 +61,7 @@ public class MailService {
 
     public void sendPasswordReset(User user, String rawToken, Duration ttl) {
         String link = appBaseUrl + "/reset-password?token=" + rawToken;
-        send(user,
+        sendQuietly(user,
                 "Reset your QuestLearn password",
                 """
                 Hi %s,
@@ -64,9 +80,14 @@ public class MailService {
                         "This link works once and expires in " + ttl.toMinutes() + " minutes."));
     }
 
-    public void sendEmailVerification(User user, String rawToken, Duration ttl) {
+    /**
+     * @return whether the transport accepted the message. Sign-up ignores this so
+     *         a mail outage cannot fail account creation; an explicit resend uses
+     *         it to report the failure instead of claiming a link was sent.
+     */
+    public boolean sendEmailVerification(User user, String rawToken, Duration ttl) {
         String link = appBaseUrl + "/verify-email?token=" + rawToken;
-        send(user,
+        return sendQuietly(user,
                 "Confirm your QuestLearn email address",
                 """
                 Hi %s,
@@ -84,10 +105,6 @@ public class MailService {
                 htmlLink(user, link, "Confirm this address",
                         "The link works once and expires in "
                                 + Math.max(1, ttl.toHours()) + " hours."));
-    }
-
-    private void send(User user, String subject, String text, String html) {
-        sendQuietly(user, subject, text, html);
     }
 
     /**
@@ -149,18 +166,67 @@ public class MailService {
 
     private boolean sendQuietly(User user, String subject, String text, String html) {
         EmailMessage message = new EmailMessage(fromAddress, user.getEmail(), subject, text, html);
-        try {
-            sender.send(message);
-            if (sender.isDeliveryConfigured()) {
-                log.info("Email '{}' sent to {}.", subject, user.getEmail());
+        RuntimeException failure = null;
+
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                sender.send(message);
+                if (sender.isDeliveryConfigured()) {
+                    log.info("Email '{}' sent to {}.", subject, user.getEmail());
+                }
+                return true;
+            } catch (RuntimeException ex) {
+                failure = ex;
+                if (attempt == MAX_ATTEMPTS || !isTransient(ex)) {
+                    break;
+                }
+                log.warn("Email '{}' to {} failed ({}); retrying once.",
+                        subject, user.getEmail(), ex.getMessage());
+                if (!pauseBeforeRetry()) {
+                    break;
+                }
             }
+        }
+
+        // Never surface delivery problems to the caller: an anonymous reset
+        // request must not learn whether an address exists or a provider is down.
+        log.error("Could not send '{}' to {}: {}", subject, user.getEmail(),
+                failure == null ? "unknown transport failure" : failure.getMessage());
+        return false;
+    }
+
+    private static boolean pauseBeforeRetry() {
+        try {
+            Thread.sleep(RETRY_PAUSE_MS);
             return true;
-        } catch (RuntimeException ex) {
-            // Never surface delivery problems to the caller: an anonymous reset
-            // request must not learn whether an address exists or a provider is down.
-            log.error("Could not send '{}' to {}: {}", subject, user.getEmail(), ex.getMessage());
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
             return false;
         }
+    }
+
+    /**
+     * True for failures that say the message never reached the server: the host
+     * did not resolve, the port refused or reset the connection, or a connect or
+     * read timed out. Authentication and provider rejections are excluded, because
+     * sending the same credentials again cannot help and a retry only spends quota.
+     *
+     * <p>JavaMail wraps the real network error, so the whole cause chain is walked.</p>
+     */
+    private static boolean isTransient(Throwable failure) {
+        Throwable cause = failure;
+        for (int depth = 0; cause != null && depth < 12; depth++) {
+            if (cause instanceof UnknownHostException
+                    || cause instanceof SocketException
+                    || cause instanceof InterruptedIOException) {
+                return true;
+            }
+            if (cause.getCause() == cause) {
+                break;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     private String htmlLink(User user, String link, String label, String note) {

@@ -14,6 +14,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
+import ConfirmDialog from '../components/common/ConfirmDialog.jsx';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
@@ -99,6 +100,11 @@ export default function AdminPanel() {
   const [busyId, setBusyId] = useState(null);
   // Bumped after a delete so the page effect refetches the current page.
   const [usersVersion, setUsersVersion] = useState(0);
+  // Every privileged action asks here rather than in a native window.confirm,
+  // which ignored the app's design and could not report a server error in place.
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmError, setConfirmError] = useState(null);
 
   const { paused: retryPaused, reset: resetAutoRetry, retryNow: retryLoadNow } = useAutoRetry({
     active: Boolean(loadError) && !loading,
@@ -169,19 +175,31 @@ export default function AdminPanel() {
     setPage(0);
   };
 
+  const ask = (action) => {
+    setConfirmError(null);
+    setConfirmAction(action);
+  };
+
+  const runConfirm = async () => {
+    setConfirmBusy(true);
+    setConfirmError(null);
+    try {
+      await confirmAction.run();
+      setConfirmAction(null);
+    } catch (error) {
+      // The dialog stays open: "it failed" is the one thing a confirmation
+      // must never hide behind a toast that scrolls away.
+      setConfirmError(apiError(error, 'That action could not be completed.'));
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
+
   /**
    * Replaces the password every demo account shares. Asked first, because the
    * current value stops working everywhere it was written down.
    */
   const rotateDemoPassword = async () => {
-    if (
-      !window.confirm(
-        'Every demo account gets a new shared password, and the current one stops working. Continue?'
-      )
-    ) {
-      return;
-    }
-
     setRotating(true);
     try {
       const { data } = await api.post('/admin/demo-password/rotate');
@@ -198,8 +216,6 @@ export default function AdminPanel() {
         text: `Demo password rotated for ${data.accounts} accounts. It is shown once below.`,
       });
       refreshAudit();
-    } catch (error) {
-      setMessage({ type: 'error', text: apiError(error, 'Could not rotate the demo password.') });
     } finally {
       setRotating(false);
     }
@@ -215,56 +231,49 @@ export default function AdminPanel() {
   };
 
   const changeRole = async (targetUser, role) => {
-    // Promotion is the one change a mis-scroll can make permanent: an admin can
-    // then change roles, reset passwords and unpublish courses.
-    if (role === 'ADMIN' && targetUser.role !== 'ADMIN') {
-      const confirmed = window.confirm(
-        `Make ${targetUser.name} an admin? Admins can change roles, reset passwords and unpublish courses.`,
-      );
-      if (!confirmed) {
-        // The select is controlled by row state, so re-rendering snaps it back.
-        setUsers((previous) => [...previous]);
-        return;
-      }
-    }
     setBusyId(targetUser.id);
     try {
       const { data } = await api.patch(`/admin/users/${targetUser.id}/role`, { role });
       setUsers((previous) => previous.map((item) => (item.id === data.id ? data : item)));
       setMessage({ type: 'success', text: `${data.name} is now ${data.role.toLowerCase()}.` });
       refreshAudit();
-    } catch (error) {
-      setMessage({ type: 'error', text: apiError(error, 'Could not change that role.') });
     } finally {
       setBusyId(null);
     }
   };
 
+  /**
+   * Both directions ask: promotion grants the keys, demotion takes them away, and
+   * a stray arrow key in the select should not do either on its own.
+   */
+  const requestRoleChange = (targetUser, role) => {
+    if (role === targetUser.role) return;
+    const promoting = role === 'ADMIN';
+    ask({
+      title: promoting
+        ? `Make ${targetUser.name} an admin?`
+        : `Change ${targetUser.name} to ${role.toLowerCase()}?`,
+      message: promoting
+        ? 'Admins can change roles, reset passwords and unpublish courses.'
+        : `They keep their work and progress but lose the ${targetUser.role.toLowerCase()} powers immediately.`,
+      confirmLabel: promoting ? 'Make admin' : 'Change role',
+      run: () => changeRole(targetUser, role),
+    });
+  };
+
   const deleteAccount = async (targetUser) => {
-    const confirmed = window.confirm(
-      `Delete ${targetUser.name} (${targetUser.email})? Their progress, attempts and enrolments go with the account, and this cannot be undone.`,
-    );
-    if (!confirmed) return;
     setBusyId(`del-${targetUser.id}`);
     try {
       await api.delete(`/admin/users/${targetUser.id}`);
       setMessage({ type: 'success', text: `${targetUser.name}'s account was deleted.` });
       setUsersVersion((previous) => previous + 1);
       load();
-    } catch (error) {
-      setMessage({ type: 'error', text: apiError(error, 'Could not delete that account.') });
     } finally {
       setBusyId(null);
     }
   };
 
   const resetPassword = async (targetUser) => {
-    // One click signs the person out everywhere and retires their password, so it
-    // asks first, the same way clearing a learner's node progress does.
-    const confirmed = window.confirm(
-      `Reset the password for ${targetUser.name}? Their current sessions are signed out and their old password stops working. You get a one-time temporary password to pass on.`,
-    );
-    if (!confirmed) return;
     setBusyId(`pw-${targetUser.id}`);
     try {
       const { data } = await api.post(`/admin/users/${targetUser.id}/reset-password`);
@@ -273,12 +282,36 @@ export default function AdminPanel() {
         text: `Temporary password for ${data.email}: ${data.temporaryPassword}. Share it privately. It is shown once and never stored in clear text.`,
       });
       refreshAudit();
-    } catch (error) {
-      setMessage({ type: 'error', text: apiError(error, 'Could not reset that password.') });
     } finally {
       setBusyId(null);
     }
   };
+
+  const requestDelete = (targetUser) =>
+    ask({
+      title: `Delete ${targetUser.name}?`,
+      message: `${targetUser.email}. Their progress, attempts and enrolments go with the account, and this cannot be undone.`,
+      confirmLabel: 'Delete account',
+      run: () => deleteAccount(targetUser),
+    });
+
+  const requestReset = (targetUser) =>
+    ask({
+      title: `Reset ${targetUser.name}'s password?`,
+      message:
+        'Their current sessions are signed out and their old password stops working. You get a one-time temporary password to pass on.',
+      confirmLabel: 'Reset password',
+      run: () => resetPassword(targetUser),
+    });
+
+  const requestRotate = () =>
+    ask({
+      title: 'Rotate the demo password?',
+      message:
+        'Every demo account gets a new shared password, and the current one stops working everywhere it was written down.',
+      confirmLabel: 'Rotate password',
+      run: rotateDemoPassword,
+    });
 
   const togglePublish = async (course) => {
     setBusyId(`course-${course.id}`);
@@ -335,6 +368,8 @@ export default function AdminPanel() {
 
       {message && (
         <div
+          role={message.type === 'error' ? 'alert' : 'status'}
+          aria-live={message.type === 'error' ? 'assertive' : 'polite'}
           className={`mb-5 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${
             message.type === 'error'
               ? 'border-danger/30 bg-danger/[0.07] text-danger'
@@ -379,12 +414,13 @@ export default function AdminPanel() {
               uptime {formatUptime(telemetry.uptimeSeconds)}
             </span>
           </div>
-          <dl className="grid grid-cols-2 gap-3 px-5 py-4 sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-3 px-5 py-4 sm:grid-cols-3 lg:grid-cols-5">
             {[
               ['Requests since restart', telemetry.requests],
               ['Server errors since restart', telemetry.serverErrors],
               ['p50 latency', formatLatency(telemetry.p50Ms)],
               ['p95 latency', formatLatency(telemetry.p95Ms)],
+              ['p99 latency', formatLatency(telemetry.p99Ms)],
             ].map(([label, value]) => (
               <div key={label}>
                 <dt className="text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">
@@ -448,9 +484,11 @@ export default function AdminPanel() {
 
           <div className="px-5 py-4">
             <p className="text-[12px] leading-relaxed text-fg-muted">
-              All {demoStatus.accounts} demo accounts share one password. It is stored as a hash, so
-              it cannot be read back here; rotating replaces it for every one of them and shows the
-              new value once.
+              {demoStatus.accounts === 1
+                ? 'The demo account shares one password'
+                : `These ${demoStatus.accounts} demo accounts share one password`}
+              . It is stored as a hash, so it cannot be read back here; rotating replaces it for
+              every one of them and shows the new value once.
             </p>
             {demoStatus.source === 'ROTATED' && demoStatus.rotatedAt && (
               <p className="mt-1 text-[11px] text-fg-subtle">
@@ -459,9 +497,28 @@ export default function AdminPanel() {
               </p>
             )}
 
+            {(demoStatus.logins ?? []).length > 0 && (
+              <ul className="mt-3 divide-y divide-line overflow-hidden rounded-lg border border-line">
+                {(demoStatus.logins ?? []).map((login) => (
+                  <li
+                    key={login.email}
+                    className="flex flex-wrap items-center gap-x-2 gap-y-1 bg-muted/20 px-3 py-2"
+                  >
+                    <span className="shrink-0 rounded-md border border-line bg-muted/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-fg-muted">
+                      {login.role}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-foreground">
+                      {login.name}
+                    </span>
+                    <code className="text-[11px] text-fg-muted">{login.email}</code>
+                  </li>
+                ))}
+              </ul>
+            )}
+
             <button
               type="button"
-              onClick={rotateDemoPassword}
+              onClick={requestRotate}
               disabled={rotating}
               className="btn-ghost mt-3 h-9 px-3 text-xs"
             >
@@ -567,7 +624,7 @@ export default function AdminPanel() {
                       className="field h-9 min-w-0 flex-1 px-2 py-1.5 text-[11px]"
                       value={row.role}
                       disabled={row.id === user.id || busyId === row.id}
-                      onChange={(event) => changeRole(row, event.target.value)}
+                      onChange={(event) => requestRoleChange(row, event.target.value)}
                       aria-label={
                         row.id === user.id
                           ? `Role for ${row.name} (you cannot change your own role)`
@@ -584,7 +641,7 @@ export default function AdminPanel() {
                     <button
                       type="button"
                       disabled={busyId === `pw-${row.id}`}
-                      onClick={() => resetPassword(row)}
+                      onClick={() => requestReset(row)}
                       className="btn-ghost h-9 shrink-0 px-2.5 text-[11px]"
                       aria-label={`Reset password for ${row.name}`}
                       title="Issue a one-time temporary password"
@@ -595,7 +652,7 @@ export default function AdminPanel() {
                     <button
                       type="button"
                       disabled={row.id === user.id || busyId === `del-${row.id}`}
-                      onClick={() => deleteAccount(row)}
+                      onClick={() => requestDelete(row)}
                       className="btn-ghost h-9 shrink-0 px-2.5 text-[11px] text-danger"
                       aria-label={
                         row.id === user.id
@@ -646,7 +703,7 @@ export default function AdminPanel() {
                         className="field w-[7.5rem] px-2 py-1.5 text-[11px]"
                         value={row.role}
                         disabled={row.id === user.id || busyId === row.id}
-                        onChange={(event) => changeRole(row, event.target.value)}
+                        onChange={(event) => requestRoleChange(row, event.target.value)}
                         aria-label={
                           row.id === user.id
                             ? `Role for ${row.name} (you cannot change your own role)`
@@ -665,7 +722,7 @@ export default function AdminPanel() {
                       <button
                         type="button"
                         disabled={busyId === `pw-${row.id}`}
-                        onClick={() => resetPassword(row)}
+                        onClick={() => requestReset(row)}
                         className="btn-ghost px-2.5 py-1.5 text-[11px]"
                         aria-label={`Reset password for ${row.name}`}
                         title="Issue a one-time temporary password"
@@ -676,7 +733,7 @@ export default function AdminPanel() {
                       <button
                         type="button"
                         disabled={row.id === user.id || busyId === `del-${row.id}`}
-                        onClick={() => deleteAccount(row)}
+                        onClick={() => requestDelete(row)}
                         className="btn-ghost ml-1 px-2.5 py-1.5 text-[11px] text-danger"
                         aria-label={
                           row.id === user.id
@@ -823,6 +880,22 @@ export default function AdminPanel() {
           ))}
         </ul>
       </section>
+
+      {confirmAction && (
+        <ConfirmDialog
+          title={confirmAction.title}
+          message={confirmAction.message}
+          confirmLabel={confirmAction.confirmLabel}
+          busy={confirmBusy}
+          error={confirmError}
+          onClose={() => {
+            if (confirmBusy) return;
+            setConfirmAction(null);
+            setConfirmError(null);
+          }}
+          onConfirm={runConfirm}
+        />
+      )}
     </div>
   );
 }

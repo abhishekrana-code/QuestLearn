@@ -153,8 +153,11 @@ SMTP when a host exists, and otherwise logs the link at `WARN`. Asking for a pro
 without its settings fails at startup instead of silently dropping mail. Address
 verification is a single-use, hashed, 48-hour token with a per-account resend limit
 and a soft dashboard reminder; unconfirmed accounts keep full access. A delivery
-failure is still only a log line (there is no outbox or retry queue) and lesson
-notification digests remain open, but the P0 access gap is closed.
+failure is logged, and an explicit resend now answers 502 and rolls its token
+change back so an older working link survives. A transient DNS, refused-connection
+or timeout failure is retried once in-process, though there is still no outbox or
+retry queue; recovery stays deliberately silent. Lesson notification digests remain
+open, but the P0 access gap is closed.
 
 **3. Class reporting, acting on the data: CLOSED.**
 The roster lists every enrolled learner with their per-node status, attempts, XP and
@@ -258,6 +261,34 @@ graded term still needs.
 | Commit | What it added | How it was verified |
 |---|---|---|
 | `_pending_` | Advisory deadlines and the reminder digest. V11 adds `modules.due_at`, `users.notify_deadlines`, and a `deadline_reminders` ledger keyed by learner, node, kind and due date. `DeadlineStateResolver` is the single clock for `UPCOMING`/`DUE_SOON`/`OVERDUE`/`COMPLETED`/`COMPLETED_LATE`; `DeadlineService` sets, moves, clears and aggregates; `PUT`/`DELETE /courses/{courseId}/modules/{moduleId}/deadline` is owner-or-admin; `GET /me/deadlines` feeds the dashboard; `DeadlineReminderService` and `DeadlineReminderJob` send one digest per learner on the UTC cron; `PATCH /auth/notification-preferences` stores the opt-out. Skill-tree nodes and node details carry `dueAt` and `deadlineState`, and the dashboard panel, map badges, briefing chip and studio Due column all render them | 17 new backend tests: 11 integration (set/move/clear, owner/admin/student permissions, foreign-course 404, overview ordering and course-leave removal, completed-work ordering, late completion, digest send and dedupe, failed-send retry, opt-out round trip, overdue kind) and 8 resolver unit tests (window edges, due-instant boundary, completion win, minimum window); 11 new frontend tests: 7 date/state helpers and 4 panel interactions (ordering, toggle success, provider error, empty state). Full suite: 149 backend tests (56 integration), 48 frontend tests across 10 files, `npm run build` clean |
+
+### The UX pass (17 November 2026)
+
+A role-by-role review of the three journeys (learner, teacher, admin) produced this
+batch. Every item was checked in a browser against the running demo, not just in tests.
+
+| Commit | What it fixed | How it was verified |
+|---|---|---|
+| `_pending_` | Skill-tree geometry: the positioned node is now a plain wrapper, because framer-motion overwrote the centring `translate` on the animated element, and the canvas keeps the exact pixel size the connectors are drawn in instead of stretching to `min-width: 100%` | Live: wrapper measured 754×860 and all six node centres sat 0 px from their connector endpoints |
+| `_pending_` | Server health numbers: `TelemetryService` aggregates every `http.server.requests` timer and merges histogram buckets, and `management.metrics.distribution.slo.http.server.requests` supplies explicit bounds. `SimpleMeterRegistry` only fills buckets for explicit bounds, so `percentiles-histogram` alone left p95/p99 empty. A second pass found the histogram window (two minutes by default) rotating away from the all-time request count, which pinned every percentile to the 5 s ceiling; quantiles now use the histogram's own sample count and `expiry.all=365d` keeps samples until restart | 4 unit tests, including one with a mock clock that advances past the old window; live API after 40 requests: `requests=43, p50=25.8 ms, p95=98.5 ms, p99=217.8 ms` (previously `p50=p95=p99=5000`) |
+| `_pending_` | Dashboard never states false progress: the header and counters show a dash or "Loading your progress…" until the first answer arrives, instead of "0/0 nodes cleared". The permanent "How XP works" panel is now a disclosure, so the formula no longer holds a block of the page | Live: cold load showed the placeholder, then the real totals; the panel starts collapsed and still opens |
+| `_pending_` | Sign-in errors are announced: `role="alert"`, `aria-invalid` and `aria-describedby` on the email field, and focus returns to it when the form fails | Live: a wrong password produced `#login-error` with both ARIA links and focus on `#email` |
+| `_pending_` | Dialog keyboard contract in one place: `useDialogFocus` moves focus in, wraps Tab/Shift+Tab, closes on Escape and restores focus to the opener. `ConfirmDialog` and `NodeEditorDialog` both use it, the last native `window.confirm` (resetting a learner's node) is gone, and destructive admin actions plus role changes are confirmed in both directions | 3 hook tests (initial focus, wrap at both ends, Escape + restore); live: Escape closed both dialogs and focus came back to the trigger; the learner reset dialog opens, names the node and its cost, and Cancel leaves progress untouched |
+| `_pending_` | Instructor vocabulary and tree authoring: the three links to analytics all read "Where learners stop", "Import and enroll" matches the US spelling used elsewhere, a new node lands in the next slot of a three-column map instead of at (0,0), the two position fields are labelled in words with a "placed automatically" hint, and the disabled delete on a published course is still reachable by keyboard and explains itself in a banner instead of a tooltip | 4 Playwright tests: the delete button takes focus, is `aria-disabled`, and the reason appears; the node form defaults to 90/90 with the hint; the learner reset uses the app dialog; all three analytics links share the phrase. Live screenshot of the delete reason |
+| `_pending_` | Studio deadlines are discoverable: an optional due date on the create form (saved through the deadline endpoint after the node exists) and the Due cell is a button that opens the node editor. Quiz rows read "Multiple choice" / "No quiz" instead of a bare dash | Live: set a due date, saw "Nov 20, 2026, 09:00 AM" and `DUE_SOON` from `/modules/{id}`, cleared it again; both labels visible in the module list; the smoke journey also asserts "Pick one answer to continue." is gone once both questions are answered |
+| `_pending_` | Class panel wording: the switch is labelled by the state it turns on ("Open to the catalogue") and `aria-checked` follows that label, so it no longer contradicts the summary beside it | Live: toggling changed the copy and the switch together |
+| `_pending_` | "Focus next" on the performance page only lists quiz scores below 80%, so a 96% no longer appears as remedial work; the topic toggle says how many it reveals | Live: a 96% topic left the list and the heading stated the threshold |
+| `_pending_` | Viva character count reads "412 characters" and only adds "· N left" near the cap, instead of presenting three different limits at once | Live: typed past 80% of the cap and watched the remaining count appear |
+| `_pending_` | Admin demo accounts: `GET /admin/demo-password-status` returns the accounts that still exist (a deleted demo account drops out), the panel lists them with role and email, and the card shows uptime, request/error counts and p50/p95/p99 | `AdminServiceTest` gains the deleted-account case; live list matched the seeded students and p99 rendered |
+| `_pending_` | "What next" is decided by the server: `GET /me/next` returns the unlocked, unfinished node with the earliest urgency (overdue, then due soon, then date; newest course and tree order break ties) or **204** when nothing is left. The dashboard shows a "Pick up here" card linking to `/courses/{id}?node={nodeId}`, and the skill-tree page opens that node once, clears the parameter, and explains a stale or still-locked id instead of failing silently | 6 unit tests (locked child skipped, overdue sibling wins, nothing left, no enrolment, teacher, archived/unpublished courses), 1 integration test walking root → child → 204, and 2 Playwright tests (card visible with a real href and opening the node; stale id shows the explanation and leaves the URL clean) |
+| `_pending_` | Announcements match the action: error banners use `role="alert"` and success banners `role="status"` in the studio, course library, learner detail, admin console and roster import; the skill-tree toast is a live region; the account, recovery and reset forms announce failures; and `/accessibility` now claims only the behaviour those forms actually have. The smoke suite deletes the accounts it creates, and the historical smoke/phase-five accounts were removed | 3 Playwright tests (health card, demo logins list, accessibility sentence); the leaderboard and roster no longer carry smoke rows, and the smoke suite leaves the account count unchanged |
+| `_pending_` | The mobile menu's close button: the outside-tap handler ran on `pointerdown` and closed the panel, then the button's `click` toggled it straight back open, so the X looked dead. The toggle button is now excluded from the outside-tap check | 2 Playwright tests at a 390×844 viewport: the X closes the menu and the same button opens it again; tapping the page still closes it |
+
+Totals for the pass: 210 backend tests (58 integration skipped locally without
+`IT_DB_URL`), 51 frontend unit tests across 11 files, `npm run build` clean, and
+thirteen browser tests across five files (smoke, next node, studio, admin, mobile
+menu) passing against the published build.
+
 
 ---
 

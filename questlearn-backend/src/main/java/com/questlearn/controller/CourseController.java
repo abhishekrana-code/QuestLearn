@@ -82,7 +82,7 @@ public class CourseController {
 
     @PostMapping("/courses/{courseId}/roster/import")
     @PreAuthorize("hasAnyRole('INSTRUCTOR','ADMIN')")
-    @Operation(summary = "Enrol a pasted class list, optionally into one class, reporting unknown addresses")
+    @Operation(summary = "Enroll a pasted class list, optionally into one class, reporting unknown addresses")
     public com.questlearn.dto.RosterImportResult importRoster(
             @PathVariable Long courseId,
             @RequestBody com.questlearn.dto.ImportRosterRequest request,

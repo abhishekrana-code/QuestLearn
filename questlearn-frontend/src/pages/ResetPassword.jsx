@@ -140,7 +140,10 @@ export default function ResetPassword() {
               </div>
 
               {error && (
-                <p className="rounded-xl border border-danger/25 bg-danger/[0.07] px-3.5 py-2.5 text-[12px] leading-5 text-danger">
+                <p
+                  role="alert"
+                  className="rounded-xl border border-danger/25 bg-danger/[0.07] px-3.5 py-2.5 text-[12px] leading-5 text-danger"
+                >
                   {error}
                 </p>
               )}

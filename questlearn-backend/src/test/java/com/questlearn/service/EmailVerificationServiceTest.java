@@ -42,6 +42,8 @@ class EmailVerificationServiceTest {
     @BeforeEach
     void setUp() {
         service = new EmailVerificationService(userRepository, tokenRepository, mailService, 48, 3);
+        // Transport succeeds unless a test says otherwise.
+        when(mailService.sendEmailVerification(any(), any(), any())).thenReturn(true);
     }
 
     @Test
@@ -150,6 +152,19 @@ class EmailVerificationServiceTest {
         ApiException error = assertThrows(ApiException.class, () -> service.resend(principal));
         assertEquals(HttpStatus.TOO_MANY_REQUESTS, error.getStatus());
         verify(mailService, times(3)).sendEmailVerification(any(), any(), any());
+    }
+
+    @Test
+    void aFailedSendIsReportedInsteadOfClaimingALinkWasSent() {
+        User user = user(7L, "verify@questlearn.dev");
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(mailService.sendEmailVerification(any(), any(), any())).thenReturn(false);
+
+        ApiException error = assertThrows(ApiException.class,
+                () -> service.resend(new AppUserPrincipal(7L, user.getEmail(), Role.STUDENT)));
+
+        assertEquals(HttpStatus.BAD_GATEWAY, error.getStatus());
+        assertTrue(error.getMessage().contains("mail server"));
     }
 
     private static User user(Long id, String email) {

@@ -1,10 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, BookOpen, Check, Compass, Crown, Layers, Sparkles, Trophy, Zap } from 'lucide-react';
+import {
+  ArrowRight,
+  BookOpen,
+  Check,
+  ChevronDown,
+  Compass,
+  Crown,
+  Layers,
+  Play,
+  Sparkles,
+  Trophy,
+  Zap,
+} from 'lucide-react';
 import EmailVerificationBanner from '../components/common/EmailVerificationBanner.jsx';
 import DeadlinePanel from '../components/deadlines/DeadlinePanel.jsx';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
+import { deadlineStateMeta, formatDeadline } from '../services/deadlines.js';
 import { useAutoRetry } from '../hooks/useAutoRetry.js';
 import StreakCounter from '../components/gamification/StreakCounter.jsx';
 import XPBar from '../components/gamification/XPBar.jsx';
@@ -18,6 +31,7 @@ export default function StudentDashboard() {
   const [courses, setCourses] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [deadlineOverview, setDeadlineOverview] = useState(null);
+  const [nextNode, setNextNode] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -25,15 +39,19 @@ export default function StudentDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [courseResponse, leaderboardResponse, deadlineResponse] = await Promise.all([
-        api.get('/courses'),
-        api.get('/leaderboard'),
-        // Deadlines are supplementary: their failure must not blank the dashboard.
-        api.get('/me/deadlines').catch(() => ({ data: null })),
-      ]);
+      const [courseResponse, leaderboardResponse, deadlineResponse, nextResponse] =
+        await Promise.all([
+          api.get('/courses'),
+          api.get('/leaderboard'),
+          // Deadlines are supplementary: their failure must not blank the dashboard.
+          api.get('/me/deadlines').catch(() => ({ data: null })),
+          // The server picks the node, so a 204 simply means "nothing left".
+          api.get('/me/next').catch(() => ({ data: null })),
+        ]);
       setCourses(courseResponse.data);
       setLeaderboard(leaderboardResponse.data.slice(0, 5));
       setDeadlineOverview(deadlineResponse.data);
+      setNextNode(nextResponse.data?.nodeId ? nextResponse.data : null);
     } catch (loadError) {
       setError(apiError(loadError, 'Could not load your dashboard.'));
     } finally {
@@ -71,10 +89,15 @@ export default function StudentDashboard() {
         <div className="min-w-0">
           <p className="eyebrow">Your learning space</p>
           <h1 className="page-title mt-3">Good to see you, {firstName}.</h1>
-          <p className="page-subtitle mt-2">
-            Level {currentLevel} · {totalXp.toLocaleString()} XP · {clearedNodes}/{totalNodes} nodes
-            cleared
-          </p>
+          {loading ? (
+            // Never print "0 / 0 nodes cleared" while the answer is still in flight.
+            <p className="page-subtitle mt-2 text-fg-subtle">Loading your progress…</p>
+          ) : (
+            <p className="page-subtitle mt-2">
+              Level {currentLevel} · {totalXp.toLocaleString()} XP · {clearedNodes}/{totalNodes}{' '}
+              nodes cleared
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -101,7 +124,7 @@ export default function StudentDashboard() {
             <Zap size={20} />
           </span>
           <div className="min-w-0">
-            <p className="stat-value">{clearedNodes}</p>
+            <p className="stat-value">{loading ? '—' : clearedNodes}</p>
             <p className="text-[10px] font-semibold uppercase leading-tight tracking-[0.1em] text-fg-muted">
               Nodes cleared
             </p>
@@ -130,6 +153,50 @@ export default function StudentDashboard() {
               View all courses
             </Link>
           </div>
+
+          {!loading && nextNode && (
+            <Link
+              to={`/courses/${nextNode.courseId}?node=${nextNode.nodeId}`}
+              className="panel card-hover mb-3 flex items-center gap-3.5 border-gold/30 bg-brand-tint/60 p-4 sm:p-5"
+            >
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-gold/30 bg-gold/[0.14] text-gold-text">
+                <Play size={17} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-gold-text">
+                  Pick up here
+                </p>
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {nextNode.nodeTitle}
+                </p>
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-fg-muted">
+                  <span className="truncate">{nextNode.courseTitle}</span>
+                  <span aria-hidden="true" className="text-fg-subtle">
+                    ·
+                  </span>
+                  <span className="shrink-0 tabular-nums">{nextNode.xpReward} XP</span>
+                  {nextNode.dueAt &&
+                    (() => {
+                      const meta = deadlineStateMeta(nextNode.deadlineState);
+                      return (
+                        <span
+                          className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                            meta?.chip ?? 'border-line bg-muted/60 text-fg-muted'
+                          }`}
+                        >
+                          {meta?.label ? `${meta.label} · ` : ''}
+                          {formatDeadline(nextNode.dueAt)}
+                        </span>
+                      );
+                    })()}
+                </p>
+              </div>
+              <span className="hidden shrink-0 items-center gap-1 text-[11px] font-semibold text-gold-text sm:inline-flex">
+                Open node
+                <ArrowRight size={12} />
+              </span>
+            </Link>
+          )}
 
           {loading ? (
             <div className="space-y-3">
@@ -228,11 +295,16 @@ export default function StudentDashboard() {
               })}
             </div>
           )}
-          <div className="panel mt-6 p-5">
-            <h2 className="flex items-center gap-2 text-[14px] font-semibold text-foreground">
+          <details className="panel group mt-6 p-5">
+            <summary className="flex cursor-pointer list-none items-center gap-2 text-[13px] font-semibold text-foreground [&::-webkit-details-marker]:hidden">
               <Layers size={15} className="text-rune-text" />
               How XP works
-            </h2>
+              <ChevronDown
+                size={14}
+                className="ml-auto text-fg-subtle transition-transform duration-200 group-open:rotate-180"
+                aria-hidden="true"
+              />
+            </summary>
             <ul className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
               {[
                 'Every node shows its XP reward before you open it.',
@@ -249,7 +321,7 @@ export default function StudentDashboard() {
                 </li>
               ))}
             </ul>
-          </div>
+          </details>
         </section>
 
         <aside className="space-y-4">
@@ -269,7 +341,13 @@ export default function StudentDashboard() {
               </Link>
             </div>
 
-            {leaderboard.length === 0 ? (
+            {loading ? (
+              <div className="space-y-1.5" aria-hidden="true">
+                {[0, 1, 2].map((key) => (
+                  <div key={key} className="h-9 animate-pulse rounded-xl bg-muted/50" />
+                ))}
+              </div>
+            ) : leaderboard.length === 0 ? (
               <p className="text-[12px] text-fg-subtle">No ranked students yet.</p>
             ) : (
               <ol className="space-y-1.5">

@@ -62,9 +62,14 @@ public class EmailVerificationService {
     /**
      * Creates a fresh link and mails it. Used both by sign-up and by an explicit
      * resend; the caller decides whether the per-account throttle applies.
+     *
+     * @return whether the mail transport accepted the message. The token row is
+     *         written either way, but a caller inside a transaction can throw on
+     *         {@code false} and let the whole change roll back, which keeps the
+     *         previous link working when delivery failed.
      */
     @Transactional
-    public void issue(User user) {
+    public boolean issue(User user) {
         Instant now = Instant.now();
         // A new link supersedes older ones, so a forwarded email stops working.
         tokenRepository.invalidateAllForUser(user.getId(), now);
@@ -77,7 +82,7 @@ public class EmailVerificationService {
                 .expiresAt(now.plus(tokenTtl))
                 .build());
 
-        mailService.sendEmailVerification(user, rawToken, tokenTtl);
+        return mailService.sendEmailVerification(user, rawToken, tokenTtl);
     }
 
     /**
@@ -96,7 +101,13 @@ public class EmailVerificationService {
             throw ApiException.tooManyRequests(
                     "Too many confirmation emails for this account. Try again in an hour.");
         }
-        issue(user);
+        // issue() joins this transaction, so throwing rolls back the new token and
+        // the invalidation of the old one. A failed send therefore leaves the
+        // learner with whatever working link they already had.
+        if (!issue(user)) {
+            throw ApiException.badGateway(
+                    "The mail server could not be reached, so the confirmation link was not sent. Try again in a moment.");
+        }
     }
 
     /**

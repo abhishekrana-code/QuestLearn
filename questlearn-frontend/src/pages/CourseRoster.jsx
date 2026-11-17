@@ -280,7 +280,7 @@ export default function CourseRoster() {
           to={`/studio/courses/${courseId}/analytics`}
           className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-fg-muted hover:text-foreground"
         >
-          <BarChart3 size={13} /> Where the course loses people
+          <BarChart3 size={13} /> Where learners stop
         </Link>
       </div>
 
@@ -443,12 +443,20 @@ export default function CourseRoster() {
                   <Upload size={13} /> Choose a CSV
                 </button>
                 <button type="submit" disabled={importBusy} className="btn-primary text-[11px]">
-                  {importBusy ? 'Importing…' : 'Import and enrol'}
+                  {importBusy ? 'Importing…' : 'Import and enroll'}
                 </button>
-                {importError && <span className="text-[11px] text-danger">{importError}</span>}
+                {importError && (
+                  <span role="alert" className="text-[11px] text-danger">
+                    {importError}
+                  </span>
+                )}
               </div>
               {importResult && (
-                <div className="mt-3 rounded-lg border border-line bg-muted/40 px-3 py-2 text-[11px]">
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="mt-3 rounded-lg border border-line bg-muted/40 px-3 py-2 text-[11px]"
+                >
                   <p className="font-semibold text-foreground">
                     {importResult.imported.length} enrolled · {importResult.alreadyMember.length} already
                     in · {importResult.unknown.length} unknown

@@ -240,7 +240,9 @@ export default function Register() {
           <div>
             <label className="label" htmlFor="inviteCode">
               {form.role === 'INSTRUCTOR' ? 'Instructor invite code' : 'Class code'}
-              <span className="ml-1 font-normal text-fg-subtle">(optional)</span>
+              {form.role !== 'INSTRUCTOR' && (
+                <span className="ml-1 font-normal text-fg-subtle">(optional)</span>
+              )}
             </label>
             <input
               id="inviteCode"
@@ -255,13 +257,17 @@ export default function Register() {
             />
             <p className="mt-1.5 text-[10px] leading-4 text-fg-subtle">
               {form.role === 'INSTRUCTOR'
-                ? 'Instructor sign-up is disabled unless the deployment sets an invite code.'
+                ? 'Required to join as an instructor. Ask an administrator for the code; if this deployment has none, instructor sign-up is closed.'
                 : 'Leave blank on a local install. A class deployment asks for the code your teacher gave you.'}
             </p>
           </div>
 
           {error && (
-            <p className="rounded-xl border border-danger/25 bg-danger/[0.07] px-3.5 py-2.5 text-[12px] leading-5 text-danger">
+            <p
+              id="register-error"
+              role="alert"
+              className="rounded-xl border border-danger/25 bg-danger/[0.07] px-3.5 py-2.5 text-[12px] leading-5 text-danger"
+            >
               {error}
             </p>
           )}

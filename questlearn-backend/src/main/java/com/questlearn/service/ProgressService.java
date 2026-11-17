@@ -6,6 +6,7 @@ import com.questlearn.dto.AttemptDto;
 import com.questlearn.dto.CourseLeaderboardEntry;
 import com.questlearn.dto.LeaderboardEntry;
 import com.questlearn.dto.ModuleDetailDto;
+import com.questlearn.dto.NextNodeDto;
 import com.questlearn.dto.OverallLeaderboardEntry;
 import com.questlearn.dto.SkillNodeDto;
 import com.questlearn.dto.SkillTreeDto;
@@ -14,6 +15,8 @@ import com.questlearn.dto.XpAwardResponse;
 import com.questlearn.exception.ApiException;
 import com.questlearn.model.AttemptSource;
 import com.questlearn.model.Course;
+import com.questlearn.model.DeadlineState;
+import com.questlearn.model.Enrollment;
 import com.questlearn.model.Module;
 import com.questlearn.model.ModuleAttempt;
 import com.questlearn.model.ProgressStatus;
@@ -22,6 +25,7 @@ import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.model.UserModuleProgress;
 import com.questlearn.repository.CourseRepository;
+import com.questlearn.repository.EnrollmentRepository;
 import com.questlearn.repository.ModuleAttemptRepository;
 import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
@@ -47,6 +51,7 @@ public class ProgressService {
     private final ModuleAttemptRepository attemptRepository;
     private final UserModuleProgressRepository progressRepository;
     private final UserRepository userRepository;
+    private final EnrollmentRepository enrollmentRepository;
     private final QuizService quizService;
     private final GamificationService gamificationService;
     private final CourseService courseService;
@@ -137,6 +142,96 @@ public class ProgressService {
                 user.getCurrentLevel(),
                 nodes
         );
+    }
+
+    /**
+     * The one node worth opening next, for the "continue" card on the dashboard.
+     *
+     * <p>Only unlocked, not-yet-cleared work qualifies, so the card can never send
+     * a learner into a locked branch or back into something already finished. When
+     * several qualify, an overdue node comes first, then one due soon, then the
+     * earliest date; after that the most recently joined course and the tree's own
+     * order decide. Returns null when there is nothing left, which the endpoint
+     * answers with 204 rather than an empty object.</p>
+     */
+    @Transactional(readOnly = true)
+    public NextNodeDto nextNode(AppUserPrincipal principal) {
+        if (principal.role() != Role.STUDENT) {
+            return null;
+        }
+
+        List<Enrollment> enrollments =
+                enrollmentRepository.findByUserIdOrderByEnrolledAtDesc(principal.id());
+        if (enrollments.isEmpty()) {
+            return null;
+        }
+
+        // Enrolment order is the tie-breaker: the course joined most recently wins.
+        Map<Long, Integer> courseOrder = new HashMap<>();
+        for (Enrollment enrollment : enrollments) {
+            courseOrder.putIfAbsent(enrollment.getCourseId(), courseOrder.size());
+        }
+
+        List<Module> modules = moduleRepository.findByCourseIdIn(courseOrder.keySet()).stream()
+                .filter(module -> module.getCourse().isPublished())
+                .filter(module -> module.getCourse().getArchivedAt() == null)
+                .toList();
+        if (modules.isEmpty()) {
+            return null;
+        }
+
+        Map<Long, UserModuleProgress> progress = new HashMap<>();
+        progressRepository.findByUserId(principal.id())
+                .forEach(row -> progress.put(row.getModule().getId(), row));
+        Set<Long> cleared = new java.util.HashSet<>();
+        progress.values().stream()
+                .filter(row -> row.getStatus() == ProgressStatus.COMPLETED)
+                .forEach(row -> cleared.add(row.getModule().getId()));
+
+        Map<Long, Instant> overrides =
+                effectiveDeadlines.overridesFor(principal.id(), courseOrder.keySet());
+
+        Comparator<Module> nextFirst = Comparator
+                .comparingInt((Module module) -> urgency(module, overrides))
+                .thenComparing(module -> datedOrLast(module, overrides))
+                .thenComparingInt(module -> courseOrder.getOrDefault(module.getCourse().getId(), Integer.MAX_VALUE))
+                .thenComparingInt(Module::getOrderIndex)
+                .thenComparing(Module::getTitle, String.CASE_INSENSITIVE_ORDER);
+
+        Module next = modules.stream()
+                .filter(module -> !cleared.contains(module.getId()))
+                .filter(module -> module.getParentModule() == null
+                        || cleared.contains(module.getParentModule().getId()))
+                .min(nextFirst)
+                .orElse(null);
+        if (next == null) {
+            return null;
+        }
+
+        Instant dueAt = effectiveDeadlines.dueAt(next, overrides);
+        return new NextNodeDto(
+                next.getCourse().getId(),
+                next.getCourse().getTitle(),
+                next.getId(),
+                next.getTitle(),
+                next.getXpReward(),
+                dueAt,
+                dueAt == null ? null : deadlineStateResolver.resolve(dueAt, null));
+    }
+
+    /** Overdue first, then due soon, then everything with no date or a later one. */
+    private int urgency(Module module, Map<Long, Instant> overrides) {
+        Instant dueAt = effectiveDeadlines.dueAt(module, overrides);
+        if (dueAt == null) return 2;
+        DeadlineState state = deadlineStateResolver.resolve(dueAt, null);
+        if (state == DeadlineState.OVERDUE) return 0;
+        return state == DeadlineState.DUE_SOON ? 1 : 2;
+    }
+
+    /** Undated nodes sort last instead of throwing on a null key. */
+    private Instant datedOrLast(Module module, Map<Long, Instant> overrides) {
+        Instant dueAt = effectiveDeadlines.dueAt(module, overrides);
+        return dueAt == null ? Instant.MAX : dueAt;
     }
 
     @Transactional

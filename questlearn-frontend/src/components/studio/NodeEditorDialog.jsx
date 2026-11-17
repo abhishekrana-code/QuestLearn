@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertTriangle, CalendarClock, Loader2, Save, X } from 'lucide-react';
 import api, { apiError } from '../../services/api.js';
 import { fromDateTimeInput, toDateTimeInput } from '../../services/deadlines.js';
 import { EMPTY_LESSON, lessonPayload } from '../../services/lesson.js';
+import { useDialogFocus } from '../../hooks/useDialogFocus.js';
 import LessonEditor from './LessonEditor.jsx';
 
 /**
@@ -19,6 +20,9 @@ export default function NodeEditorDialog({ node, courseId, onClose, onSaved }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const dialogRef = useRef(null);
+
+  useDialogFocus(dialogRef, { onEscape: () => !saving && onClose() });
 
   useEffect(() => {
     let cancelled = false;
@@ -46,19 +50,15 @@ export default function NodeEditorDialog({ node, courseId, onClose, onSaved }) {
     };
   }, [node.id]);
 
-  // Escape closes, and the page behind the dialog must not scroll.
+  // Escape and the focus trap live in useDialogFocus; this only stops the page
+  // behind the dialog from scrolling while it is open.
   useEffect(() => {
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      window.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [onClose]);
+  }, []);
 
   const save = async (event) => {
     event.preventDefault();
@@ -103,9 +103,11 @@ export default function NodeEditorDialog({ node, courseId, onClose, onSaved }) {
         className="absolute inset-0 cursor-default scrim"
       />
       <motion.div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="node-editor-title"
+        tabIndex={-1}
         initial={{ opacity: 0, y: 26, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
@@ -154,6 +156,7 @@ export default function NodeEditorDialog({ node, courseId, onClose, onSaved }) {
                     id="edit-node-title"
                     required
                     maxLength={160}
+                    autoFocus
                     className="field"
                     value={form.title}
                     onChange={(event) => set({ title: event.target.value })}

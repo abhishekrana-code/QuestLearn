@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Eye, EyeOff, Flame, Route, Sparkles, Trophy } from 'lucide-react';
@@ -102,6 +102,7 @@ export default function Login() {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const emailRef = useRef(null);
 
   const signIn = async (email, password) => {
     setBusy(true);
@@ -111,6 +112,9 @@ export default function Login() {
       navigate('/', { replace: true });
     } catch (loginError) {
       setError(apiError(loginError, 'Could not sign you in.'));
+      // The message is announced by the alert region; focus also returns to the
+      // first field so a keyboard user is not left at the end of the page.
+      emailRef.current?.focus();
     } finally {
       setBusy(false);
     }
@@ -144,6 +148,7 @@ export default function Login() {
             </label>
             <input
               id="email"
+              ref={emailRef}
               type="email"
               autoComplete="email"
               autoCapitalize="none"
@@ -155,6 +160,8 @@ export default function Login() {
               placeholder="you@questlearn.dev"
               value={form.email}
               onChange={(event) => setForm({ ...form, email: event.target.value })}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? 'login-error' : undefined}
             />
           </div>
 
@@ -175,6 +182,8 @@ export default function Login() {
                 placeholder="Enter your password"
                 value={form.password}
                 onChange={(event) => setForm({ ...form, password: event.target.value })}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? 'login-error' : undefined}
               />
               <button
                 type="button"
@@ -197,7 +206,11 @@ export default function Login() {
           </div>
 
           {error && (
-            <p className="rounded-xl border border-danger/25 bg-danger/[0.07] px-3.5 py-2.5 text-[12px] leading-5 text-danger">
+            <p
+              id="login-error"
+              role="alert"
+              className="rounded-xl border border-danger/25 bg-danger/[0.07] px-3.5 py-2.5 text-[12px] leading-5 text-danger"
+            >
               {error}
             </p>
           )}

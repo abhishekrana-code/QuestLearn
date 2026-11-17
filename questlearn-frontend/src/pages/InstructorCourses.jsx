@@ -29,11 +29,15 @@ function IconAction({ label, onClick, disabled = false, busy = false, danger = f
       type="button"
       title={label}
       aria-label={label}
+      // Deliberately not the `disabled` attribute: a disabled button cannot be
+      // focused, so keyboard and touch users would never learn why it is grey.
+      // `aria-disabled` keeps that meaning while still letting the click explain.
+      aria-disabled={disabled || undefined}
       onClick={onClick}
-      disabled={disabled || busy}
+      disabled={busy}
       className={`grid h-8 w-8 place-items-center rounded-lg border border-line bg-muted/40 text-fg-muted transition-colors duration-150 hover:border-line-strong hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 ${
         danger ? 'hover:border-danger/40 hover:text-danger' : ''
-      }`}
+      } ${disabled ? 'cursor-not-allowed opacity-50 hover:border-line hover:text-fg-muted' : ''}`}
     >
       {busy ? <Loader2 size={14} className="animate-spin" /> : children}
     </button>
@@ -201,6 +205,8 @@ export default function InstructorCourses() {
 
       {notice && (
         <div
+          role={notice.type === 'error' ? 'alert' : 'status'}
+          aria-live={notice.type === 'error' ? 'assertive' : 'polite'}
           className={`mb-4 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${
             notice.type === 'error'
               ? 'border-danger/30 bg-danger/[0.07] text-danger'
@@ -388,10 +394,17 @@ export default function InstructorCourses() {
                         {archived ? <RotateCcw size={14} /> : <Archive size={14} />}
                       </IconAction>
                       <IconAction
-                        label={course.published ? 'Unpublish it first' : 'Delete'}
+                        label={course.published ? 'Delete course (unpublish it first)' : 'Delete course'}
                         danger
                         disabled={course.published}
                         onClick={() => {
+                          if (course.published) {
+                            setNotice({
+                              type: 'error',
+                              text: `"${course.title}" is published, so students may be working in it. Unpublish it first, then delete.`,
+                            });
+                            return;
+                          }
                           setDeleteError(null);
                           setDeleting(course);
                         }}

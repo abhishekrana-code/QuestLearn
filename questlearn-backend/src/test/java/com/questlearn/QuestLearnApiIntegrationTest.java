@@ -112,6 +112,9 @@ class QuestLearnApiIntegrationTest {
                 + "module_attempts, user_module_progress, quizzes, modules, "
                 + "courses, users RESTART IDENTITY CASCADE");
 
+        // Mail is mocked; by default its transport accepts every message.
+        when(mailService.sendEmailVerification(any(User.class), any(), any())).thenReturn(true);
+
         instructor = users.save(User.builder()
                 .name("Teacher")
                 .email("teacher@it.test")
@@ -312,6 +315,12 @@ class QuestLearnApiIntegrationTest {
         return json.readTree(result.getResponse().getContentAsString());
     }
 
+    private org.springframework.test.web.servlet.MvcResult nextNode(String token) throws Exception {
+        return mvc.perform(get("/api/v1/me/next")
+                        .header("Authorization", "Bearer " + token))
+                .andReturn();
+    }
+
     private JsonNode node(JsonNode tree, String title) {
         for (JsonNode node : tree.path("nodes")) {
             if (title.equals(node.path("title").asText())) {
@@ -405,8 +414,26 @@ class QuestLearnApiIntegrationTest {
     }
 
     @Test
-    void wrongAnswersAwardNothing() throws Exception {
-        skillTree();
+    void theNextNodeWalksThePathAndThenSaysThereIsNothingLeft() throws Exception {
+        skillTree(); // first read enrols the learner
+
+        MvcResult first = nextNode(studentToken);
+        assertThat(first.getResponse().getStatus()).isEqualTo(200);
+        JsonNode body = json.readTree(first.getResponse().getContentAsString());
+        assertThat(body.path("nodeTitle").asText()).isEqualTo("Root node");
+        assertThat(body.path("nodeId").asLong()).isEqualTo(root.getId());
+        assertThat(body.path("courseId").asLong()).isEqualTo(course.getId());
+
+        complete(studentToken, root.getId(), 1);
+        JsonNode second = json.readTree(nextNode(studentToken).getResponse().getContentAsString());
+        assertThat(second.path("nodeTitle").asText()).isEqualTo("Child node");
+
+        complete(studentToken, child.getId(), 1);
+        assertThat(nextNode(studentToken).getResponse().getStatus()).isEqualTo(204);
+    }
+
+    @Test
+    void wrongAnswersAwardNothing() throws Exception {        skillTree();
 
         MvcResult result = complete(studentToken, root.getId(), 0);
 
@@ -1408,6 +1435,23 @@ class QuestLearnApiIntegrationTest {
         assertThat(second).isNotEqualTo(first);
         assertThat(verifyEmail(first).getResponse().getStatus()).isEqualTo(400);
         assertThat(verifyEmail(second).getResponse().getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void aFailedConfirmationSendAnswers502AndKeepsTheOlderLinkWorking() throws Exception {
+        String email = "verify.mailfail@it.test";
+        String first = registerAndCaptureVerificationToken(email);
+        String session = login(email);
+        when(mailService.sendEmailVerification(any(User.class), any(), any())).thenReturn(false);
+
+        mvc.perform(post("/api/v1/auth/verify-email/resend")
+                        .header("Authorization", "Bearer " + session))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("mail server")));
+
+        // The failed resend rolled back, so the link from sign-up still works.
+        assertThat(verifyEmail(first).getResponse().getStatus()).isEqualTo(200);
     }
 
     @Test

@@ -35,12 +35,14 @@ export default function SkillTreeCanvas({ nodes, onSelect, onLockedClick, active
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-line bg-card">
-      <div
-        className="relative grid-floor"
-        style={{ width, height, minWidth: '100%' }}
-      >
+      {/*
+        The box keeps the exact pixel size the edges are drawn in. Letting it
+        stretch to the container (min-width: 100%) moved the nodes but not the
+        SVG coordinates, so every connector pointed at empty space.
+      */}
+      <div className="relative mx-auto grid-floor" style={{ width, height }}>
         <svg
-          className="pointer-events-none absolute inset-0"
+          className="pointer-events-none absolute left-0 top-0"
           width={width}
           height={height}
           aria-hidden="true"

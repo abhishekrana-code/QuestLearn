@@ -43,6 +43,7 @@ export default function Navbar() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const accountRef = useRef(null);
   const mobileRef = useRef(null);
+  const mobileButtonRef = useRef(null);
 
   const links = LINKS_BY_ROLE[user.role] ?? [];
   const home = HOME_BY_ROLE[user.role] ?? HOME_BY_ROLE.STUDENT;
@@ -72,7 +73,15 @@ export default function Navbar() {
       if (accountRef.current && !accountRef.current.contains(event.target)) {
         setAccountOpen(false);
       }
-      if (mobileRef.current && !mobileRef.current.contains(event.target)) {
+      // The toggle sits outside the panel, so without this check pointerdown
+      // closed the menu and the following click toggled it straight back open.
+      const onMobileToggle =
+        mobileButtonRef.current && mobileButtonRef.current.contains(event.target);
+      if (
+        mobileRef.current &&
+        !mobileRef.current.contains(event.target) &&
+        !onMobileToggle
+      ) {
         setMobileOpen(false);
       }
     };
@@ -211,6 +220,7 @@ export default function Navbar() {
           </div>
 
           <button
+            ref={mobileButtonRef}
             type="button"
             onClick={() => {
               setMobileOpen((open) => !open);

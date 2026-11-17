@@ -1,6 +1,7 @@
 package com.questlearn.service;
 
 import com.questlearn.dto.AppUserPrincipal;
+import com.questlearn.dto.DemoAccountSummary;
 import com.questlearn.exception.ApiException;
 import com.questlearn.model.Course;
 import com.questlearn.model.DemoCredential;
@@ -151,6 +152,12 @@ class AdminServiceTest {
 
     @Test
     void reportsWhetherThePasswordWasRotatedHereOrCameFromStartup() {
+        // The status is built from the rows, so a real deployment lists the seeded
+        // accounts rather than a constant that might not match the database.
+        long[] id = {1};
+        DemoAccounts.EMAILS.forEach(email -> when(userRepository.findByEmailIgnoreCase(email))
+                .thenReturn(Optional.of(user(id[0]++, email, Role.STUDENT))));
+
         when(demoCredentialRepository.findById(DemoCredential.SINGLETON_ID)).thenReturn(Optional.empty());
         assertThat(service.demoPasswordStatus().source()).isEqualTo("STARTUP");
 
@@ -165,7 +172,22 @@ class AdminServiceTest {
         var status = service.demoPasswordStatus();
         assertThat(status.source()).isEqualTo("ROTATED");
         assertThat(status.rotatedBy()).isEqualTo("admin@example.com");
-        assertThat(status.accounts()).isEqualTo(5);
+        assertThat(status.accounts()).isEqualTo(DemoAccounts.EMAILS.size());
+        assertThat(status.logins()).extracting(DemoAccountSummary::email)
+                .containsExactlyElementsOf(DemoAccounts.EMAILS);
+    }
+
+    @Test
+    void aDeletedDemoAccountIsNoLongerCountedOrListed() {
+        String kept = DemoAccounts.EMAILS.get(0);
+        when(userRepository.findByEmailIgnoreCase(kept))
+                .thenReturn(Optional.of(user(1L, kept, Role.ADMIN)));
+
+        var status = service.demoPasswordStatus();
+
+        assertThat(status.accounts()).isEqualTo(1);
+        assertThat(status.logins()).hasSize(1);
+        assertThat(status.logins().get(0).email()).isEqualTo(kept);
     }
 
     private User user(Long id, String email, Role role) {

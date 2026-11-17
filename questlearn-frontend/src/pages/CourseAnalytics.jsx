@@ -94,7 +94,7 @@ export default function CourseAnalytics() {
             {data?.courseTitle ?? 'Course analytics'}
           </h1>
           <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-fg-subtle">
-            Where the class arrives and stops. A wide gap between reached and cleared is a
+            Where learners stop. A wide gap between reached and cleared is a
             node worth teaching again, not a student worth chasing.
           </p>
         </div>
