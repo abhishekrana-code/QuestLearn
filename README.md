@@ -91,6 +91,17 @@ DB_PASSWORD=your_password
 
 Environment variables still take precedence over the file when both are set.
 
+The database listens on loopback only. The stock Windows installer sets `listen_addresses = '*'`,
+which accepts connections from the LAN and from every device on the Tailscale network using the
+credentials above, so the server was set to `localhost` once:
+
+```sql
+ALTER SYSTEM SET listen_addresses = 'localhost';   -- then restart the PostgreSQL service
+```
+
+`netstat -ano | findstr :5432` should now show only `127.0.0.1` and `[::1]`. Because the backend
+connects over `localhost` too, nothing in the app notices the difference.
+
 **No PostgreSQL running?** Start the bundled zero-setup H2 profile instead, schema and demo data
 are created automatically in `questlearn-backend/data/`:
 
@@ -260,6 +271,27 @@ Proven by killing
 the backend outright: the watchdog timed the failure, restarted the jar, reported `Backend healthy
 again after 11 seconds`, and the alert arrived by SMTP. A second manual run while the scheduled one was alive
 printed `Another QuestLearn watchdog is already running.` and exited without touching anything.
+
+### Outside monitoring
+
+The watchdog runs on the laptop it watches, so it cannot report a sleeping machine, a stopped
+`vite preview` behind the Funnel, or Tailscale no longer publishing. `.github/workflows/uptime.yml`
+closes that gap from GitHub's runners, every ten minutes:
+
+- it fetches `https://questlearn.taileb48b2.ts.net/` and expects 200, then posts a demo login to
+  `/api/v1/auth/login` and expects a token. The login matters because a page-only check passes while
+  the Funnel serves the static build with a dead backend; the login goes through the proxy, the backend
+  and the database.
+- three attempts twenty seconds apart, so a dropped packet or a laptop waking from sleep does not
+  alert anyone.
+- when it still fails it opens one issue titled `Demo is not answering`, assigned to the repository
+  owner, with the checks to run in order. It will not open a second while one is open, and it closes
+the issue itself on the next successful probe.
+
+Alerts therefore arrive as GitHub notifications, which need no extra account. This is worth knowing
+because the failure it was written for happened: the Funnel was up, the preview server had died, the
+public URL returned 502, and every local check still said healthy. Free scheduled workflows need a
+public repository; on a private one each run spends a billed minute.
 
 ### Backups and restore
 
@@ -459,6 +491,17 @@ expires after 48 hours (`VERIFICATION_TOKEN_HOURS`), and redeeming it claims the
 with a conditional `UPDATE` so it works once. Asking for another link supersedes
 the earlier one. Resends are capped at 3 per account per rolling hour
 (`VERIFICATION_MAX_PER_HOUR`).
+
+A resend is only reported as sent when the mail transport accepted it: a failed
+delivery answers **502** with the reason, and the token change is rolled back so the
+link the learner already has keeps working. A failure that looks transient (the host
+did not resolve, a connection was refused or reset, or an attempt timed out) is
+retried once after half a second, and each SMTP attempt is capped by
+`MAIL_SMTP_TIMEOUT_MS` (10 seconds by default), so a brief network hiccup does not
+lose the link. Sign-up deliberately ignores the same failure, so a mail outage cannot
+fail account creation; the dashboard reminder then offers a resend. Recovery keeps
+its deliberately vague 202 for every request so it cannot be used to probe which
+addresses exist.
 
 Verification is **soft on purpose**: an unconfirmed account keeps every permission
 and all of its progress. It only sees a "Confirm your email address" reminder on the

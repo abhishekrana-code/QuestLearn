@@ -1,0 +1,102 @@
+name: Demo uptime
+
+# Checks the public demo from GitHub's runners, which is the only vantage point
+# that is not the laptop being watched. The watchdog on the laptop can only see
+# what the laptop can see: it polls localhost:8091, so it stays silent when the
+# machine sleeps, when Tailscale stops publishing, or when the preview server
+# behind the Funnel dies while the backend is healthy. That last one happened on
+# 2026-11-16: the Funnel was up, nothing answered on 5180, and the public URL
+# returned 502 with every local check still green.
+#
+# The login assertion is deliberate. A page-only check passes while the Funnel
+# serves the static build with a dead backend, so the probe also logs in through
+# the proxy, which exercises the frontend server, the backend and the database.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: demo-uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEMO_HOST: questlearn.taileb48b2.ts.net
+    steps:
+      - name: Page and a real login answer through the Funnel
+        run: |
+          set -uo pipefail
+
+          attempt() {
+            local page login
+            page=$(curl -s -o page.html -w '%{http_code}' --max-time 25 "https://$DEMO_HOST/" || echo 000)
+            login=$(curl -s -o login.json -w '%{http_code}' --max-time 25 \
+              -H 'Content-Type: application/json' \
+              -d '{"email":"student@questlearn.dev","password":"QuestLearn2026"}' \
+              "https://$DEMO_HOST/api/v1/auth/login" || echo 000)
+            echo "page=$page login=$login"
+            [ "$page" = 200 ] && [ "$login" = 200 ] && grep -q '"token"' login.json
+          }
+
+          # Three attempts twenty seconds apart: a single dropped packet or a
+          # laptop waking from sleep should not page anyone.
+          for i in 1 2 3; do
+            if attempt; then
+              echo "The demo answered on attempt $i."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::The demo did not answer after three attempts."
+          exit 1
+
+      - name: Close an earlier outage issue when it recovers
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          ids=$(gh issue list --state open --search '"Demo is not answering" in:title' \
+            --json number --jq '.[].number' 2>/dev/null || true)
+          for id in $ids; do
+            gh issue close "$id" --comment "The demo answered again from GitHub's runners; closing this automatically." || true
+          done
+
+      - name: Open an outage issue when it stays down
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          existing=$(gh issue list --state open --search '"Demo is not answering" in:title' \
+            --json number --jq 'length' 2>/dev/null || echo 0)
+          if [ "${existing:-0}" != "0" ]; then
+            echo "An outage issue is already open; not filing another."
+            exit 0
+          fi
+          gh issue create \
+            --title "Demo is not answering" \
+            --assignee "${{ github.repository_owner }}" \
+            --body "$(printf '%s\n' \
+              "The scheduled probe could not get a page and a login from https://$DEMO_HOST." \
+              "" \
+              "It tried three times, twenty seconds apart. A dead laptop, a sleeping laptop, a stopped \`vite preview\` on 5180, or Tailscale no longer publishing the Funnel all look like this." \
+              "" \
+              "Check, in this order:" \
+              "1. Is the machine awake and online?" \
+              "2. \`tailscale funnel status\` still shows / proxying to 127.0.0.1:5180?" \
+              "3. \`curl -s -o /dev/null -w '%{http_code}' http://localhost:5180/\` answers 200?" \
+              "4. \`logs\watchdog.log\` and \`logs\backend.start.log\` for a restart in progress." \
+              "" \
+              "Run \`scripts\questlearn-up.ps1\` to restore anything that is missing; it skips what already answers." \
+              "" \
+              "This issue closes itself on the next successful probe.")"
