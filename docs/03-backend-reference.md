@@ -200,7 +200,7 @@ needed, and pick a status code. All paths are under `/api/v1` (declared per clas
 
 | Method | Path | Behaviour |
 | --- | --- | --- |
-| `skillTree` | `GET /courses/{courseId}/skill-tree` | Tree plus progress; creates missing rows and enrols on first open. |
+| `skillTree` | `GET /courses/{courseId}/skill-tree` | Tree plus progress; creates missing progress rows on first open. Joining is separate (`POST /courses/{courseId}/enroll`). |
 | `moduleDetail` | `GET /modules/{moduleId}` | Lesson, sanitized quiz, viva config, deadline, history. |
 | `nextNode` | `GET /me/next` | The one node to continue with; `204` when none. |
 | `completeModule` | `POST /modules/{moduleId}/complete` | Grades answers, awards XP once, unlocks children. Students/admins. |
@@ -342,7 +342,7 @@ needed, and pick a status code. All paths are under `/api/v1` (declared per clas
 | Function | What it does |
 | --- | --- |
 | `getSkillTree(courseId, principal)` | View check. For non-instructors, creates a progress row per missing node (roots `UNLOCKED`, rest `LOCKED`), then returns the tree with status, best score, attempts, quiz type, video, effective due date and deadline state. The first open is the enrollment side effect. |
-| `nextNode(principal)` | Students only. Among enrolled, published, non-archived courses, picks the first uncleared node whose parent is cleared. Ordering: overdue → due soon → earliest date → newest enrollment → tree order → title. Returns `null` (204) when nothing qualifies. |
+| `nextNode(principal)` | Students only. Among joined (enrolled), published, non-archived courses, picks the first uncleared node whose parent is cleared. Ordering: overdue → due soon → earliest date → newest enrollment → tree order → title. Returns `null` (204) when nothing qualifies. |
 | `urgency(module, overrides)` | 0 overdue, 1 due soon, 2 otherwise/no date. |
 | `datedOrLast(module, overrides)` | Due date or `Instant.MAX`, so undated nodes sort last. |
 | `getModuleDetail(moduleId, principal)` | Lesson content, sanitized quiz, viva config, deadline state and (for learners) the last 10 attempts. |

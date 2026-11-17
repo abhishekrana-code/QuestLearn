@@ -62,8 +62,10 @@ public class ProgressService {
 
     /**
      * Returns the course as a skill tree merged with the learner's progress.
-     * Opening the tree for the first time enrols the learner: every node gets a
-     * progress row, root nodes UNLOCKED and everything else LOCKED.
+     * Opening the tree for the first time creates the learner's progress rows,
+     * root nodes UNLOCKED and everything else LOCKED. It does not enrol: joining
+     * is a separate action (POST /courses/{id}/enroll), which is what a learner's
+     * course list and nextNode read.
      */
     @Transactional
     public SkillTreeDto getSkillTree(Long courseId, AppUserPrincipal principal) {

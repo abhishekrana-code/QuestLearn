@@ -415,7 +415,10 @@ class QuestLearnApiIntegrationTest {
 
     @Test
     void theNextNodeWalksThePathAndThenSaysThereIsNothingLeft() throws Exception {
-        skillTree(); // first read enrols the learner
+        // /me/next looks at joined courses, so joining is a separate step: opening
+        // the tree creates progress rows, it does not enrol anyone.
+        enrollInCourse();
+        skillTree();
 
         MvcResult first = nextNode(studentToken);
         assertThat(first.getResponse().getStatus()).isEqualTo(200);
