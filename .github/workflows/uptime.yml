@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      # TEMPORARY DRILL, reverted in the next commit: a host that answers the
+      # TEMPORARY DRILL, reverted in the next commit: a host that serves the
       # page but cannot log in, to prove the outage path without taking the demo
       # down.
       DEMO_HOST: example.com
