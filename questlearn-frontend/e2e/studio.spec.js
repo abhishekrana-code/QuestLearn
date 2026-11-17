@@ -1,16 +1,20 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { expect, test } from '@playwright/test';
+import {
+  INSTRUCTOR,
+  addNode,
+  clearNode,
+  createCourse,
+  deleteUserByEmail,
+  enroll,
+  instructorToken,
+  registerLearner,
+  removeCourse,
+  skillTree,
+  uniqueName,
+} from './fixtures.js';
+import { demoPassword } from './fixtures.js';
 
-function demoPassword() {
-  if (process.env.DEMO_PASSWORD) return process.env.DEMO_PASSWORD;
-  const envPath = path.resolve(process.cwd(), '..', '.env');
-  const match = fs.readFileSync(envPath, 'utf8').match(/^DEMO_PASSWORD=(.*)$/m);
-  if (!match) throw new Error('DEMO_PASSWORD missing');
-  return match[1].trim().replace(/^"|"$/g, '');
-}
-
-async function signIn(page, email) {
+async function signIn(page, email = INSTRUCTOR.email) {
   await page.goto('/login');
   await page.locator('#email').fill(email);
   await page.locator('#password').fill(demoPassword());
@@ -18,83 +22,110 @@ async function signIn(page, email) {
   await expect(page).not.toHaveURL(/\/login/);
 }
 
-test('a disabled delete explains itself to keyboard users', async ({ page }) => {
-  await signIn(page, 'instructor@questlearn.dev');
-  await page.goto('/studio/courses');
+// Every test below builds the course it reads and deletes it again, so the studio
+// pages can be checked on a fresh database and on a demo someone has been using.
 
-  const remove = page.getByRole('button', { name: 'Delete course (unpublish it first)' }).first();
-  await expect(remove).toBeVisible();
-  await expect(remove).toHaveAttribute('aria-disabled', 'true');
-  await remove.focus();
-  await expect(remove).toBeFocused();
-  // Playwright refuses to click an element it reads as disabled, which is the
-  // point of aria-disabled; the browser itself still delivers the click.
-  await remove.evaluate((node) => node.click());
-  await expect(page.getByText(/Unpublish it first, then delete/)).toBeVisible();
+test('a disabled delete explains itself to keyboard users', async ({ page, request }) => {
+  const token = await instructorToken(request);
+  const title = uniqueName('delete');
+  const courseId = await createCourse(request, token, title);
 
-  await page.screenshot({ path: 'test-results/course-delete-reason.png', fullPage: false });
+  try {
+    await signIn(page);
+    await page.goto('/studio/courses');
+
+    const card = page.locator('article').filter({ hasText: title });
+    const remove = card.getByRole('button', { name: 'Delete course (unpublish it first)' });
+    await expect(remove).toBeVisible();
+    await expect(remove).toHaveAttribute('aria-disabled', 'true');
+    await remove.focus();
+    await expect(remove).toBeFocused();
+    // Playwright refuses to click an element it reads as disabled, which is the
+    // point of aria-disabled; the browser itself still delivers the click.
+    await remove.evaluate((node) => node.click());
+    await expect(page.getByText(/Unpublish it first, then delete/)).toBeVisible();
+
+    await page.screenshot({ path: 'test-results/course-delete-reason.png', fullPage: false });
+  } finally {
+    await removeCourse(request, token, courseId);
+  }
 });
 
-test('the node form places new nodes without pixel maths', async ({ page }) => {
-  await signIn(page, 'instructor@questlearn.dev');
-  await page.goto('/studio?course=1&step=nodes');
+test('the node form places new nodes without pixel maths', async ({ page, request }) => {
+  const token = await instructorToken(request);
+  const courseId = await createCourse(request, token, uniqueName('nodes'), { published: false });
 
-  await expect(page.locator('#module-x')).toHaveValue('90');
-  await expect(page.locator('#module-y')).toHaveValue('90');
-  await expect(page.getByText(/placed on the map automatically/i)).toBeVisible();
-  await expect(page.getByLabel('Horizontal position')).toBeVisible();
+  try {
+    await signIn(page);
+    await page.goto(`/studio?course=${courseId}&step=nodes`);
+
+    await expect(page.locator('#module-x')).toHaveValue('90');
+    await expect(page.locator('#module-y')).toHaveValue('90');
+    await expect(page.getByText(/placed on the map automatically/i)).toBeVisible();
+    await expect(page.getByLabel('Horizontal position')).toBeVisible();
+  } finally {
+    await removeCourse(request, token, courseId);
+  }
 });
 
 test('resetting a learner uses the app dialog, not window.confirm', async ({ page, request }) => {
-  const token = (
-    await (
-      await request.post('/api/v1/auth/login', {
-        data: { email: 'instructor@questlearn.dev', password: demoPassword() },
-      })
-    ).json()
-  ).token;
+  const token = await instructorToken(request);
   const headers = { Authorization: `Bearer ${token}` };
+  const courseId = await createCourse(request, token, uniqueName('reset'));
+  // The reset control only appears on a node the learner actually worked on, so the
+  // fixture clears one rather than hunting the demo for a learner who did.
+  const nodeId = await addNode(request, token, courseId, { title: 'Fixture Reset Node' });
+  const learner = {
+    name: uniqueName('Reset Learner'),
+    email: `fixture.reset.${Date.now()}@questlearn.dev`,
+  };
 
-  // The seeded learner with cleared work sits in the second course, and a new
-  // database has nobody else enrolled, so the course cannot be hardcoded: find the
-  // first owned course whose roster actually has something to reset. (An earlier
-  // version assumed course 1 had such a learner, which was only true on a laptop
-  // where previous runs had left one behind.)
-  const courses = await (await request.get('/api/v1/courses', { headers })).json();
-  let target = null;
-  for (const course of courses) {
+  try {
+    const learnerToken = await registerLearner(request, learner);
+    await enroll(request, learnerToken, courseId);
+    await skillTree(request, learnerToken, courseId);
+    await clearNode(request, learnerToken, nodeId);
+
     const roster = await (
-      await request.get(`/api/v1/courses/${course.id}/roster`, { headers })
+      await request.get(`/api/v1/courses/${courseId}/roster`, { headers })
     ).json();
-    const learner = (roster.learners ?? []).find((item) => item.clearedNodes > 0);
-    if (learner) {
-      target = { course, learner };
-      break;
-    }
+    const row = (roster.learners ?? []).find((item) => item.email === learner.email);
+    expect(row, 'The fixture learner should be on the roster with cleared work').toBeTruthy();
+    expect(row.clearedNodes).toBe(1);
+
+    await signIn(page);
+    await page.goto(`/studio/courses/${courseId}/roster/${row.userId}`);
+
+    await page.getByRole('button', { name: 'Reset' }).first().click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('returns to where it started');
+    await expect(page.getByRole('button', { name: 'Reset node' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  } finally {
+    // Progress blocks deleting a course, so the learner goes first.
+    await deleteUserByEmail(request, learner.email);
+    await removeCourse(request, token, courseId);
   }
-
-  expect(target, 'a course roster must contain a learner with cleared work').toBeTruthy();
-  await signIn(page, 'instructor@questlearn.dev');
-  await page.goto(`/studio/courses/${target.course.id}/roster/${target.learner.userId}`);
-
-  await page.getByRole('button', { name: 'Reset' }).first().click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText('returns to where it started');
-  await expect(page.getByRole('button', { name: 'Reset node' })).toBeVisible();
-
-  await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('the three analytics links now share one phrase', async ({ page }) => {
-  await signIn(page, 'instructor@questlearn.dev');
-  await page.goto('/studio/courses/1/analytics');
-  await expect(page.getByText(/Where learners stop\./)).toBeVisible();
+test('the three analytics links now share one phrase', async ({ page, request }) => {
+  const token = await instructorToken(request);
+  const courseId = await createCourse(request, token, uniqueName('analytics'), { published: false });
 
-  await page.goto('/studio/courses/1/roster');
-  await expect(page.getByRole('link', { name: 'Where learners stop' })).toBeVisible();
+  try {
+    await signIn(page);
+    await page.goto(`/studio/courses/${courseId}/analytics`);
+    await expect(page.getByText(/Where learners stop\./)).toBeVisible();
 
-  await page.goto('/studio/courses/1/cohorts');
-  await expect(page.getByRole('link', { name: 'Where learners stop' })).toBeVisible();
+    await page.goto(`/studio/courses/${courseId}/roster`);
+    await expect(page.getByRole('link', { name: 'Where learners stop' })).toBeVisible();
+
+    await page.goto(`/studio/courses/${courseId}/cohorts`);
+    await expect(page.getByRole('link', { name: 'Where learners stop' })).toBeVisible();
+  } finally {
+    await removeCourse(request, token, courseId);
+  }
 });

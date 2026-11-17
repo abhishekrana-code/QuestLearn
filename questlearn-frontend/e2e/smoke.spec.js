@@ -1,47 +1,33 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
-
-/**
- * The seeded accounts can be rotated with DEMO_PASSWORD (DataInitializer rewrites
- * them on start), so the teacher login reads the same root .env the backend does
- * instead of assuming the published default.
- *
- * <p>There is no fallback password on purpose. A database seeded without
- * DEMO_PASSWORD gets a random password, so guessing one only produces a confusing
- * login timeout; failing here says what is actually wrong.</p>
- */
-function demoPassword() {
-  if (process.env.DEMO_PASSWORD) return process.env.DEMO_PASSWORD;
-  const envPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.env');
-  try {
-    const match = fs.readFileSync(envPath, 'utf8').match(/^DEMO_PASSWORD=(.*)$/m);
-    const value = match?.[1]?.trim();
-    if (value) return value;
-  } catch {
-    /* no root .env: reported below */
-  }
-  throw new Error(
-    'DEMO_PASSWORD is not set and no root .env provides one, so the smoke suite cannot sign in as the seeded instructor. Set DEMO_PASSWORD in the environment or in the root .env.',
-  );
-}
+import {
+  ADMIN,
+  INSTRUCTOR,
+  addNode,
+  createCourse,
+  deleteUserByEmail,
+  demoPassword,
+  instructorToken,
+  registerLearner,
+  removeCourse,
+  uniqueName,
+} from './fixtures.js';
 
 /**
  * Two journeys, end to end, through the real UI and the real API.
  *
- * <p>The first creates a brand-new account rather than borrowing a demo one: a smoke
- * test that signs in as a seeded user cannot catch a broken registration. The
- * account is unique per run and deleted again afterwards, so the leaderboard and
- * roster no longer collect smoke accounts.</p>
+ * <p>Both build their own courses and nodes, so a fresh database behaves exactly
+ * like a demo that visitors have been using. Accounts are unique per run and are
+ * deleted again in `afterAll`.</p>
  *
- * <p>Every step is the thing a person would do: type the form, press Join course,
- * answer the quiz, then sign in as the teacher and find the name on the roster.</p>
+ * <p>The first sign-up journey creates a brand-new account rather than borrowing a
+ * demo one: a smoke test that signs in as a seeded user cannot catch a broken
+ * registration. Every step is the thing a person would do: type the form, press
+ * Join course, answer the quiz, then sign in as the teacher and find the name on
+ * the roster.</p>
  *
  * <p>The second is the other way into a course: the teacher makes a course members
  * only and reads out a class code, and a student who cannot find the course in the
- * catalogue joins with that code. It gates the second seeded course, never the one
- * the first test uses, and puts it back in the catalogue afterwards.</p>
+ * catalogue joins with that code.</p>
  */
 
 const run = Date.now();
@@ -50,20 +36,16 @@ const student = {
   email: `smoke.${run}@questlearn.dev`,
   password: 'password123',
 };
-const INSTRUCTOR = { email: 'instructor@questlearn.dev', password: demoPassword() };
-const ADMIN = { email: 'admin@questlearn.dev', password: demoPassword() };
-const COURSE = 'Full-Stack Web Engineering Quest';
-const GATED_COURSE = 'Data Structures Detour';
-const gatedClass = { name: `12C Smoke ${run}` };
 const classStudent = {
   name: `Class Code Student ${run}`,
   email: `classcode.${run}@questlearn.dev`,
   password: 'password123',
 };
+const gatedClass = { name: `12C Smoke ${run}` };
 
-// Set while the gating test runs so cleanup can always restore the demo course.
-let instructorToken = null;
-let gatedCourseId = null;
+// Filled in by beforeAll: ids and titles of the courses this suite owns.
+let fixture = null;
+// Set while the gating test runs so cleanup can always remove the class.
 let gatedCohortId = null;
 
 test.beforeAll(async ({ request }) => {
@@ -72,6 +54,34 @@ test.beforeAll(async ({ request }) => {
     health.ok(),
     'The API is not answering on :8091. Start the backend jar before running the smoke suite.',
   ).toBeTruthy();
+
+  const token = await instructorToken(request);
+  const courseTitle = uniqueName('Smoke Course');
+  const courseId = await createCourse(request, token, courseTitle);
+  const nodeId = await addNode(request, token, courseId, { title: 'HTML Foundations' });
+  const gatedTitle = uniqueName('Gated Course');
+  const gatedCourseId = await createCourse(request, token, gatedTitle);
+  await addNode(request, token, gatedCourseId, { title: 'Arrays' });
+
+  fixture = { token, courseTitle, courseId, nodeId, gatedTitle, gatedCourseId };
+});
+
+test.afterAll(async ({ request }) => {
+  // Every account this suite made is removed again, so the leaderboard and the
+  // admin list do not fill up with "Smoke Student …" rows. Their progress has to go
+  // with them: a course with progress cannot be deleted.
+  for (const email of [student.email, classStudent.email]) {
+    await deleteUserByEmail(request, email);
+  }
+
+  const token = await instructorToken(request);
+  const headers = { Authorization: `Bearer ${token}` };
+  if (gatedCohortId) {
+    await request.delete(`/api/v1/cohorts/${gatedCohortId}`, { headers });
+    gatedCohortId = null;
+  }
+  await removeCourse(request, token, fixture.gatedCourseId);
+  await removeCourse(request, token, fixture.courseId);
 });
 
 async function signIn(page, { email, password }) {
@@ -80,12 +90,6 @@ async function signIn(page, { email, password }) {
   await page.locator('#password').fill(password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).not.toHaveURL(/\/login/);
-}
-
-async function apiSignIn(request, { email, password }) {
-  const response = await request.post('/api/v1/auth/login', { data: { email, password } });
-  expect(response.ok(), `Could not sign ${email} in through the API`).toBeTruthy();
-  return (await response.json()).token;
 }
 
 async function signOut(page) {
@@ -126,14 +130,14 @@ test('a new student signs up, joins a course, clears a node, and reaches the ros
 
   // 2. Join the course from the catalogue.
   await page.goto('/explore');
-  const card = page.locator('article').filter({ hasText: COURSE }).first();
+  const card = page.locator('article').filter({ hasText: fixture.courseTitle }).first();
   await expect(card).toBeVisible();
   await card.getByRole('button', { name: 'Join course' }).click();
   await expect(card.getByRole('button', { name: 'Continue' })).toBeVisible();
 
-  // 3. Open it and clear the first node with the quiz the seeder wrote.
+  // 3. Open it and clear the first node with the quiz the suite attached.
   await card.getByRole('button', { name: 'Continue' }).click();
-  await expect(page).toHaveURL(/\/courses\/\d+/);
+  await expect(page).toHaveURL(new RegExp(`/courses/${fixture.courseId}$`));
   // The tree draws each node twice (canvas and a "jump to node" list), so take the
   // first match by name rather than relying on a unique element.
   await page.getByRole('button', { name: /HTML Foundations/ }).first().click();
@@ -149,64 +153,23 @@ test('a new student signs up, joins a course, clears a node, and reaches the ros
   await expect(page.getByText('Node cleared')).toBeVisible();
   await expect(page.getByText(/Score 100%/)).toBeVisible();
 
-  // 4. As the teacher, read the report: the new name is on the roster at 1/6.
+  // 4. As the teacher, read the report: the new name is on the roster at 1/1.
   await signOut(page);
-  await signIn(page, INSTRUCTOR);
-  await page.goto('/studio/courses/1/roster');
+  await signIn(page, { email: INSTRUCTOR.email, password: demoPassword() });
+  await page.goto(`/studio/courses/${fixture.courseId}/roster`);
 
   const row = page.locator('article').filter({ hasText: student.name }).first();
   await expect(row).toBeVisible();
-  await expect(row.getByText('1/6 cleared')).toBeVisible();
-      await expect(row.getByText(student.email)).toBeVisible();
-});
-
-test.afterAll(async ({ request }) => {
-  // Every account this suite made is removed again, so the leaderboard and the
-  // admin list do not fill up with "Smoke Student 1794…" rows.
-  try {
-    const adminToken = await apiSignIn(request, ADMIN);
-    const adminHeaders = { Authorization: `Bearer ${adminToken}` };
-    for (const address of [student.email, classStudent.email]) {
-      const found = await (
-        await request.get(`/api/v1/admin/users?query=${encodeURIComponent(address)}`, {
-          headers: adminHeaders,
-        })
-      ).json();
-      const match = (found.users ?? []).find((user) => user.email === address);
-      if (match) {
-        await request.delete(`/api/v1/admin/users/${match.id}`, { headers: adminHeaders });
-      }
-    }
-  } catch {
-    // A cleanup failure should not turn a green journey red; the API rejects a
-    // deleted admin, for example, and that is already visible elsewhere.
-  }
-
-  if (!instructorToken) return;
-  const headers = { Authorization: `Bearer ${instructorToken}` };
-  if (gatedCohortId) {
-    await request.delete(`/api/v1/cohorts/${gatedCohortId}`, { headers });
-    gatedCohortId = null;
-  }
-  if (gatedCourseId) {
-    await request.patch(
-      `/api/v1/courses/${gatedCourseId}/members-only?membersOnly=false`,
-      { headers },
-    );
-  }
+  await expect(row.getByText('1/1 cleared')).toBeVisible();
+  await expect(row.getByText(student.email)).toBeVisible();
 });
 
 test('a class code is the only way into a members-only course', async ({ page, request }) => {
-  // 1. The teacher makes the second seeded course members only.
-  instructorToken = await apiSignIn(request, INSTRUCTOR);
-  const headers = { Authorization: `Bearer ${instructorToken}` };
-  const courses = await (await request.get('/api/v1/courses', { headers })).json();
-  const course = courses.find((item) => item.title === GATED_COURSE);
-  expect(course, `The seed data must contain "${GATED_COURSE}"`).toBeTruthy();
-  gatedCourseId = course.id;
+  // 1. The teacher makes the second fixture course members only.
+  const headers = { Authorization: `Bearer ${fixture.token}` };
 
-  await signIn(page, INSTRUCTOR);
-  await page.goto(`/studio/courses/${gatedCourseId}/cohorts`);
+  await signIn(page, { email: INSTRUCTOR.email, password: demoPassword() });
+  await page.goto(`/studio/courses/${fixture.gatedCourseId}/cohorts`);
   await page.getByRole('switch', { name: 'Open to the catalogue' }).click();
   await expect(
     page.getByText(/only students who type one of your class codes/),
@@ -221,28 +184,20 @@ test('a class code is the only way into a members-only course', async ({ page, r
   expect(joinCode, 'A class code is eight unambiguous characters').toMatch(/^[A-Z0-9]{8}$/);
 
   const cohorts = await (
-    await request.get(`/api/v1/courses/${gatedCourseId}/cohorts`, { headers })
+    await request.get(`/api/v1/courses/${fixture.gatedCourseId}/cohorts`, { headers })
   ).json();
   gatedCohortId = cohorts.find((item) => item.name === gatedClass.name)?.id;
   expect(gatedCohortId, 'The new class should exist on the server').toBeTruthy();
 
   // 3. A student who is not in the class can neither find nor open the course.
   await signOut(page);
-  const registered = await request.post('/api/v1/auth/register', {
-    data: {
-      name: classStudent.name,
-      email: classStudent.email,
-      password: classStudent.password,
-      role: 'STUDENT',
-    },
-  });
-  expect(registered.status(), 'Signing a smoke student up through the API').toBe(201);
+  await registerLearner(request, classStudent);
   await signIn(page, classStudent);
 
   await page.goto('/explore');
-  await expect(page.getByRole('heading', { name: GATED_COURSE })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: fixture.gatedTitle })).toHaveCount(0);
 
-  await page.goto(`/courses/${gatedCourseId}`);
+  await page.goto(`/courses/${fixture.gatedCourseId}`);
   await expect(
     page.getByText('This course is only open to the class it was created for'),
   ).toBeVisible();
@@ -253,9 +208,9 @@ test('a class code is the only way into a members-only course', async ({ page, r
   await page.getByRole('button', { name: 'Join class' }).click();
   await expect(page.getByText(/You joined .*is now on your dashboard/)).toBeVisible();
 
-  const card = page.locator('article').filter({ hasText: GATED_COURSE }).first();
+  const card = page.locator('article').filter({ hasText: fixture.gatedTitle }).first();
   await expect(card).toBeVisible();
   await card.getByRole('button', { name: 'Continue' }).click();
-  await expect(page).toHaveURL(new RegExp(`/courses/${gatedCourseId}$`));
+  await expect(page).toHaveURL(new RegExp(`/courses/${fixture.gatedCourseId}$`));
   await expect(page.getByText('Jump to node')).toBeVisible();
 });

@@ -41,15 +41,29 @@ test('the health card counts the server and lists real latencies', async ({ page
   await expect(page.getByText('5000 ms')).toHaveCount(0);
 });
 
-test('demo logins names the accounts instead of only counting them', async ({ page }) => {
+test('demo logins names the accounts instead of only counting them', async ({ page, request }) => {
+  // The card must show what the server reports rather than a list the page keeps for
+  // itself, so the expectation comes from the same endpoint the page reads.
+  const login = await request.post('/api/v1/auth/login', {
+    data: { email: 'admin@questlearn.dev', password: demoPassword() },
+  });
+  const { token } = await login.json();
+  const status = await (
+    await request.get('/api/v1/admin/demo-password', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  ).json();
+  const emails = (status.logins ?? []).map((entry) => entry.email);
+  expect(emails.length, 'The server reports at least one demo login').toBeGreaterThan(0);
+
   await signIn(page, 'admin@questlearn.dev');
   await page.goto('/admin');
 
   const card = page.getByRole('region', { name: 'Demo logins' });
   await expect(card).toBeVisible();
-  await expect(card.getByText('admin@questlearn.dev')).toBeVisible();
-  await expect(card.getByText('mira@questlearn.dev')).toBeVisible();
-  await expect(card.getByText('student@questlearn.dev')).toBeVisible();
+  for (const email of emails) {
+    await expect(card.getByText(email)).toBeVisible();
+  }
 });
 
 test('the accessibility page only claims what the forms do', async ({ page }) => {
