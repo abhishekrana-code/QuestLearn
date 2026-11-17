@@ -148,10 +148,26 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: questlearn-frontend
       - name: Smoke suite
-        run: npm run test:e2e
+        run: |
+          set -o pipefail
+          npm run test:e2e 2>&1 | tee ../e2e.log
         working-directory: questlearn-frontend
         env:
           CI: true
+      # Job logs need authentication to read, including for a public repository,
+      # which makes a failing run hard to diagnose from a laptop. Annotations are
+      # readable through the public API, so the failure is republished here.
+      - name: Report the failing specs as annotations
+        if: failure()
+        run: |
+          set -uo pipefail
+          [ -f e2e.log ] || { echo "::error title=e2e::No e2e log was captured."; exit 0; }
+          grep -aE "^[[:space:]]+[0-9]+\) |Error: |TypeError|Received|At \(.*spec\.js" e2e.log \
+            | head -40 \
+            | while IFS= read -r line; do
+                clean=$(printf '%s' "$line" | tr -d '\r' | sed 's/::/:/g' | cut -c1-240)
+                echo "::error title=e2e::$clean"
+              done || true
       - name: Upload the Playwright report
         if: failure()
         uses: actions/upload-artifact@v5
