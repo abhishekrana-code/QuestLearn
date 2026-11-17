@@ -15,6 +15,12 @@ name: Demo uptime
 on:
   schedule:
     - cron: '*/10 * * * *'
+  # Editing the probe runs it: the schedule is the only other trigger, and it can
+  # take a while to fire, so a change should show straight away whether the check
+  # still passes from an outside network.
+  push:
+    paths:
+      - '.github/workflows/uptime.yml'
   workflow_dispatch:
 
 permissions:
