@@ -36,13 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      # TEMPORARY DRILL, reverted in the next commit: a host that serves the
-      # page but cannot log in, to prove the outage path without taking the demo
-      # down.
-      DEMO_HOST: example.com
+      DEMO_HOST: questlearn.taileb48b2.ts.net
       # There is no checkout in this job, so gh cannot infer the repository from a
       # git remote and has to be told. Without this both issue steps fail with
-      # "unable to determine repository", which is how the first drill failed.
+      # "unable to determine repository" and the outage is silent.
       GH_REPO: ${{ github.repository }}
     steps:
       - name: Page and a real login answer through the Funnel
