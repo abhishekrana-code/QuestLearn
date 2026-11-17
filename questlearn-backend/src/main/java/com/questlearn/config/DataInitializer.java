@@ -28,8 +28,7 @@ import com.questlearn.service.GamificationService;
 import com.questlearn.service.MediaStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -65,7 +64,7 @@ import java.util.Set;
 @Component
 @Profile("!prod & !it")
 @RequiredArgsConstructor
-public class DataInitializer implements ApplicationRunner {
+public class DataInitializer implements SmartInitializingSingleton {
 
     /**
      * The five seeded accounts all share one password. Set DEMO_PASSWORD to choose it;
@@ -94,20 +93,31 @@ public class DataInitializer implements ApplicationRunner {
     private final ObjectMapper objectMapper;
     private final MediaStorageService mediaStorageService;
 
+    // Seeding runs while the context is still being built, not as an ApplicationRunner.
+    // Runners execute after the servlet container is already listening, so on a fresh
+    // database the first requests arrived before the demo accounts existed and were
+    // answered with 401 for a moment (CI's e2e login did exactly that).
     @Override
     @Transactional
-    public void run(ApplicationArguments args) throws Exception {
-        boolean freshDatabase = userRepository.count() == 0;
-        resolveDemoPassword(freshDatabase);
+    public void afterSingletonsInstantiated() {
+        try {
+            boolean freshDatabase = userRepository.count() == 0;
+            resolveDemoPassword(freshDatabase);
 
-        if (freshDatabase) {
-            seedDemoData();
+            if (freshDatabase) {
+                seedDemoData();
+            }
+            syncDemoPasswords();
+            seedRivalProgress();
+            seedSecondCourse();
+            attachDemoVideo();
+            backfillDemoAttempts();
+        } catch (Exception failure) {
+            // Spring had already abandoned the context when this ran as a runner, so
+            // failing here keeps the same outcome and removes a half-seeded database
+            // from behind a healthy-looking server.
+            throw new IllegalStateException("Demo seeding failed", failure);
         }
-        syncDemoPasswords();
-        seedRivalProgress();
-        seedSecondCourse();
-        attachDemoVideo();
-        backfillDemoAttempts();
     }
 
     private void seedDemoData() throws Exception {
