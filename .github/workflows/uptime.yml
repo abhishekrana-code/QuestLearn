@@ -14,7 +14,12 @@ name: Demo uptime
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    # Off the hour and off the ten-minute marks: GitHub documents that scheduled
+    # runs are delayed under load, that the start of every hour is a load peak, and
+    # that some queued runs are dropped without leaving a trace. This repository saw
+    # no scheduled run at all for three and a half hours after the first version of
+    # this file, so the slot is moved to minutes GitHub is less busy with.
+    - cron: '3,13,23,33,43,53 * * * *'
   # Editing the probe runs it: the schedule is the only other trigger, and it can
   # take a while to fire, so a change should show straight away whether the check
   # still passes from an outside network.
