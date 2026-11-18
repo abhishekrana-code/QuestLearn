@@ -110,6 +110,34 @@ function Start-Backend {
         -RedirectStandardError (Join-Path $LogDirectory 'backend.err.log')
 }
 
+# Holds the first backend start until Windows has finished booting. The logon task
+# fired it 18 seconds after boot on 2026-11-18, into a start Windows itself logged as
+# a 109 second boot duration with a 45 second timeout on the Intel Platform License
+# Manager and a failed Dell Client Management Service start; the JVM then needed
+# 245s against 10s idle, with the stalls spread evenly through class loading. This
+# waits for both a minimum uptime and a quiet processor, with a ceiling so a busy
+# machine cannot hold the demo back forever. Returns the seconds it waited.
+function Wait-BootSettled {
+    param(
+        [int]$MinUptimeSeconds = 120,
+        [int]$MaxWaitSeconds = 300,
+        [int]$LoadThreshold = 30
+    )
+    $getUptime = { ((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalSeconds }
+    if ((& $getUptime) -ge $MinUptimeSeconds) { return 0 }
+
+    $waited = 0
+    $quiet = 0
+    while ($waited -lt $MaxWaitSeconds) {
+        $load = (Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average
+        if ((& $getUptime) -ge $MinUptimeSeconds -and $load -le $LoadThreshold) { $quiet++ } else { $quiet = 0 }
+        if ($quiet -ge 2) { return $waited }
+        Start-Sleep -Seconds ([math]::Min(5, $MaxWaitSeconds - $waited))
+        $waited += 5
+    }
+    return [math]::Min($waited, $MaxWaitSeconds)
+}
+
 # True when a QuestLearn JVM exists at all. The port only opens at the end of a
 # start, so a process with no listener is still loading classes rather than gone.
 # A process owned by another account can hide its command line, which reads as

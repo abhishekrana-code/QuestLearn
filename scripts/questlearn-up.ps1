@@ -43,6 +43,16 @@ function Wait-Url {
 # The backend reads its own .env through spring.config.import, so CORS origins,
 # the database and the demo password all come from one file.
 if (-not (Test-Url 'http://localhost:8091/actuator/health')) {
+    # The logon task fires the moment someone signs in, while Windows is still
+    # starting services and Defender is refreshing its configuration and
+    # signatures. A start issued into that window was measured at 245s against 10s
+    # on a settled machine, with the stalls spread evenly through class loading, so
+    # the first start waits for the boot to settle before it begins.
+    $settled = Wait-BootSettled
+    if ($settled -gt 0) {
+        Write-Output "Waited $settled s for Windows to finish booting before starting the backend."
+    }
+
     # The shared starter is what applies the heap cap, so the logon task cannot
     # bring up a backend with the JVM's default quarter-of-RAM maximum.
     Start-Backend -Jar 'target\questlearn-1.0.0.jar' `
