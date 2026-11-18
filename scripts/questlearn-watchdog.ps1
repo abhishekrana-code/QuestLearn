@@ -6,25 +6,29 @@
 # unhealthy for two minutes, so a rebuild by questlearn-watch-java.ps1 (about 27
 # seconds) or a restore (about 30) never looks like a death.
 #
-# When it acts: stop the process that owns 8091, start the jar again, wait up to two
-# minutes for health, then email the same address the backup check uses. One email
-# per outage, plus a follow-up only if the first one said the backend was still down
-# and it later came back, so a backend that cannot start does not mail on every
-# attempt.
+# When it acts: stop the process that owns 8091, start the jar again, wait up to the
+# start budget for health, then email the same address the backup check uses. One
+# email per outage, plus a follow-up only if the first one said the backend was
+# still down and it later came back, so a backend that cannot start does not mail
+# on every attempt.
 #
-#   -IntervalSeconds 30   how often health is polled
-#   -FailMinutes 2        unhealthy for this long before a restart
+#   -IntervalSeconds 30        how often health is polled
+#   -FailMinutes 2             unhealthy for this long before a restart
+#   -RestartTimeoutSeconds 480 how long one start may take before it is killed
 
 param(
     [int]$IntervalSeconds = 30,
-    [int]$FailMinutes = 2
+    [int]$FailMinutes = 2,
+    # A start takes about 10s on an idle machine and was measured at 71s under
+    # load, but 245s when the logon task started it while Windows was still
+    # booting. The old 180s budget was shorter than that start, so the watchdog
+    # killed a JVM that was still loading classes, started over, and mailed "still
+    # down" thirty seconds before the retry answered. Eight minutes covers a
+    # boot-time start and still bounds a real crash loop.
+    [int]$RestartTimeoutSeconds = 480
 )
 
 $ErrorActionPreference = 'Stop'
-
-# A start takes about 10s on an idle machine and was measured at 71s under load.
-# 180s leaves room for a much worse window before a start is called a failure.
-$RestartTimeoutSeconds = 180
 
 $root = Split-Path -Parent $PSScriptRoot
 $backend = Join-Path $root 'questlearn-backend'
@@ -133,7 +137,7 @@ function Send-OutageAlert {
     Send-Alert -Subject $subject -Body $body
 }
 
-Write-Log "Watchdog started: polling $healthUrl every ${IntervalSeconds}s, restarting after $FailMinutes minute(s) of failure."
+Write-Log "Watchdog started: polling $healthUrl every ${IntervalSeconds}s, restarting after $FailMinutes minute(s) of failure, allowing ${RestartTimeoutSeconds}s for a start."
 
 $unhealthySince = $null
 $attempts = 0

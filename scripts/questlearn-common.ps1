@@ -137,8 +137,10 @@ function Wait-PortFree {
     return $false
 }
 
+# 150s was too short for a start issued while Windows is still booting, which was
+# measured at 245s; this matches the watchdog's start budget.
 function Wait-BackendHealth {
-    param([int]$Port = 8091, [int]$Seconds = 150)
+    param([int]$Port = 8091, [int]$Seconds = 480)
     $deadline = (Get-Date).AddSeconds($Seconds)
     while ((Get-Date) -lt $deadline) {
         if (Test-BackendHealth -Port $Port) { return $true }
