@@ -763,15 +763,17 @@ public class CourseService {
     }
 
     public void assertCanManage(Course course, AppUserPrincipal principal) {
-        if (principal.role() == Role.ADMIN) {
-            return;
+        if (!canManage(course, principal)) {
+            throw ApiException.forbidden("Only the course instructor or an admin can do that");
         }
-        if (principal.role() == Role.INSTRUCTOR
+    }
+
+    /** The ownership rule alone, for callers that branch instead of refusing. */
+    public boolean canManage(Course course, AppUserPrincipal principal) {
+        return principal.role() == Role.ADMIN
+                || (principal.role() == Role.INSTRUCTOR
                 && course.getInstructor() != null
-                && course.getInstructor().getId().equals(principal.id())) {
-            return;
-        }
-        throw ApiException.forbidden("Only the course instructor or an admin can do that");
+                && course.getInstructor().getId().equals(principal.id()));
     }
 
     public void assertCanView(Course course, AppUserPrincipal principal) {

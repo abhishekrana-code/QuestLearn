@@ -16,6 +16,7 @@ import VerifyEmail from './pages/VerifyEmail.jsx';
 // confetti. Loading them on demand keeps the landing and sign-in pages small
 // on a phone.
 const StudentDashboard = lazy(() => import('./pages/StudentDashboard.jsx'));
+const Announcements = lazy(() => import('./pages/Announcements.jsx'));
 const SkillTreePage = lazy(() => import('./pages/SkillTreePage.jsx'));
 const Leaderboard = lazy(() => import('./pages/Leaderboard.jsx'));
 const InstructorStudio = lazy(() => import('./pages/InstructorStudio.jsx'));
@@ -92,6 +93,14 @@ export default function App() {
               element={
                 <ProtectedRoute roles={['STUDENT']}>
                   <StudentDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/announcements"
+              element={
+                <ProtectedRoute roles={['STUDENT']}>
+                  <Announcements />
                 </ProtectedRoute>
               }
             />

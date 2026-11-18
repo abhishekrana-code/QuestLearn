@@ -11,6 +11,7 @@ import StreakCounter from '../gamification/StreakCounter.jsx';
 const LINKS_BY_ROLE = {
   STUDENT: [
     { to: '/dashboard', label: 'Dashboard' },
+    { to: '/announcements', label: 'Notices' },
     { to: '/explore', label: 'Courses' },
     { to: '/performance', label: 'Progress' },
     { to: '/leaderboard', label: 'Leaderboard' },

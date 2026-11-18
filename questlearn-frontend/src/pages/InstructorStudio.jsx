@@ -17,6 +17,7 @@ import {
   Sparkles,
   Wand2,
 } from 'lucide-react';
+import AnnouncementComposer from '../components/studio/AnnouncementComposer.jsx';
 import CourseDetailsDialog from '../components/studio/CourseDetailsDialog.jsx';
 import LessonEditor from '../components/studio/LessonEditor.jsx';
 import NodeEditorDialog from '../components/studio/NodeEditorDialog.jsx';
@@ -1253,6 +1254,8 @@ export default function InstructorStudio() {
                       : 'Students cannot see a draft. Publish when the tree, quizzes and videos are ready.'}
                 </p>
               </div>
+
+              <AnnouncementComposer key={selectedCourse.id} course={selectedCourse} />
             </>
           )}
 

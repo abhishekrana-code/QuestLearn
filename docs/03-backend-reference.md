@@ -14,15 +14,15 @@ beyond their name.
 | --- | ---: | --- |
 | `com.questlearn` | 1 | Spring Boot entry point. |
 | `config` | 10 | Startup seeding, security wiring, mail/media choice, scheduling, OpenAPI. |
-| `controller` | 12 | HTTP surface. |
-| `dto` | 65 | Immutable request/response records. |
+| `controller` | 13 | HTTP surface. |
+| `dto` | 67 | Immutable request/response records. |
 | `email` | 5 | Delivery adapters behind one interface. |
 | `exception` | 3 | Typed failures and the single JSON error handler. |
 | `mapper` | 1 | Entity → DTO. |
-| `model` (incl. `service.media`) | 21 + 4 | JPA entities, enums, media drivers. |
-| `repository` | 15 | Spring Data interfaces. |
+| `model` (incl. `service.media`) | 22 + 4 | JPA entities, enums, media drivers. |
+| `repository` | 16 | Spring Data interfaces. |
 | `security` | 4 | JWT, one-time tokens, request tracing. |
-| `service` | 27 | Business rules and transactions. |
+| `service` | 28 | Business rules and transactions. |
 | `util` | 1 | Email normalisation. |
 
 ## 3.2 Entry point
@@ -235,6 +235,14 @@ needed, and pick a status code. All paths are under `/api/v1` (declared per clas
 | `delete` | `DELETE /cohorts/{cohortId}` | Deletes the class; members stay enrolled. |
 | `join` | `POST /cohorts/join` | Student joins by code, which also enrolls in the course. |
 
+### `AnnouncementController` — `/api/v1`
+
+| Method | Path | Behaviour |
+| --- | --- | --- |
+| `list` | `GET /courses/{courseId}/announcements` | Newest first. Staff who manage the course see every note; an enrolled learner sees course-wide notes plus their own classes' notes. |
+| `create` | `POST /courses/{courseId}/announcements` | Staff and owner-or-admin: posts to the whole course or one class. |
+| `delete` | `DELETE /announcements/{announcementId}` | Same permission as writing; `204`. |
+
 ### `AnalyticsController` — `/api/v1`
 
 | Method | Path | Behaviour |
@@ -331,7 +339,7 @@ needed, and pick a status code. All paths are under `/api/v1` (declared per clas
 | `attachQuiz(moduleId, request, principal)` | Validates the payload, upserts the one quiz per node, defaults pass 60. |
 | `getModuleEntity(Long)` | Module or 404. |
 | `loadCourse(Long)` | Course or 404. |
-| `assertCanManage(course, principal)` | Admin, or the course's owning instructor. |
+| `assertCanManage(course, principal)` / `canManage(course, principal)` | The ownership rule: an admin, or the course's owning instructor. The boolean form is for callers that branch (such as the announcement read path) instead of refusing. |
 | `assertCanView(course, principal)` | Admin always; published + members-only requires enrollment for students; published otherwise open; unpublished visible only to the owning instructor; archived gets a distinct message. |
 | `toCourseDto(course, principal)` | Single-course mapping (null caches). |
 | `toCourseDto(course, principal, enrolledIds, rosterCounts)` | Page-aware mapping: completed count, roster size, enrollment flag. |
@@ -438,10 +446,21 @@ needed, and pick a status code. All paths are under `/api/v1` (declared per clas
 | --- | --- |
 | `list(courseId, principal)` | Manage check; classes by name with member counts. |
 | `create(courseId, name, principal)` | Manage check; validates name; generates a unique 8-character code. |
-| `delete(cohortId, principal)` | Manage check; deletes only the class and its membership rows (cascade); enrollment and progress stay. |
+| `delete(cohortId, principal)` | Manage check; deletes only the class, its membership rows and its announcements (cascade); enrollment and progress stay. |
 | `join(code, principal)` | Students only; normalises spaces; finds the class case-insensitively; refuses archived/unpublished courses; adds membership if new and enrolls in the course if needed; returns `alreadyMember`. |
 | `toDto(Cohort)` | Adds the live member count. |
 | `nextJoinCode()` | 20 attempts at an unambiguous code; 500 if the space is somehow exhausted. |
+
+### `AnnouncementService`
+
+| Function | What it does |
+| --- | --- |
+| `list(courseId, principal)` | Managers (owner or admin) get every note with its class name. Anyone else must be a `STUDENT` enrolled on a published, non-archived course; that learner gets the course-wide notes plus the notes addressed to a class they belong to, filtered in the service so the classroom boundary is never a client concern. |
+| `create(courseId, request, principal)` | Manage check; trims the body and refuses a blank note (the 2000-character cap is the request DTO's `@Size`); resolves the optional class and refuses one from another course (404); stores the author and the original text and returns the DTO with names resolved. |
+| `delete(announcementId, principal)` | 404 for an unknown note, then the same manage check on its course, then deletes. A learner has nothing to delete. |
+| `toDtos(announcements, cohorts)` | One cohort lookup and one author lookup for the page, so a dashboard card does not issue a query per note. |
+| `toDto(announcement, cohortName, authorName)` | Maps the row, leaving both names null when they do not apply. |
+| `authorName(authorId)` | Resolves the author for the single-note create response; null for a deleted account. |
 
 ### `AnalyticsService`
 
@@ -749,6 +768,7 @@ All entities use Lombok builders/getters/setters; ids are identity columns.
 | `Enrollment` | userId, courseId, enrolledAt | Plain join table with its own id. |
 | `Cohort` | courseId, name, joinCode, createdAt | `joinCode` is unique. |
 | `CohortMembership` | cohortId, userId, joinedAt | Unique pair enforced in the schema. |
+| `Announcement` | courseId, cohortId, authorId, body, createdAt | `cohortId` null means the whole course. Cascades with its course and class; `authorId` is set to null when the author is deleted, so the note the class already read survives. |
 | `CohortDeadline` | cohortId, moduleId, dueAt, createdAt | One per (class, node). |
 | `DeadlineReminder` | user, module, kind, dueAt, sentAt | The send ledger. |
 | `PasswordResetToken` | user, tokenHash, createdAt, expiresAt, usedAt | Only the hash is stored; atomic claim. |
@@ -777,6 +797,7 @@ Spring Data derives the SQL from these names. The important ones:
 | `EnrollmentRepository` | exists/find by user+course, ordered by user or course, count, delete, grouped counts for a set of courses. |
 | `CohortRepository` | ordered by course, by course set, case-insensitive join-code lookup, code existence. |
 | `CohortMembershipRepository` | exists, count, ordered members, memberships for a user in a set of classes. |
+| `AnnouncementRepository` | `findByCourseIdOrderByCreatedAtDescIdDesc` (newest first, id breaking a same-instant tie). |
 | `CohortDeadlineRepository` | ordered overrides for a class, overrides for a set of classes, one by class+node. |
 | `DeadlineReminderRepository` | recent rows per user, delete older than a cutoff. |
 | `PasswordResetTokenRepository` / `EmailVerificationTokenRepository` | hash lookup, atomic `claim` (sets `usedAt` only if unused), invalidate all for a user. |

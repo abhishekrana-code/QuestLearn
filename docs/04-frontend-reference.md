@@ -28,8 +28,8 @@ talks to the API, or changes what the user can do is described on its own.
 | `HomeRoute()` | Signed-out visitors get `Landing`; a signed-in student is sent to `/dashboard`, an instructor to `/studio`, an admin to `/admin`. It waits for `booting` first, so a refresh never flashes the public page at a signed-in user. |
 | `App()` | Renders the navbar only when a user exists, then the route table inside one `<main id="main-content">`. `/login`, `/register` and `/forgot-password` redirect signed-in users home; `/reset-password` and `/verify-email` stay reachable while signed in because those links can be opened in any tab. |
 
-Lazy chunks: `StudentDashboard`, `SkillTreePage`, `Leaderboard`, `InstructorStudio`,
-`InstructorCourses`, `AdminPanel` and the other studio screens. The landing page,
+Lazy chunks: `StudentDashboard`, `Announcements`, `SkillTreePage`, `Leaderboard`,
+`InstructorStudio`, `InstructorCourses`, `AdminPanel` and the other studio screens. The landing page,
 sign-in and registration stay in the initial chunk so a phone on a slow link reaches
 the form quickly.
 
@@ -43,6 +43,7 @@ the form quickly.
 | `/verify-email` | `VerifyEmail` | public | The confirmation link may be opened signed out. |
 | `/accessibility` | `Accessibility` | public | The statement must be readable without an account. |
 | `/dashboard` | `StudentDashboard` | `STUDENT` | Personal progress and the next node. |
+| `/announcements` | `Announcements` | `STUDENT` | Every notice for the learner's courses and classes, newest first. |
 | `/explore` | `ExploreCourses` | `STUDENT` | Joining and leaving courses is a learner action. |
 | `/courses/:courseId` | `SkillTreePage` | all three roles | Learners play it; teachers and admins preview it. |
 | `/performance` | `StudentPerformance` | `STUDENT` | Cross-course grades and attempt history. |
@@ -423,11 +424,26 @@ their failure must not blank the page; the next-node endpoint may answer `204`.
 | Course list | Enrolled courses first; a learner with no enrolments still sees the catalogue, so the first sign-in is never an empty page. |
 | Next node | Renders the server's pick as "Pick up here" with course, XP and deadline chip, linking to `/courses/{id}?node={nodeId}`. |
 | Cards | `XPBar`, `StreakCounter` and a cleared-node count. |
-| Banners | `EmailVerificationBanner` and `LoadErrorBanner`. |
+| Banners | `EmailVerificationBanner`, `LoadErrorBanner`, and `AnnouncementBanner` with the newest note across enrolled courses. |
 | Per-course row | Emoji, title, category, enrolled badge, description, progress bar and a Continue/Start link; the mobile footer repeats the action. |
 | Details section | A collapsed block explaining how XP, levels and streaks work (the arithmetic matches the server). |
 
-### 4.10.10 `ExploreCourses.jsx` — `/explore`
+### 4.10.10 `Announcements.jsx` — `/announcements`
+
+The learner's notice board. Loads `/courses`, keeps the enrolled ones, then
+`fetchAnnouncementsFor` fans out to `GET /courses/{id}/announcements` and merges the
+results newest first. Class visibility was already applied by the server, so the page
+only renders: course chip, audience (class name or "Everyone enrolled"), timestamp,
+full note text and author.
+
+| Behaviour | Detail |
+| --- | --- |
+| `load()` | One course-list request, then the announcement requests. `fetchAnnouncementsFor` drops a course whose announcements fail rather than blanking the page; a failed course list shows an error with a **Try again** button. |
+| Header and list | `{n} notices` count, then one panel per note, newest first, with the course and class it was addressed to. |
+| Empty state | "No notices yet", an explanation that notes appear here and in the dashboard banner, and a link to the catalogue. |
+| Entry points | The dashboard banner and the student nav's **Notices** link both open this page. |
+
+### 4.10.11 `ExploreCourses.jsx` — `/explore`
 
 The catalogue, grouped by teacher. Search, teacher, subject and sort live in the URL
 (`q`, `teacher`, `subject`, `sort`), so a filtered view can be shared or reloaded.
@@ -445,7 +461,7 @@ The catalogue, grouped by teacher. Search, teacher, subject and sort live in the
 The page also shows a filter summary with removable chips and a "no matches" state
 that offers to clear the filters.
 
-### 4.10.11 `SkillTreePage.jsx` — `/courses/:courseId`
+### 4.10.12 `SkillTreePage.jsx` — `/courses/:courseId`
 
 The play screen, and the preview screen for staff (`user.role === 'INSTRUCTOR'`
 hides learner-only progress and treats the page as a preview).
@@ -467,7 +483,7 @@ and/or viva entry point, and the attempt history with a "Try again" action. The 
 sits beside it from `xl` upward; below that, selecting a node scrolls the briefing
 into view after it renders.
 
-### 4.10.12 `StudentPerformance.jsx` — `/performance`
+### 4.10.13 `StudentPerformance.jsx` — `/performance`
 
 Cross-course progress, folded up by subject.
 
@@ -487,7 +503,7 @@ Cross-course progress, folded up by subject.
 Topics expand per subject; a topic with history can expand again to show each try,
 its source (quiz/spoken viva/typed viva) and the delta from the first try.
 
-### 4.10.13 `Leaderboard.jsx` — `/leaderboard`
+### 4.10.14 `Leaderboard.jsx` — `/leaderboard`
 
 Three boards behind one control: `overall` (every course added up, each node counted
 once), `all` (lifetime XP) and one course (XP earned inside it). Staff can narrow a
@@ -505,7 +521,7 @@ course board to one class.
 The signed-in user's row is ringed. The podium uses rank labels as text, not colour
 alone.
 
-### 4.10.14 `InstructorCourses.jsx` — `/studio/courses`
+### 4.10.15 `InstructorCourses.jsx` — `/studio/courses`
 
 The course library: active/archived tabs, search, and per-course actions.
 
@@ -523,7 +539,7 @@ The course library: active/archived tabs, search, and per-course actions.
 Each card links to the builder, roster, analytics and classes, and shows status
 (draft/live/archived), node count, enrolment count and last update.
 
-### 4.10.15 `InstructorStudio.jsx` — `/studio`
+### 4.10.16 `InstructorStudio.jsx` — `/studio`
 
 The five-step builder: Course → Nodes → Quiz → Videos → Publish. The step lives in
 `?step=` and the course in `?course=`, so a shared link reopens the same screen.
@@ -562,7 +578,7 @@ Step details:
   video is attached), a student preview link, publish/unpublish, and an explanation
   of what each state means.
 
-### 4.10.16 `CourseRoster.jsx` — `/studio/courses/:courseId/roster`
+### 4.10.17 `CourseRoster.jsx` — `/studio/courses/:courseId/roster`
 
 Answers "who is enrolled, and who is stuck".
 
@@ -581,7 +597,7 @@ Filters: class, node, and cleared/not-cleared (default "not cleared"). The heade
 shows learner count, average cleared nodes and the active filters; export and print
 buttons are print-hidden appropriately.
 
-### 4.10.17 `LearnerDetail.jsx` — `/studio/courses/:courseId/roster/:userId`
+### 4.10.18 `LearnerDetail.jsx` — `/studio/courses/:courseId/roster/:userId`
 
 One learner's attempt trail in one course.
 
@@ -595,7 +611,7 @@ The header summarises cleared nodes, XP, level, streak, last activity and join d
 Reset is available to instructors and admins; the copy states that all attempts and
 the XP for that node are lost and other work is untouched.
 
-### 4.10.18 `CourseAnalytics.jsx` — `/studio/courses/:courseId/analytics`
+### 4.10.19 `CourseAnalytics.jsx` — `/studio/courses/:courseId/analytics`
 
 The funnel per node, optionally limited to one class.
 
@@ -609,7 +625,7 @@ The funnel per node, optionally limited to one class.
 - The table shows reached, started, cleared, attempts and median hours to clear per
   node, with bar widths relative to the learner count.
 
-### 4.10.19 `InstructorCohorts.jsx` — `/studio/courses/:courseId/cohorts`
+### 4.10.20 `InstructorCohorts.jsx` — `/studio/courses/:courseId/cohorts`
 
 Classes inside one course. A class code both adds a student to the class list and
 enrols them in the course.
@@ -624,7 +640,7 @@ enrols them in the course.
 The page also renders `CohortDeadlineEditor` for each class, and links to the roster
 and analytics.
 
-### 4.10.20 `AdminPanel.jsx` — `/admin`
+### 4.10.21 `AdminPanel.jsx` — `/admin`
 
 The operations screen. It loads stats, all courses, the audit feed, telemetry and the
 demo-login status in parallel, then pages accounts from the server.

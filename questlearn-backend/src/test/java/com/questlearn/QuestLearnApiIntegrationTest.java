@@ -107,7 +107,7 @@ class QuestLearnApiIntegrationTest {
     @BeforeEach
     void seed() throws Exception {
         // The suite owns the whole database, so start from nothing every time.
-        jdbc.execute("TRUNCATE TABLE admin_audit_log, cohort_memberships, cohorts, enrollments, "
+        jdbc.execute("TRUNCATE TABLE announcements, admin_audit_log, cohort_memberships, cohorts, enrollments, "
                 + "email_verification_tokens, deadline_reminders, password_reset_tokens, "
                 + "module_attempts, user_module_progress, quizzes, modules, "
                 + "courses, users RESTART IDENTITY CASCADE");
@@ -1712,5 +1712,177 @@ class QuestLearnApiIntegrationTest {
         assertThat(deadlineReminderService.sendDueReminders().remindersRecorded()).isEqualTo(1);
         assertThat(jdbc.queryForObject(
                 "SELECT kind FROM deadline_reminders", String.class)).isEqualTo("OVERDUE");
+    }
+
+    // ----------------------------------------------------------- announcements
+
+    @Test
+    void announcementsReachTheWholeCourseOrOnlyTheClassTheyName() throws Exception {
+        String teacherToken = login("teacher@it.test");
+        enrollInCourse();
+
+        // A second learner is in the course but never joins the class.
+        users.save(User.builder()
+                .name("Other Learner")
+                .email("other@it.test")
+                .passwordHash(passwordEncoder.encode(PASSWORD))
+                .role(Role.STUDENT)
+                .totalXp(0)
+                .currentLevel(1)
+                .streakDays(0)
+                .emailVerified(true)
+                .build());
+        String outsiderToken = login("other@it.test");
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + outsiderToken))
+                .andExpect(status().isOk());
+
+        MvcResult cohort = mvc.perform(post("/api/v1/courses/" + course.getId() + "/cohorts")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("name", "10B"))))
+                .andExpect(status().isOk())
+                .andReturn();
+        long cohortId = json.readTree(cohort.getResponse().getContentAsString()).path("id").asLong();
+        String code = json.readTree(cohort.getResponse().getContentAsString()).path("joinCode").asText();
+        mvc.perform(post("/api/v1/cohorts/join")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("code", code))))
+                .andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of(
+                                "body", "The lab moved to Thursday."))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cohortId").doesNotExist())
+                .andExpect(jsonPath("$.authorName").value("Teacher"));
+
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of(
+                                "body", "10B writes the test on Friday.",
+                                "cohortId", cohortId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cohortName").value("10B"));
+
+        // The teacher runs the course, so they see both notes.
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].body").value("10B writes the test on Friday."));
+
+        // An admin reads the same list.
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + login("admin@it.test")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+
+        // A learner in 10B sees both.
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+
+        // A learner in the course but not in 10B never learns what 10B was told.
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + outsiderToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].body").value("The lab moved to Thursday."))
+                .andExpect(jsonPath("$[0].cohortId").doesNotExist());
+
+        // Someone outside the course reads nothing, even on a published course.
+        User stranger = users.save(User.builder()
+                .name("Stranger")
+                .email("stranger@it.test")
+                .passwordHash(passwordEncoder.encode(PASSWORD))
+                .role(Role.STUDENT)
+                .totalXp(0)
+                .currentLevel(1)
+                .streakDays(0)
+                .emailVerified(true)
+                .build());
+        assertThat(stranger.getId()).isNotNull();
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + login("stranger@it.test")))
+                .andExpect(status().isForbidden());
+
+        // Notes are written by the course's staff, not by learners.
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("body", "Not mine to post"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void onlyTheCourseStaffCanPostAndRemoveAnAnnouncement() throws Exception {
+        String teacherToken = login("teacher@it.test");
+        String adminToken = login("admin@it.test");
+
+        MvcResult created = mvc.perform(post("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("body", "Read chapter 3."))))
+                .andExpect(status().isOk())
+                .andReturn();
+        long announcementId = json.readTree(created.getResponse().getContentAsString())
+                .path("id").asLong();
+
+        // A class from another course cannot be addressed from this one.
+        MvcResult foreignCohort = mvc.perform(post("/api/v1/courses/" + draft.getId() + "/cohorts")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("name", "Other class"))))
+                .andExpect(status().isOk())
+                .andReturn();
+        long foreignCohortId = json.readTree(foreignCohort.getResponse().getContentAsString())
+                .path("id").asLong();
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of(
+                                "body", "Wrong lab", "cohortId", foreignCohortId))))
+                .andExpect(status().isNotFound());
+
+        // A blank note is refused instead of posted as an empty card.
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("body", "   "))))
+                .andExpect(status().isBadRequest());
+
+        // An instructor who does not own the course can neither read nor delete it.
+        users.save(User.builder()
+                .name("Another Teacher")
+                .email("teacher2@it.test")
+                .passwordHash(passwordEncoder.encode(PASSWORD))
+                .role(Role.INSTRUCTOR)
+                .totalXp(0)
+                .currentLevel(1)
+                .streakDays(0)
+                .emailVerified(true)
+                .build());
+        String otherTeacherToken = login("teacher2@it.test");
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + otherTeacherToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/announcements/" + announcementId)
+                        .header("Authorization", "Bearer " + otherTeacherToken))
+                .andExpect(status().isForbidden());
+
+        // The admin can remove it, and it is gone for the teacher too.
+        mvc.perform(delete("/api/v1/announcements/" + announcementId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 }

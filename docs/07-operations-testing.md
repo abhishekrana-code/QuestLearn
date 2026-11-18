@@ -354,10 +354,10 @@ instructor, course, nodes and quiz, so it does not depend on the demo seed.
 reads the Surefire XML and fails if the class is missing, skipped, or reports fewer
 than ten tests. A green CI backend job means the PostgreSQL suite really ran.
 
-At the time of writing the backend suite is **210 tests across 25 test classes**
+At the time of writing the backend suite is **212 tests across 25 test classes**
 (unit plus PostgreSQL). It covers grading, gamification arithmetic, deadline
 resolution, viva parsing and concurrency, quotas, telemetry, media storage, mail,
-auth, admin rules and the end-to-end API. On this demo machine the `it` profile is not
+auth, admin rules, announcement visibility and the end-to-end API. On this demo machine the `it` profile is not
 configured, so a local `mvn verify` reports the integration class as skipped; CI is
 the run that proves it.
 
@@ -618,7 +618,36 @@ If the scan reports a real value, rotate it. Deleting the commit or force pushin
 over it does not help once it has been pushed: GitHub keeps the object reachable and
 the value has to be assumed public.
 
-## 7.9 Known limits of this deployment
+## 7.9 Announcements
+
+The class announcement channel is deliberately **in-app only** in this version:
+posting a note sends no mail, so there is no provider, queue or scheduled job to
+watch. A note is a plain-text row in `announcements` (Flyway
+`V15__announcements.sql`), capped at 2000 characters and optionally tied to one
+class.
+
+| Where it shows | Who sees it |
+| --- | --- |
+| Student dashboard banner, and the `/announcements` notices page behind it | Learners enrolled on a published, non-archived course: the course-wide notes plus the notes for their own classes. The banner shows the newest one; the page lists them all. |
+| Studio, Publish step | The course owner and admins: every note, labelled with the class it was sent to, with a delete action. |
+
+Nothing needs configuring, but three cascade rules matter when a term is tidied up:
+
+- deleting a class deletes the notes addressed to it, so keep anything worth
+  archiving before removing the class;
+- deleting a course deletes all of its notes;
+- deleting the author's account keeps the note the class already read and leaves
+  `authorName` empty.
+
+A note is ordinary relational data, so `questlearn-backup.ps1` and
+`questlearn-restore.ps1` cover it; there is no file store and no ledger to rebuild.
+To verify the channel, run the PostgreSQL suite and read the two announcement tests
+(`announcementsReachTheWholeCourseOrOnlyTheClassTheyName` and
+`onlyTheCourseStaffCanPostAndRemoveAnAnnouncement`), then sign in as a student in a
+class that was not addressed and confirm the other class's note is absent from both
+the dashboard banner and the notices page.
+
+## 7.10 Known limits of this deployment
 
 These are deliberate trade-offs for a single-machine classroom demo, not hidden bugs.
 They are listed here so nobody plans around them by accident.
@@ -635,7 +664,7 @@ They are listed here so nobody plans around them by accident.
 | The public demo serves a **production build**, not the dev server | Source edits are invisible until a rebuild. | That is the intended behaviour. |
 | `tailscale funnel` is machine-local | A new machine or hostname needs the Funnel and Vite `allowedHosts` updated together. | Configuration management. |
 
-## 7.10 Troubleshooting
+## 7.11 Troubleshooting
 
 | Symptom | First check | Likely fix |
 | --- | --- | --- |
@@ -660,7 +689,7 @@ They are listed here so nobody plans around them by accident.
 | Backup check fails with "past the 48 hour limit" | Task Scheduler and `backups/` | Re-register the backup task; run a backup manually and verify it. |
 | Two instances fight over the port | `Get-NetTCPConnection -LocalPort 8091` | Stop the extra process; the scripts stop the owner of the port, never a name match. |
 
-## 7.11 A short release checklist
+## 7.12 A short release checklist
 
 1. `mvn -B verify` in `questlearn-backend` with `IT_DB_*` set, or confirm CI ran the
    PostgreSQL suite.

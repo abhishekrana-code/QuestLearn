@@ -14,6 +14,7 @@ import {
   Trophy,
   Zap,
 } from 'lucide-react';
+import AnnouncementBanner from '../components/announcements/AnnouncementBanner.jsx';
 import EmailVerificationBanner from '../components/common/EmailVerificationBanner.jsx';
 import DeadlinePanel from '../components/deadlines/DeadlinePanel.jsx';
 import LoadErrorBanner from '../components/common/LoadErrorBanner.jsx';
@@ -113,6 +114,8 @@ export default function StudentDashboard() {
       </header>
 
       <EmailVerificationBanner className="mb-5" />
+
+      <AnnouncementBanner courses={enrolledCourses} className="mb-5" />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1.55fr_1fr_1fr]">
         <div className="col-span-2 lg:col-span-1">

@@ -172,6 +172,9 @@ answered with a generic sentence plus the request id.
 | POST | `/courses/{courseId}/cohorts` | staff | 200 `CohortDto` |
 | DELETE | `/cohorts/{cohortId}` | staff | 204 |
 | POST | `/cohorts/join` | student | 200 `CohortJoinResponse` |
+| GET | `/courses/{courseId}/announcements` | any | 200 `AnnouncementDto[]` |
+| POST | `/courses/{courseId}/announcements` | staff | 200 `AnnouncementDto` |
+| DELETE | `/announcements/{announcementId}` | staff | 204 |
 | POST | `/modules/{moduleId}/video` | staff | 200 `VideoAttachmentDto` |
 | POST | `/modules/{moduleId}/video/upload-ticket` | staff | 200 `VideoUploadTicketDto` |
 | POST | `/modules/{moduleId}/video/attachments` | staff | 200 `VideoAttachmentDto` |
@@ -426,14 +429,38 @@ date but never decides lateness.
 | --- | --- | --- |
 | `GET /courses/{courseId}/cohorts` | — | 200 `CohortDto[]`: `{ id, courseId, name, joinCode, memberCount, createdAt }`. |
 | `POST /courses/{courseId}/cohorts` | `{ name }` | 200 with the new class and its join code. Name required, at most 120 characters. |
-| `DELETE /cohorts/{cohortId}` | — | 204. Removes the grouping only; members keep the course and their progress. |
+| `DELETE /cohorts/{cohortId}` | — | 204. Removes the grouping and the announcements addressed to it; members keep the course and their progress. |
 | `POST /cohorts/join` | `{ code }` | 200 `CohortJoinResponse`: `{ cohortId, cohortName, courseId, courseTitle, alreadyMember }`. Adds the student to the class **and** enrols them in the course in one transaction. 404 for an unknown code; 403 for a non-student, an unpublished course, or an archived one. |
 
 A class code is not a password for the course's content: it is an invitation that
 performs two memberships at once. A student who is already in the class gets
 `alreadyMember: true` instead of a duplicate row.
 
-## 6.8 Lesson video
+## 6.8 Announcements
+
+A teacher's note to a course, or to one class inside it. This is an **in-app**
+channel: nothing is emailed, so the dashboard banner, the student notices page and
+the studio panel are the only places a note appears.
+
+| Endpoint | Request | Behaviour and failures |
+| --- | --- | --- |
+| `GET /courses/{courseId}/announcements` | — | 200 `AnnouncementDto[]`, newest first. Staff who manage the course see every note with the class it names; a learner must be enrolled on a published, non-archived course and receives the course-wide notes plus the notes for their own classes only. |
+| `POST /courses/{courseId}/announcements` | `{ body, cohortId? }` | 200 `AnnouncementDto`. **Staff** and owner-or-admin. `body` is trimmed; blank is 400 and the length cap is 2000 characters. `cohortId` omitted (or `null`) addresses the whole course; an unknown class, or one from another course, is 404. |
+| `DELETE /announcements/{announcementId}` | — | 204. **Staff** and owner-or-admin of the note's course. 404 for an unknown id. A deleted author does not delete the note; the row stays with `authorName: null`. |
+
+`AnnouncementDto`:
+
+```text
+id, courseId, cohortId, cohortName, authorName, body, createdAt
+```
+
+`cohortId` and `cohortName` are null for a course-wide note. Reading failures keep
+the existing vocabulary: a non-owner instructor, an unenrolled student, an
+unpublished course and an archived course are all **403** with a distinct message,
+and an unknown course is **404**. The class filter is applied on the server, so a
+learner in 10B never receives a note written for 10C.
+
+## 6.9 Lesson video
 
 Video bytes never pass through the application server in the normal flow. The
 browser asks for a ticket, uploads directly, then records the object.
@@ -460,7 +487,7 @@ Every endpoint here is **staff** and owner-or-admin.
 Deleting or replacing a video removes the stored object. Uploaded files live on disk
 (`./uploads/videos` by default), not in the database, so they need their own backup.
 
-## 6.9 Viva
+## 6.10 Viva
 
 Two shapes of the same attempt. Both return `VivaGradeResponse` and share grading,
 XP, unlocks and history.
@@ -489,7 +516,7 @@ upstream failure is **502**; a rate-limited model is **429**. The permit pool
 (`AI_MAX_CONCURRENT_VIVAS`, default 4) fails fast instead of queueing, because a
 student watching a spinner cannot tell "busy" from "broken".
 
-## 6.10 AI authoring
+## 6.11 AI authoring
 
 | Endpoint | Request | Behaviour and failures |
 | --- | --- | --- |
@@ -509,7 +536,7 @@ teacher knows which nodes still need a quiz. Generation is quota-limited per acc
 per rolling hour (30 by default) and per deployment per calendar day (150); exceeding
 either is **429**. The quota is in memory.
 
-## 6.11 Analytics
+## 6.12 Analytics
 
 `GET /courses/{courseId}/analytics?cohortId=` — **staff**, owner-or-admin.
 
@@ -531,7 +558,7 @@ with the largest reached-minus-cleared gap, already computed by the server so ev
 client names the same teaching target. An unknown class, or one from another course,
 is 404.
 
-## 6.12 Administration — `/api/v1/admin`
+## 6.13 Administration — `/api/v1/admin`
 
 Every endpoint in this group is **admin** except the node-progress reset, which is
 **staff** and limited to the teacher's own course.
@@ -561,7 +588,7 @@ and the server log describe the same incident.
 | `GET /actuator/metrics`, other actuator paths | admin | Micrometer metrics; `TelemetryService` reads the same registry for the admin view. |
 | `GET /swagger-ui.html`, `/v3/api-docs` | public in dev | Interactive schema. Disabled by the `prod` profile because production should not publish the whole surface. |
 
-## 6.13 Client guidance
+## 6.14 Client guidance
 
 - **Never compute a grade, an unlock, a level or a deadline state locally.** Every
   one of them is returned by the API, and the browser is only a renderer.
