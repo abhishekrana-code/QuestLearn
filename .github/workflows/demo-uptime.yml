@@ -25,7 +25,7 @@ on:
   # still passes from an outside network.
   push:
     paths:
-      - '.github/workflows/uptime.yml'
+      - '.github/workflows/demo-uptime.yml'
   workflow_dispatch:
 
 permissions:

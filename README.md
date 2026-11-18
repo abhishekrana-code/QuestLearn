@@ -275,7 +275,7 @@ printed `Another QuestLearn watchdog is already running.` and exited without tou
 ### Outside monitoring
 
 The watchdog runs on the laptop it watches, so it cannot report a sleeping machine, a stopped
-`vite preview` behind the Funnel, or Tailscale no longer publishing. `.github/workflows/uptime.yml`
+`vite preview` behind the Funnel, or Tailscale no longer publishing. `.github/workflows/demo-uptime.yml`
 closes that gap from GitHub's runners, every ten minutes:
 
 - it fetches `https://questlearn.taileb48b2.ts.net/` and expects 200, then posts a demo login to
