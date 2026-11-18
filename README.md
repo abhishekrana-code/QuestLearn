@@ -11,6 +11,20 @@ Built with a focus on fluid animations, clean modular architecture, and low-memo
 For an administrator's assessment of what is production-ready and what a real classroom
 still needs, see [`AUDIT.md`](AUDIT.md).
 
+For the full explanation — architecture, a function-level reference for the backend and
+frontend, end-to-end flows, the API, and how to run and test it — start at
+[`docs/README.md`](docs/README.md):
+
+| Page | What it covers |
+| :--- | :--- |
+| [Overview](docs/01-overview.md) | Purpose, users, rules of the game (XP, levels, streaks, deadlines). |
+| [Architecture](docs/02-architecture.md) | Processes, data model, security, configuration, failure modes. |
+| [Backend reference](docs/03-backend-reference.md) | Every backend class and function. |
+| [Frontend reference](docs/04-frontend-reference.md) | Every route, context, hook, service, component and page. |
+| [Flows](docs/05-flows.md) | Sign-up, enrolment, clearing a node, the viva, roster import, authoring, admin. |
+| [API](docs/06-api.md) | Endpoint-by-endpoint requests, responses, roles and errors. |
+| [Operations & testing](docs/07-operations-testing.md) | Build, run, publish, back up, test, observe and troubleshoot. |
+
 ---
 
 ## Key Features
@@ -760,30 +774,34 @@ cd questlearn-backend && mvn -B -DskipTests package
 cd questlearn-frontend && npm run build
 ```
 
-### Smoke suite (Playwright)
+### Browser suite (Playwright)
 
-Two browser tests drive the loops a real learner and teacher go through, and they
-are the only checks that exercise the pages against the real API.
+Thirteen browser tests across five specs drive the loops a real learner, teacher and
+administrator go through against the running API:
 
-1. **Open course:** register a fresh account, join a course from the catalogue,
-   clear the first node, then sign in as the instructor and find that learner on
-   the roster with `1/6` cleared.
-2. **Members-only course:** the instructor flips a course to members only, creates a
-   class and reads out its code; a new student cannot see the course in the
-   catalogue and is refused the direct link, then joins with the code and lands on
-   the skill tree. The test restores the course and deletes its class when it
-   finishes, even after a failure.
+1. **`smoke.spec.js`** — a fresh account joins a course, clears the first node, and
+   appears on the instructor's roster at `1/6`. A members-only course is invisible
+   until the class code is used, and the test restores the course afterwards.
+2. **`studio.spec.js`** — the node form places nodes without pixel maths, a disabled
+   delete explains itself to keyboard users, resetting a learner uses the in-app
+   dialog, and the analytics links share one phrase.
+3. **`next-node.spec.js`** — the dashboard continue card deep-links into the next
+   node, and a stale node parameter explains itself.
+4. **`admin.spec.js`** — the health card counts real requests and latencies, demo
+   logins are named, and the accessibility page only claims what the forms do.
+5. **`mobile-nav.spec.js`** — the mobile menu closes on its own button and on an
+   outside tap.
 
 ```bash
-# Needs the backend on :8091 (the spec checks and says so if it is missing).
+# Needs the backend on :8091 (the specs check and say so if it is missing).
 # The dev server is started for you on :5180 if it is not already running.
 cd questlearn-frontend
 npx playwright install chromium   # once per machine
-npm run test:e2e
+npm run test:e2e                  # needs DEMO_PASSWORD from the root .env
 ```
 
-Each run registers a new `smoke.<timestamp>@questlearn.dev` student, so a local
-database collects a few of them over time; CI uses a throwaway database.
+Each smoke run registers a new `smoke.<timestamp>@questlearn.dev` student and the
+account is deleted when the test finishes; CI uses a throwaway database.
 
 ## Troubleshooting
 

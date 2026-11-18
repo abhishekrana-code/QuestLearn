@@ -37,10 +37,10 @@ verified in the browser without committing it.
 
 | Script | What it does | When it runs |
 | --- | --- | --- |
-| `questlearn-up.ps1` | Starts the backend if health fails, builds `dist` only when it is missing, starts preview if 5180 is silent, starts the frontend watcher and the Java watcher if absent, then registers the Funnel with `tailscale funnel --bg 5180`. Safe to re-run. | The **QuestLearn demo** scheduled task, at sign-in. |
+| `questlearn-up.ps1` | Starts the backend if health fails, holding the first start until Windows has finished booting (two quiet CPU samples, at most five minutes), builds `dist` only when it is missing, starts preview if 5180 is silent, starts the frontend watcher and the Java watcher if absent, then registers the Funnel with `tailscale funnel --bg 5180`. Safe to re-run. | The **QuestLearn demo** scheduled task, at sign-in. |
 | `questlearn-publish.ps1` | Rebuilds the frontend (unless `-SkipBuild`), stops only the process that owns 5180, starts preview again, then checks that the public URL serves the bundle named in `dist/index.html`. | `npm run publish`, or manually. |
 | `questlearn-watch-java.ps1` | Polls backend source timestamps; on a change it stops the JVM, packages the jar, restores the previous jar if the build fails, starts the new one and waits for health. | Started by `questlearn-up.ps1`; the demo process. |
-| `questlearn-watchdog.ps1` | Polls `/actuator/health` every 30 s; after 2 minutes unhealthy it stops whatever owns 8091, starts the jar, waits up to 180 s, and emails one alert per outage. | The **QuestLearn watchdog** task, at startup, as `SYSTEM`. |
+| `questlearn-watchdog.ps1` | Polls `/actuator/health` every 30 s; after 2 minutes unhealthy it stops whatever owns 8091, starts the jar, waits up to 8 minutes for it (a start during Windows boot was measured at 245 s), and emails one alert per outage. | The **QuestLearn watchdog** task, at startup, as `SYSTEM`. |
 | `questlearn-backup.ps1` | Dumps the database in custom format, zips `questlearn-backend/uploads`, writes a manifest, and keeps the newest 7 runs. | The **QuestLearn backup** task, daily at 02:30, as `SYSTEM`. |
 | `questlearn-restore.ps1` | Stops the backend, restores the dump with `--clean --if-exists`, replaces the uploads folder, starts the backend and waits for health. | Manually, during recovery. |
 | `questlearn-verify-backup.ps1` | Restores the newest backup into a scratch database, checks schema version and row floors, compares the uploads archive with the manifest, drops the scratch database, and alerts on failure. | The **QuestLearn backup check** task, Sunday at 03:30. |
@@ -69,6 +69,61 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\register-backup-chec
 | QuestLearn backup check | Sunday 03:30 | `SYSTEM` | Same, and it runs an hour after the nightly dump. |
 
 Re-register the logon task after moving the repository: it stores an absolute path.
+
+### Before a demo
+
+`questlearn-preflight.ps1` answers whether the demo is actually reachable before
+anyone opens it on a projector. It only checks: nothing is started unless asked, and
+no power setting is changed.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-preflight.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-preflight.ps1 -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\questlearn-preflight.ps1 -StartIfDown
+```
+
+Exit 0 means every check passed, 1 means one failed, 2 means the host or the
+configuration is unusable. A check that could not run says SKIPPED and is never
+reported as a pass. Findings are appended to `logs\preflight.log` with timestamps and
+no secret values.
+
+| Setting | Environment variable | Default |
+| --- | --- | --- |
+| `BackendUrl` | `QUESTLEARN_BACKEND_URL` | `http://localhost:8091` |
+| `FrontendUrl` | `QUESTLEARN_FRONTEND_URL` | `http://localhost:5180` |
+| `PublicUrl` | `QUESTLEARN_PUBLIC_URL` | `https://questlearn.taileb48b2.ts.net` |
+| `Retries` | `QUESTLEARN_PREFLIGHT_RETRIES` | 3 |
+| `TimeoutSeconds` | `QUESTLEARN_PREFLIGHT_TIMEOUT` | 10 |
+| `RetryDelaySeconds` | `QUESTLEARN_PREFLIGHT_RETRY_DELAY` | 3 |
+| `LogPath` | `QUESTLEARN_PREFLIGHT_LOG` | `logs\preflight.log` |
+| `Email` | `QUESTLEARN_EMAIL` | none, so sign-in is SKIPPED |
+| `Password` | `QUESTLEARN_PASSWORD` | none, then `DEMO_PASSWORD` from `questlearn-backend\.env` |
+
+Each value can also be passed as a parameter. The password deliberately has no
+parameter: it would land in the process command line. Without both an email and a
+password, the sign-in check says SKIPPED rather than guessing.
+
+| Check | A FAIL means | What to do |
+| --- | --- | --- |
+| AC Power | the machine is on battery, or the battery state cannot be read; nothing else is checked | connect the charger and re-run |
+| Standby Prevention | Windows refused the execution-state request | run from an interactive window and keep the lid open |
+| Backend Readiness | `/actuator/health` did not answer, did not answer 200, or did not report `UP` | `scripts\questlearn-up.ps1`, or re-run with `-StartIfDown` |
+| Frontend Readiness | the preview did not answer or served something other than the app shell | `scripts\questlearn-up.ps1`; `npm run publish` if the bundle is stale |
+| Frontend API Proxy | the preview's `/api` did not reach the API (5xx or no answer) | start the backend and check `SERVER_PORT` |
+| Public URL Accessibility | DNS, TLS, timeout or HTTP failure at the Funnel root | `tailscale funnel status`, then `tailscale funnel --bg 5180` |
+| Login Page Accessibility | `/login` was not served through the Funnel | check the Funnel first, then `npm run publish` |
+| Authentication Verification | the public login rejected the credentials, was throttled, or the token failed `/auth/me` | check the email and password; reset the demo password from `/admin` if it changed |
+
+The public checks confirm the Funnel serves the app shell and that a real sign-in
+works; they do not click through pages, so the rendered page still deserves a look in
+a browser. `-DryRun` skips the keep-awake request and the login call, and ignores
+`-StartIfDown`.
+
+The execution-state request (`ES_CONTINUOUS | ES_SYSTEM_REQUIRED`) is released in a
+`finally` block, including on Ctrl+C. A hard kill, a crash or power loss cannot run
+that cleanup, but Windows drops the request with the thread, so no setting is left
+behind. It also has no vote in a firmware-level Modern Standby transition, which is
+why the AC check comes first.
 
 ## 7.2 Running from source
 
@@ -277,9 +332,8 @@ mvn test
 # Full lifecycle, including the PostgreSQL integration suite when configured.
 mvn verify
 
-# One class or one method while iterating.
+# One class while iterating.
 mvn -Dtest=VivaGraderTest test
-mvn -Dtest=VivaGraderTest#clampsScores test
 ```
 
 The integration class is `QuestLearnApiIntegrationTest`, annotated with
@@ -314,7 +368,6 @@ cd questlearn-frontend
 npm ci
 npm test                 # vitest run
 npx vitest run src/services/deadlines.test.js
-npm run test:coverage    # only if the coverage provider is installed
 ```
 
 Vitest runs in jsdom. Playwright owns `e2e/`, and `vite.config.js` excludes that folder
@@ -326,7 +379,7 @@ CSV quoting and the verification page.
 
 ### Browser tests (Playwright)
 
-The smoke suite is the only check that drives real pages against the real API.
+The Playwright suite is the only run that drives real pages against the real API.
 
 ```bash
 cd questlearn-frontend
@@ -346,11 +399,11 @@ At the time of writing there are **13 tests across five specs**:
 
 | Spec | Covers |
 | --- | --- |
-| `smoke.spec.js` | Public pages, sign-in, the learner quiz loop, the instructor roster, the members-only class-code path, cleanup after failure. |
-| `studio.spec.js` | Course creation and the studio's authoring screens. |
-| `next-node.spec.js` | The dashboard's "pick up here" deep link into the skill tree. |
-| `mobile-nav.spec.js` | The mobile menu opens and closes; the X and outside tap do not fight the toggle. |
-| `admin.spec.js` | Admin account search, role changes and the guarded actions. |
+| `smoke.spec.js` | Public pages, sign-up, joining a course, clearing a node, the instructor roster, the members-only class-code path, cleanup after failure. |
+| `studio.spec.js` | Unpublished-course delete explained to keyboard users, node auto-placement, the reset-node dialog, and the shared analytics links. |
+| `next-node.spec.js` | The dashboard's "pick up here" deep link into the skill tree, and the message for a stale `node` parameter. |
+| `mobile-nav.spec.js` | The mobile menu closes on its own X and on an outside tap without fighting the toggle. |
+| `admin.spec.js` | The telemetry health card, named demo logins, and the narrowed accessibility claims. |
 
 One worker and no parallelism are deliberate: the specs create accounts and mutate
 shared demo courses. Each spec deletes the accounts and classes it created, even when
@@ -398,8 +451,8 @@ That value is not a production secret and is not used by the local demo.
 
 `RequestTraceFilter` gives every request an id, puts it in the response header
 `X-Request-Id`, in the logging MDC and in error bodies. A support report that quotes
-the id can be matched to the exact log lines, including the authenticated user and the
-final status.
+the id can be matched to the exact log lines for that request, including the final
+status and duration.
 
 ### Telemetry
 
@@ -534,6 +587,37 @@ works.
 - **Treat `prod` as the only safe profile for a real deployment.** It removes the
   development secret, disables schema discovery and closes open student sign-up.
 
+### Secret guard
+
+A public repository cannot take a credential back, so the same rules run before a
+commit exists and after it is pushed:
+
+| Where | What it runs |
+| --- | --- |
+| `.githooks/pre-commit` | `sh scripts/secret-scan.sh --staged` on the files in the index |
+| CI job `secrets` | `sh scripts/secret-scan.sh --tree --history` on the tracked tree and every commit |
+
+`scripts/secret-scan.sh` fails on `.env` and its variants (`.env.example` and the
+other templates are allowed), private key material, `.npmrc`/`.pgpass`/`.netrc`, and
+strings shaped like provider API keys, private key blocks and password-carrying
+PostgreSQL URLs. It prints the rule, file and line, never the value, because that
+output is a terminal transcript and a CI log. The tree scan is what catches a secret
+that predates the hook.
+
+Enable the hook once per clone, from the repository root:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+That setting is repository-local, not global. `git commit --no-verify` still bypasses
+the hook, which is why the CI job exists; a `secret-scan:allow` marker on a line
+silences a deliberate placeholder without weakening the rule.
+
+If the scan reports a real value, rotate it. Deleting the commit or force pushing
+over it does not help once it has been pushed: GitHub keeps the object reachable and
+the value has to be assumed public.
+
 ## 7.9 Known limits of this deployment
 
 These are deliberate trade-offs for a single-machine classroom demo, not hidden bugs.
@@ -544,7 +628,7 @@ They are listed here so nobody plans around them by accident.
 | Login lockout, AI quota, viva permits, telemetry, audit and the error ring are **in memory** | A restart resets them; two instances do not share them. | Redis or a database-backed counter. |
 | Lesson videos are on **local disk** by default | A second instance cannot see the first one's uploads. | Shared object storage (`MEDIA_STORAGE=s3`) or a shared volume. |
 | The deadline digest scheduler is **single-instance** | Two instances would send the digest twice. | A leader election or an external scheduler. |
-| SQLite-style assumptions do not apply: it is PostgreSQL, but the demo uses a **small Hikari pool** (5 local, 10 prod) | Heavy parallel load queues rather than scaling out. | Tune the pool and the database together. |
+| The demo runs **one JVM with a small Hikari pool** (5 local, 10 prod) | Heavy parallel load queues rather than scaling out. | Tune the pool and the database together; add instances only after moving shared state out of memory. |
 | The Funnel points at **one machine** | If the machine sleeps or loses Tailscale, the public URL fails even if the JVM is healthy. | A real host with a stable uptime contract. |
 | The local integration suite is **opt-in** (`IT_DB_URL`) | `mvn verify` can be green while the PostgreSQL suite is skipped. | CI's report guard is the required proof. |
 | H2 profile is **not schema-equivalent** | It is fine for a smoke run, not for trusting JSONB or migrations. | Always test on PostgreSQL. |

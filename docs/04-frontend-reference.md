@@ -695,16 +695,16 @@ Unit tests run in Vitest with Testing Library:
 | `components/deadlines/DeadlinePanel.test.jsx` | Ordering, the five-item cap, the digest toggle. |
 | `components/quiz/MCQCard.test.jsx` | Selection and disabled state. |
 | `components/studio/QuizEditor.test.jsx` | Visual/JSON round-trip and invalid JSON refusal. |
-| `components/hooks/useDialogFocus.test.jsx` | Focus entry, Tab wrapping and restoration. |
+| `hooks/useDialogFocus.test.jsx` | Focus entry, Tab wrapping and restoration. |
 | `services/deadlines.test.js` | State mapping, sorting, local/UTC conversion. |
 | `services/media.test.js` | Direct-play detection and YouTube/Vimeo extraction. |
 | `services/rosterCsv.test.js` | Quoting, filenames and row shape. |
 | `pages/VerifyEmail.test.jsx` | Success, expired and missing-token states. |
 
 End-to-end specs live in `e2e/` and run through Playwright against a real backend
-(see [07-operations-testing.md](07-operations-testing.md)). They cover the public
-pages, sign-in, the learner quiz flow, the studio, the roster, mobile navigation and
-the viva fallback.
+(see [07-operations-testing.md](07-operations-testing.md)). Five specs cover the
+public pages and the learner loop, studio authoring safeguards, the dashboard's
+next-node deep link, mobile navigation and the admin health/accessibility claims.
 
 ## 4.13 Adding a screen safely
 

@@ -41,7 +41,7 @@ QuestLearn/
 ├── questlearn-backend/     Spring Boot 3.4.5 · Java 21 · Maven · PostgreSQL 16
 │   ├── src/main/java/com/questlearn/
 │   │   ├── config/         startup, security, media, mail, scheduling
-│   │   ├── controller/     11 REST controllers
+│   │   ├── controller/     12 REST controllers
 │   │   ├── dto/            request and response records
 │   │   ├── email/          pluggable delivery (log, SMTP, Resend)
 │   │   ├── exception/      ApiException + one global handler
@@ -60,7 +60,7 @@ QuestLearn/
 │   │   ├── components/     auth, common, deadlines, gamification, quiz, skilltree, studio, viva
 │   │   ├── context/        auth, gamification, theme
 │   │   ├── hooks/          auto-retry, dialog focus
-│   │   ├── pages/          21 route-level screens
+│   │   ├── pages/          20 route-level screens
 │   │   ├── services/       HTTP, media, AI, deadlines, CSV, lesson payloads
 │   │   └── utils/
 │   └── e2e/                five Playwright specs
@@ -69,7 +69,7 @@ QuestLearn/
 ├── .github/workflows/      three-job CI (backend, frontend, e2e)
 ├── ARCHITECTURE.md         earlier architecture note, still useful
 ├── AUDIT.md                UX/accessibility review evidence
-└── DOCS: this directory
+└── docs/                   this documentation set
 ```
 
 ## Very short version
