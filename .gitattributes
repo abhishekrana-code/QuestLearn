@@ -1,0 +1,4 @@
+# sh fails on a CRLF script, and this machine checks out with core.autocrlf=true,
+# so anything the guard or the hooks execute is pinned to LF.
+*.sh text eol=lf
+.githooks/* text eol=lf

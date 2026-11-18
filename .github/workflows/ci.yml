@@ -8,6 +8,20 @@ permissions:
   contents: read
 
 jobs:
+  # A public repository cannot take a credential back. This job runs the same
+  # scanner as the local pre-commit hook over the working tree and every commit,
+  # so a secret added with --no-verify, or added before the hook existed, still
+  # fails the build. Without fetch-depth 0 the history is one commit deep and the
+  # history scan passes by seeing nothing.
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Refuse env files and key-shaped strings
+        run: sh scripts/secret-scan.sh --tree --history
+
   backend:
     runs-on: ubuntu-latest
     services:
