@@ -624,12 +624,22 @@ The class announcement channel is deliberately **in-app only** in this version:
 posting a note sends no mail, so there is no provider, queue or scheduled job to
 watch. A note is a plain-text row in `announcements` (Flyway
 `V15__announcements.sql`), capped at 2000 characters and optionally tied to one
-class.
+class. Read state is a second table, `announcement_reads`
+(`V16__announcement_reads.sql`): one row per reader and note, unique on the pair,
+both references cascading. Absence of a row is the unread state.
 
 | Where it shows | Who sees it |
 | --- | --- |
-| Student dashboard banner, and the `/announcements` notices page behind it | Learners enrolled on a published, non-archived course: the course-wide notes plus the notes for their own classes. The banner shows the newest one; the page lists them all. |
-| Studio, Publish step | The course owner and admins: every note, labelled with the class it was sent to, with a delete action. |
+| Student dashboard banner, the **Notices** nav link and the `/announcements` page | Learners enrolled on a published, non-archived course: the course-wide notes plus the notes for their own classes. The banner shows the newest one with the unread count; the nav link carries the count; the page filters, lists and pages them, marks one or all read, and runs on `GET /announcements`. |
+| Studio, Publish step | The course owner and admins: every note, labelled with the class it was sent to, with its read count and percentage, an expandable list of who has not read it, and a delete action. |
+
+The learner endpoints are `GET /announcements` (paged feed with `unreadCount`),
+`GET /announcements/unread-count`, `POST /announcements/read-all` and
+`POST /announcements/{id}/read`. The staff endpoints are
+`GET /courses/{courseId}/announcements/receipts` (counts) and
+`GET /announcements/{id}/receipts?status=unread|read|all` (paged names). Receipts
+never count the author or a reader outside the note's audience, and no learner can
+reach them.
 
 Nothing needs configuring, but three cascade rules matter when a term is tidied up:
 
@@ -641,11 +651,20 @@ Nothing needs configuring, but three cascade rules matter when a term is tidied 
 
 A note is ordinary relational data, so `questlearn-backup.ps1` and
 `questlearn-restore.ps1` cover it; there is no file store and no ledger to rebuild.
-To verify the channel, run the PostgreSQL suite and read the two announcement tests
-(`announcementsReachTheWholeCourseOrOnlyTheClassTheyName` and
-`onlyTheCourseStaffCanPostAndRemoveAnAnnouncement`), then sign in as a student in a
-class that was not addressed and confirm the other class's note is absent from both
-the dashboard banner and the notices page.
+To verify the channel, run the PostgreSQL suite and read the announcement tests
+(`announcementsReachTheWholeCourseOrOnlyTheClassTheyName`,
+`onlyTheCourseStaffCanPostAndRemoveAnAnnouncement`) plus the reading and receipt
+tests (`markingANoteReadIsIdempotentAndRefusedOutsideTheAudience`,
+`twoTabsMarkingTheSameNoteBothAnswer204`, `theAuthorDoesNotSeeTheirOwnNoteAsUnread`,
+`theFeedMergesCoursesAndKeepsTheClassBoundary`, `theFeedPagesNewestFirst`,
+`aClosedCourseStopsFeedingNoticesWithoutFailingTheRest`,
+`markAllReadClearsOnlyTheLearnersOwnUnreadNotes`,
+`receiptsCountOnlyTheAudienceAndRefuseEveryoneElse`). They need a database of their
+own because the suite truncates every table: create one, then pass
+`IT_DB_URL=jdbc:postgresql://localhost:5432/questlearn_it`, `IT_DB_USER` and
+`IT_DB_PASSWORD` to `mvn test -Dtest=QuestLearnApiIntegrationTest`. Then sign in as a
+student in a class that was not addressed and confirm the other class's note is
+absent from the dashboard banner, the nav badge count and the notices page.
 
 ## 7.10 Known limits of this deployment
 

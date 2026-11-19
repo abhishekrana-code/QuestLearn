@@ -174,6 +174,12 @@ answered with a generic sentence plus the request id.
 | POST | `/cohorts/join` | student | 200 `CohortJoinResponse` |
 | GET | `/courses/{courseId}/announcements` | any | 200 `AnnouncementDto[]` |
 | POST | `/courses/{courseId}/announcements` | staff | 200 `AnnouncementDto` |
+| GET | `/announcements` | student | 200 `AnnouncementFeedPage` |
+| GET | `/announcements/unread-count` | student | 200 `{ unread }` |
+| POST | `/announcements/read-all` | student | 200 `{ marked }` |
+| POST | `/announcements/{announcementId}/read` | any | 204 |
+| GET | `/courses/{courseId}/announcements/receipts` | staff | 200 `AnnouncementReceiptSummaryDto[]` |
+| GET | `/announcements/{announcementId}/receipts` | staff | 200 `AnnouncementReceiptsDto` |
 | DELETE | `/announcements/{announcementId}` | staff | 204 |
 | POST | `/modules/{moduleId}/video` | staff | 200 `VideoAttachmentDto` |
 | POST | `/modules/{moduleId}/video/upload-ticket` | staff | 200 `VideoUploadTicketDto` |
@@ -445,20 +451,40 @@ the studio panel are the only places a note appears.
 | Endpoint | Request | Behaviour and failures |
 | --- | --- | --- |
 | `GET /courses/{courseId}/announcements` | — | 200 `AnnouncementDto[]`, newest first. Staff who manage the course see every note with the class it names; a learner must be enrolled on a published, non-archived course and receives the course-wide notes plus the notes for their own classes only. |
-| `POST /courses/{courseId}/announcements` | `{ body, cohortId? }` | 200 `AnnouncementDto`. **Staff** and owner-or-admin. `body` is trimmed; blank is 400 and the length cap is 2000 characters. `cohortId` omitted (or `null`) addresses the whole course; an unknown class, or one from another course, is 404. |
+| `POST /courses/{courseId}/announcements` | `{ body, cohortId? }` | 200 `AnnouncementDto`. **Staff** and owner-or-admin. `body` is trimmed; blank is 400 and the length cap is 2000 characters. `cohortId` omitted (or `null`) addresses the whole course; an unknown class, or one from another course, is 404. The author's own read row is written, so the note is not unread for them. |
+| `GET /announcements` | `page?`, `size?`, `courseId?`, `unread?` | 200 `AnnouncementFeedPage`, **students only**. Every visible note across the learner's courses, newest first, without a request per course. `size` is clamped to 50. An archived or unpublished course is skipped, not refused. `courseId` outside the learner's courses returns an empty page. |
+| `GET /announcements/unread-count` | — | 200 `{ unread }`, students only. The same audience as the feed, counted without paging. |
+| `POST /announcements/read-all` | — | 200 `{ marked }`, students only. Marks the notes the feed would show and nothing else; already-read notes are left alone. |
+| `POST /announcements/{announcementId}/read` | — | 204, idempotent. The note must be one the caller may read: staff who manage the course, or an enrolled learner on a live course, and for a class note that learner must be in the class. A second call, including one racing from another tab, keeps the first read time. |
+| `GET /courses/{courseId}/announcements/receipts` | — | 200 `AnnouncementReceiptSummaryDto[]`, **staff** and owner-or-admin. One row per note in the course with `{ announcementId, recipients, read, readPercent }`. Recipients are the current audience, and reads are intersected with it. |
+| `GET /announcements/{announcementId}/receipts` | `status?` (`unread`\|`read`\|`all`), `page?`, `size?` | 200 `AnnouncementReceiptsDto`, **staff** and owner-or-admin. The counts cover the whole audience; `rows` are paged and sorted by name, with `readAt: null` for a learner who has not read it. Names only, never addresses. |
 | `DELETE /announcements/{announcementId}` | — | 204. **Staff** and owner-or-admin of the note's course. 404 for an unknown id. A deleted author does not delete the note; the row stays with `authorName: null`. |
 
 `AnnouncementDto`:
 
 ```text
-id, courseId, cohortId, cohortName, authorName, body, createdAt
+id, courseId, cohortId, cohortName, authorName, body, createdAt, read
 ```
 
-`cohortId` and `cohortName` are null for a course-wide note. Reading failures keep
-the existing vocabulary: a non-owner instructor, an unenrolled student, an
-unpublished course and an archived course are all **403** with a distinct message,
-and an unknown course is **404**. The class filter is applied on the server, so a
-learner in 10B never receives a note written for 10C.
+`cohortId` and `cohortName` are null for a course-wide note. `read` is the
+caller's own state, not a property of the note.
+
+`AnnouncementFeedPage`:
+
+```text
+announcements: [{ id, courseId, courseTitle, courseEmoji, cohortId, cohortName,
+                  authorName, body, createdAt, read }],
+unreadCount, total, page, size, totalPages
+```
+
+`unreadCount` covers every visible note, not just the returned page. The feed
+resolves the audience once per course and per class, then filters and pages the
+result in memory, which is bounded by the notes on the learner's own courses.
+
+Reading failures keep the existing vocabulary: a non-owner instructor, an
+unenrolled student, an unpublished course and an archived course are all **403**
+with a distinct message, and an unknown course is **404**. The class filter is
+applied on the server, so a learner in 10B never receives a note written for 10C.
 
 ## 6.9 Lesson video
 

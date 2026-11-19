@@ -242,7 +242,12 @@ needed, and pick a status code. All paths are under `/api/v1` (declared per clas
 | --- | --- | --- |
 | `list` | `GET /courses/{courseId}/announcements` | Newest first. Staff who manage the course see every note; an enrolled learner sees course-wide notes plus their own classes' notes. |
 | `create` | `POST /courses/{courseId}/announcements` | Staff and owner-or-admin: posts to the whole course or one class. |
+| `feed` | `GET /announcements` | Students only: every visible note across their courses, newest first, with `unreadCount`, an optional course and unread filter, and a clamped page. Archived and unpublished courses are skipped. |
+| `unreadCount` | `GET /announcements/unread-count` | Students only: the feed's unread number without a page of notes. |
+| `markAllRead` | `POST /announcements/read-all` | Students only: marks the notes the feed would show, leaves already-read ones alone, and returns how many changed. |
 | `markRead` | `POST /announcements/{announcementId}/read` | Records the caller's read; the note must be one the caller's page would show, so a guessed id outside their courses or classes is refused. `204`, idempotent. |
+| `receiptSummaries` | `GET /courses/{courseId}/announcements/receipts` | Staff: one `{ announcementId, recipients, read, readPercent }` per note in the course. |
+| `receipts` | `GET /announcements/{announcementId}/receipts` | Staff: audience counts plus paged names for `unread`, `read` or `all`. |
 | `delete` | `DELETE /announcements/{announcementId}` | Same permission as writing; `204`. |
 
 ### `AnalyticsController` — `/api/v1`
@@ -459,8 +464,17 @@ needed, and pick a status code. All paths are under `/api/v1` (declared per clas
 | --- | --- |
 | `list(courseId, principal)` | Maps `visibleAnnouncements` and adds each note's class name, author and the caller's own `read` flag. |
 | `visibleAnnouncements(course, cohorts, principal)` | The one visibility rule. Managers (owner or admin) get every note. Anyone else must be a `STUDENT` enrolled on a published, non-archived course; that learner gets the course-wide notes plus the notes addressed to a class they belong to, filtered in the service so the classroom boundary is never a client concern. |
-| `create(courseId, request, principal)` | Manage check; trims the body and refuses a blank note (the 2000-character cap is the request DTO's `@Size`); resolves the optional class and refuses one from another course (404); stores the author and the original text and returns the DTO with names resolved. |
-| `markRead(announcementId, principal)` | 404 for an unknown note, then the note must appear in `list` for this caller, so read state follows the same course and class boundary as reading. Writes one `announcement_reads` row; a second call is a no-op. |
+| `create(courseId, request, principal)` | Manage check; trims the body and refuses a blank note (the 2000-character cap is the request DTO's `@Size`); resolves the optional class and refuses one from another course (404); stores the author and the original text, writes the author's own read row in the same transaction, and returns the DTO with names resolved and `read: true`. |
+| `assertLearnerCanReadCourse(course, principal)` | The four conditions shared by the page and the read marker: student, enrolled, not archived, published. |
+| `assertCanReadOne(announcement, course, principal)` | Manager, or the four conditions plus class membership, for one note only. `markRead` uses this instead of loading every note in the course. |
+| `markRead(announcementId, principal)` | 404 for an unknown note, then `assertCanReadOne`, so read state follows the same course and class boundary as reading. Writes one `announcement_reads` row; the unique pair on the table makes a second call, including one racing from another tab, a no-op that keeps the first read time. |
+| `markAllRead(principal)` | Resolves the feed, reads the caller's rows in one query, then inserts the missing ones through the recorder. Each insert commits alone, so one duplicate or deleted note cannot roll back the rest. Returns the number that were unread. |
+| `feed(principal, page, size, courseId, unreadOnly)` | `feedScope` (enrollments, live courses, announcements by course set, classes, memberships) then filters and pages; `unreadCount` covers the whole scope. |
+| `feedScope(principal)` | Students only. Drops archived and unpublished courses, keeps course-wide notes plus the caller's classes, and carries the course and cohort names the page labels rows with. |
+| `unreadCount(principal)` | The same scope and read lookup, counted. |
+| `receiptSummaries(courseId, principal)` | Manage check; audience per course and class, then one read-table query for the course's notes; reads outside the audience are ignored. |
+| `receipts(announcementId, status, page, size, principal)` | Manage check; audience rows with names, filtered by `unread`/`read`/`all` and paged. Counts stay over the whole audience. |
+| `audienceOf(courseId, announcements)` | Enrolled learners for course-wide notes, class lists for class notes, resolved once per course and per class. |
 | `delete(announcementId, principal)` | 404 for an unknown note, then the same manage check on its course, then deletes. A learner has nothing to delete. |
 | `readIdsOf(principal, announcements)` | One read-row lookup for the page, returned as a set of ids. |
 | `toDtos(announcements, cohorts, readIds)` | One cohort lookup and one author lookup for the page, so a dashboard card does not issue a query per note. |

@@ -424,24 +424,27 @@ their failure must not blank the page; the next-node endpoint may answer `204`.
 | Course list | Enrolled courses first; a learner with no enrolments still sees the catalogue, so the first sign-in is never an empty page. |
 | Next node | Renders the server's pick as "Pick up here" with course, XP and deadline chip, linking to `/courses/{id}?node={nodeId}`. |
 | Cards | `XPBar`, `StreakCounter` and a cleared-node count. |
-| Banners | `EmailVerificationBanner`, `LoadErrorBanner`, and `AnnouncementBanner` with the newest note across enrolled courses. |
+| Banners | `EmailVerificationBanner`, `LoadErrorBanner`, and `AnnouncementBanner` with the newest note across the learner's feed (one request, page size one). |
 | Per-course row | Emoji, title, category, enrolled badge, description, progress bar and a Continue/Start link; the mobile footer repeats the action. |
 | Details section | A collapsed block explaining how XP, levels and streaks work (the arithmetic matches the server). |
 
 ### 4.10.10 `Announcements.jsx` — `/announcements`
 
-The learner's notice board. Loads `/courses`, keeps the enrolled ones, then
-`fetchAnnouncementsFor` fans out to `GET /courses/{id}/announcements` and merges the
-results newest first. Class visibility was already applied by the server, so the page
-only renders: course chip, audience (class name or "Everyone enrolled"), timestamp,
-full note text and author.
+The learner's notice board. One call to `GET /announcements` returns the first page
+already limited to live courses and to the learner's own classes, with each row's
+course title and emoji attached, so the page does not fan out one request per course.
+A separate `GET /courses/mine` fills the course filter. It renders the course chip,
+audience (class name or "Everyone enrolled"), timestamp, full note text and author.
 
 | Behaviour | Detail |
 | --- | --- |
-| `load()` | One course-list request, then the announcement requests. `fetchAnnouncementsFor` drops a course whose announcements fail rather than blanking the page; a failed course list shows an error with a **Try again** button. |
-| Header and list | `{n} notices` count, then one panel per note, newest first, with the course and class it was addressed to. |
+| `load()` | First page (20) from `fetchAnnouncementFeed`; the same response's `unreadCount` seeds the nav badge through `AnnouncementsContext`. A failed load shows an error with a **Try again** button. |
+| Header and list | The server's total, the unread count and one panel per note, newest first, with the course and class it was addressed to. |
+| Paging | **Load more** asks for the next page and appends it; the header keeps showing the total, not the rendered count. |
+| Filters | **Unread only** and a course picker. Both go to `fetchAnnouncementFeed` as `unread` and `courseId`, so the server pages the narrowed list and its `total` follows the filter, while the unread pill and the nav badge keep the whole feed's number. A filtered empty list offers **Clear filters**. **Mark all read** is hidden while a course is selected because it clears the whole feed, not just the view. |
+| Marking | Per note and **Mark all read**, both next to the count. Each updates the row, the header number and the shared badge locally, so the nav does not refetch. A failure is reported above the list and leaves the notes in place. |
 | Empty state | "No notices yet", an explanation that notes appear here and in the dashboard banner, and a link to the catalogue. |
-| Entry points | The dashboard banner and the student nav's **Notices** link both open this page. |
+| Entry points | The dashboard banner and the student nav's **Notices** link, which also carries the unread badge (with a screen-reader count), both open this page. |
 
 ### 4.10.11 `ExploreCourses.jsx` — `/explore`
 
