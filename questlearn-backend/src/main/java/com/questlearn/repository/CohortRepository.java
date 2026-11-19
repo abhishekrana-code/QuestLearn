@@ -11,6 +11,9 @@ public interface CohortRepository extends JpaRepository<Cohort, Long> {
 
     List<Cohort> findByCourseIdOrderByNameAsc(Long courseId);
 
+    /** The classes of several courses, for a learner's cross-course feed. */
+    List<Cohort> findByCourseIdInOrderByNameAsc(Collection<Long> courseIds);
+
     List<Cohort> findByCourseIdIn(Collection<Long> courseIds);
 
     Optional<Cohort> findByJoinCodeIgnoreCase(String joinCode);

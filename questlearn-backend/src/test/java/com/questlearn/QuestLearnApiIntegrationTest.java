@@ -107,7 +107,7 @@ class QuestLearnApiIntegrationTest {
     @BeforeEach
     void seed() throws Exception {
         // The suite owns the whole database, so start from nothing every time.
-        jdbc.execute("TRUNCATE TABLE announcements, admin_audit_log, cohort_memberships, cohorts, enrollments, "
+        jdbc.execute("TRUNCATE TABLE announcement_reads, announcements, admin_audit_log, cohort_memberships, cohorts, enrollments, "
                 + "email_verification_tokens, deadline_reminders, password_reset_tokens, "
                 + "module_attempts, user_module_progress, quizzes, modules, "
                 + "courses, users RESTART IDENTITY CASCADE");
@@ -1884,5 +1884,347 @@ class QuestLearnApiIntegrationTest {
                         .header("Authorization", "Bearer " + teacherToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    // --------------------------------------------------- reading and receipts
+
+    private User extraLearner(String name, String email) {
+        return users.save(User.builder()
+                .name(name)
+                .email(email)
+                .passwordHash(passwordEncoder.encode(PASSWORD))
+                .role(Role.STUDENT)
+                .totalXp(0)
+                .currentLevel(1)
+                .streakDays(0)
+                .emailVerified(true)
+                .build());
+    }
+
+    private long createCohort(String teacherToken, String name) throws Exception {
+        MvcResult result = mvc.perform(post("/api/v1/courses/" + course.getId() + "/cohorts")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("name", name))))
+                .andExpect(status().isOk())
+                .andReturn();
+        return json.readTree(result.getResponse().getContentAsString()).path("id").asLong();
+    }
+
+    private long postAnnouncement(String token, long courseId, String body, Long cohortId)
+            throws Exception {
+        java.util.Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("body", body);
+        if (cohortId != null) {
+            payload.put("cohortId", cohortId);
+        }
+        MvcResult result = mvc.perform(post("/api/v1/courses/" + courseId + "/announcements")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(payload)))
+                .andExpect(status().isOk())
+                .andReturn();
+        return json.readTree(result.getResponse().getContentAsString()).path("id").asLong();
+    }
+
+    private MvcResult markRead(String token, long announcementId) throws Exception {
+        return mvc.perform(post("/api/v1/announcements/" + announcementId + "/read")
+                        .header("Authorization", "Bearer " + token))
+                .andReturn();
+    }
+
+    private JsonNode feed(String token, String query) throws Exception {
+        MvcResult result = mvc.perform(get("/api/v1/announcements" + query)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn();
+        return json.readTree(result.getResponse().getContentAsString());
+    }
+
+    @Test
+    void markingANoteReadIsIdempotentAndRefusedOutsideTheAudience() throws Exception {
+        String teacherToken = login("teacher@it.test");
+        enrollInCourse();
+        long noteId = postAnnouncement(teacherToken, course.getId(), "The lab moved.", null);
+
+        assertThat(markRead(studentToken, noteId).getResponse().getStatus()).isEqualTo(204);
+        assertThat(markRead(studentToken, noteId).getResponse().getStatus()).isEqualTo(204);
+        // One row for this reader. The author has one too, which is why the count
+        // is scoped to the learner rather than to the note.
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM announcement_reads WHERE announcement_id = ? AND user_id = ?",
+                Long.class, noteId, student.getId())).isEqualTo(1L);
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].read").value(true));
+
+        mvc.perform(get("/api/v1/announcements/unread-count")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.unread").value(0));
+
+        // Guessing the id from outside the course is refused, not silently accepted.
+        extraLearner("Outsider", "outsider@it.test");
+        assertThat(markRead(login("outsider@it.test"), noteId).getResponse().getStatus())
+                .isEqualTo(403);
+    }
+
+    @Test
+    void twoTabsMarkingTheSameNoteBothAnswer204() throws Exception {
+        String teacherToken = login("teacher@it.test");
+        enrollInCourse();
+        long noteId = postAnnouncement(teacherToken, course.getId(), "Bring the book.", null);
+
+        java.util.concurrent.ExecutorService pool =
+                java.util.concurrent.Executors.newFixedThreadPool(2);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        try {
+            java.util.concurrent.Callable<Integer> mark = () -> {
+                start.await();
+                return markRead(studentToken, noteId).getResponse().getStatus();
+            };
+            java.util.concurrent.Future<Integer> first = pool.submit(mark);
+            java.util.concurrent.Future<Integer> second = pool.submit(mark);
+            start.countDown();
+            assertThat(first.get()).isEqualTo(204);
+            assertThat(second.get()).isEqualTo(204);
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM announcement_reads WHERE announcement_id = ? AND user_id = ?",
+                Long.class, noteId, student.getId())).isEqualTo(1L);
+    }
+
+    @Test
+    void theAuthorDoesNotSeeTheirOwnNoteAsUnread() throws Exception {
+        String teacherToken = login("teacher@it.test");
+        enrollInCourse();
+
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(
+                                java.util.Map.of("body", "Read chapter 3."))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.read").value(true));
+
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/announcements")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].read").value(true));
+
+        // Their read row is not a recipient row: the learner still has one unread.
+        mvc.perform(get("/api/v1/announcements/unread-count")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.unread").value(1));
+    }
+
+    @Test
+    void theFeedMergesCoursesAndKeepsTheClassBoundary() throws Exception {
+        String teacherToken = login("teacher@it.test");
+        enrollInCourse();
+        long cohortId = createCohort(teacherToken, "10B");
+        postAnnouncement(teacherToken, course.getId(), "10B only.", cohortId);
+        long wideNote = postAnnouncement(teacherToken, course.getId(), "Everyone.", null);
+
+        Course second = courses.save(Course.builder()
+                .title("Second Quest")
+                .description("Another course.")
+                .category("Testing")
+                .emoji("📘")
+                .published(true)
+                .instructor(instructor)
+                .build());
+        mvc.perform(post("/api/v1/courses/" + second.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+        long secondNote = postAnnouncement(teacherToken, second.getId(), "From course two.", null);
+        postAnnouncement(teacherToken, draft.getId(), "Draft note.", null);
+
+        JsonNode page = feed(studentToken, "?size=20");
+
+        assertThat(page.path("total").asInt()).isEqualTo(2);
+        assertThat(page.path("announcements").get(0).path("id").asLong()).isEqualTo(secondNote);
+        assertThat(page.path("announcements").get(1).path("id").asLong()).isEqualTo(wideNote);
+        assertThat(page.path("announcements").get(0).path("courseTitle").asText())
+                .isEqualTo("Second Quest");
+        // The class note exists but was never addressed to this learner.
+        assertThat(page.path("announcements").toString()).doesNotContain("10B only.");
+    }
+
+    @Test
+    void theFeedPagesNewestFirst() throws Exception {
+        String teacherToken = login("teacher@it.test");
+        enrollInCourse();
+        long oldest = postAnnouncement(teacherToken, course.getId(), "One", null);
+        postAnnouncement(teacherToken, course.getId(), "Two", null);
+        long newest = postAnnouncement(teacherToken, course.getId(), "Three", null);
+
+        JsonNode firstPage = feed(studentToken, "?page=0&size=2");
+        assertThat(firstPage.path("total").asInt()).isEqualTo(3);
+        assertThat(firstPage.path("totalPages").asInt()).isEqualTo(2);
+        assertThat(firstPage.path("announcements").size()).isEqualTo(2);
+        assertThat(firstPage.path("announcements").get(0).path("id").asLong()).isEqualTo(newest);
+
+        JsonNode secondPage = feed(studentToken, "?page=1&size=2");
+        assertThat(secondPage.path("announcements").size()).isEqualTo(1);
+        assertThat(secondPage.path("announcements").get(0).path("id").asLong()).isEqualTo(oldest);
+    }
+
+    @Test
+    void aClosedCourseStopsFeedingNoticesWithoutFailingTheRest() throws Exception {
+        String teacherToken = login("teacher@it.test");
+        enrollInCourse();
+        long keep = postAnnouncement(teacherToken, course.getId(), "Still here.", null);
+
+        Course second = courses.save(Course.builder()
+                .title("Closing Quest")
+                .description("Closes mid-term.")
+                .category("Testing")
+                .emoji("🚪")
+                .published(true)
+                .instructor(instructor)
+                .build());
+        mvc.perform(post("/api/v1/courses/" + second.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+        postAnnouncement(teacherToken, second.getId(), "Goes away.", null);
+
+        mvc.perform(patch("/api/v1/courses/" + second.getId() + "/publish")
+                        .param("published", "false")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk());
+
+        JsonNode page = feed(studentToken, "");
+        assertThat(page.path("total").asInt()).isEqualTo(1);
+        assertThat(page.path("announcements").get(0).path("id").asLong()).isEqualTo(keep);
+    }
+
+    @Test
+    void markAllReadClearsOnlyTheLearnersOwnUnreadNotes() throws Exception {
+        String teacherToken = login("teacher@it.test");
+        enrollInCourse();
+        postAnnouncement(teacherToken, course.getId(), "One", null);
+        postAnnouncement(teacherToken, course.getId(), "Two", null);
+
+        extraLearner("Other Learner", "other@it.test");
+        String otherToken = login("other@it.test");
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/v1/announcements/unread-count")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(jsonPath("$.unread").value(2));
+
+        mvc.perform(post("/api/v1/announcements/read-all")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marked").value(2));
+
+        mvc.perform(get("/api/v1/announcements/unread-count")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(jsonPath("$.unread").value(0));
+
+        // A second call has nothing left to change.
+        mvc.perform(post("/api/v1/announcements/read-all")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(jsonPath("$.marked").value(0));
+
+        // The other learner's two notes are untouched.
+        mvc.perform(get("/api/v1/announcements/unread-count")
+                        .header("Authorization", "Bearer " + otherToken))
+                .andExpect(jsonPath("$.unread").value(2));
+
+        // Staff have no learner feed; their view is the studio.
+        mvc.perform(get("/api/v1/announcements")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void receiptsCountOnlyTheAudienceAndRefuseEveryoneElse() throws Exception {
+        String teacherToken = login("teacher@it.test");
+        enrollInCourse();
+        long cohortId = createCohort(teacherToken, "10B");
+        String joinCode = json.readTree(mvc.perform(
+                        get("/api/v1/courses/" + course.getId() + "/cohorts")
+                                .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString())
+                .get(0).path("joinCode").asText();
+
+        extraLearner("Classmate", "classmate@it.test");
+        String classmateToken = login("classmate@it.test");
+        mvc.perform(post("/api/v1/courses/" + course.getId() + "/enroll")
+                        .header("Authorization", "Bearer " + classmateToken))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/cohorts/join")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("code", joinCode))))
+                .andExpect(status().isOk());
+
+        long wide = postAnnouncement(teacherToken, course.getId(), "Everyone.", null);
+        long classOnly = postAnnouncement(teacherToken, course.getId(), "10B only.", cohortId);
+        assertThat(markRead(studentToken, wide).getResponse().getStatus()).isEqualTo(204);
+
+        // Course-wide: two enrolled learners, one has read. Class note: one member, none read.
+        mvc.perform(get("/api/v1/courses/" + course.getId() + "/announcements/receipts")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].announcementId").value((int) classOnly))
+                .andExpect(jsonPath("$[0].recipients").value(1))
+                .andExpect(jsonPath("$[0].read").value(0))
+                .andExpect(jsonPath("$[1].announcementId").value((int) wide))
+                .andExpect(jsonPath("$[1].recipients").value(2))
+                .andExpect(jsonPath("$[1].read").value(1))
+                .andExpect(jsonPath("$[1].readPercent").value(50));
+
+        // The unread list names the learner who has not opened it, and only them.
+        mvc.perform(get("/api/v1/announcements/" + wide + "/receipts")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recipients").value(2))
+                .andExpect(jsonPath("$.read").value(1))
+                .andExpect(jsonPath("$.rows.length()").value(1))
+                .andExpect(jsonPath("$.rows[0].name").value("Classmate"))
+                .andExpect(jsonPath("$.rows[0].readAt").doesNotExist());
+
+        mvc.perform(get("/api/v1/announcements/" + wide + "/receipts")
+                        .param("status", "read")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rows[0].name").value("Learner"))
+                .andExpect(jsonPath("$.rows[0].readAt").exists());
+
+        // An unknown status is a bad request, not an empty list.
+        mvc.perform(get("/api/v1/announcements/" + wide + "/receipts")
+                        .param("status", "maybe")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isBadRequest());
+
+        // A learner never sees who read a note; another instructor does not own the course.
+        mvc.perform(get("/api/v1/announcements/" + wide + "/receipts")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+        users.save(User.builder()
+                .name("Another Teacher")
+                .email("teacher2@it.test")
+                .passwordHash(passwordEncoder.encode(PASSWORD))
+                .role(Role.INSTRUCTOR)
+                .totalXp(0)
+                .currentLevel(1)
+                .streakDays(0)
+                .emailVerified(true)
+                .build());
+        mvc.perform(get("/api/v1/announcements/" + wide + "/receipts")
+                        .header("Authorization", "Bearer " + login("teacher2@it.test")))
+                .andExpect(status().isForbidden());
     }
 }

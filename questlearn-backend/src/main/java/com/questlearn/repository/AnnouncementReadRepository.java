@@ -12,4 +12,10 @@ public interface AnnouncementReadRepository extends JpaRepository<AnnouncementRe
     List<AnnouncementRead> findByUserIdAndAnnouncementIdIn(Long userId, Collection<Long> announcementIds);
 
     boolean existsByAnnouncementIdAndUserId(Long announcementId, Long userId);
+
+    /** Every read of a page of notes, for receipt counts across a whole course. */
+    List<AnnouncementRead> findByAnnouncementIdIn(Collection<Long> announcementIds);
+
+    /** The reads of one note by a known audience, so receipts count only recipients. */
+    List<AnnouncementRead> findByAnnouncementIdAndUserIdIn(Long announcementId, Collection<Long> userIds);
 }
