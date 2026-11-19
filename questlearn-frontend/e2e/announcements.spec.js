@@ -252,13 +252,16 @@ test('an unread note counts on the dashboard and clears when the learner marks i
   await expect(banner).toContainText(body);
   await expect(banner).toContainText('1 unread');
 
-  // 2. The notices page marks the row itself, not just the banner.
+  // 2. The notices page marks the row itself, not just the banner, and the nav
+  // badge carries the same number.
   await banner.click();
   await expect(page).toHaveURL(/\/announcements$/);
   await expect(page.getByText('Unread', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Notices.*1 unread/ })).toBeVisible();
 
   await page.getByRole('button', { name: 'Mark as read' }).click();
   await expect(page.getByText('All caught up')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Notices.*unread/ })).toHaveCount(0);
 
   // 3. The read row is on the server, so a reload keeps the note read.
   await page.reload();
@@ -269,6 +272,197 @@ test('an unread note counts on the dashboard and clears when the learner marks i
   const readBanner = page.getByRole('link', { name: /Latest notice/ });
   await expect(readBanner).toContainText(body);
   await expect(readBanner).not.toContainText('1 unread');
+});
+
+test('mark all read clears every notice, the badge and the reloaded page', async ({
+  page,
+  request,
+}) => {
+  // Its own quiet course and learner, so the count is only these two notes.
+  const courseId = await createCourse(request, fixture.token, uniqueName('Catch Up Course'));
+  createdCourses.push(courseId);
+  for (const body of [`E2E catch up one ${run}`, `E2E catch up two ${run}`]) {
+    const posted = await request.post(`/api/v1/courses/${courseId}/announcements`, {
+      headers: { Authorization: `Bearer ${fixture.token}` },
+      data: { body },
+    });
+    expect(posted.ok(), `Posting "${body}"`).toBeTruthy();
+  }
+
+  const learner = await newLearner(request, 'catchup');
+  await enroll(request, learner.token, courseId);
+
+  await signIn(page, learner.email, 'password123');
+  await page.goto('/announcements');
+  await expect(page.getByRole('link', { name: /Notices.*2 unread/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mark all read' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Mark all read' }).click();
+  await expect(page.getByText('All caught up')).toBeVisible();
+  await expect(page.getByText('2 notices marked read.')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Notices.*unread/ })).toHaveCount(0);
+
+  // The rows are on the server, so a reload keeps every note read.
+  await page.reload();
+  await expect(page.getByText('All caught up')).toBeVisible();
+  await expect(page.getByText(`E2E catch up two ${run}`)).toBeVisible();
+
+  // And the dashboard banner has nothing left to count.
+  await page.goto('/dashboard');
+  const banner = page.getByRole('link', { name: /Latest notice/ });
+  await expect(banner).toContainText(`E2E catch up two ${run}`);
+  await expect(banner).not.toContainText(/unread/);
+});
+
+test('the notices page narrows by course and to unread notes without moving the badge', async ({
+  page,
+  request,
+}) => {
+  // Two courses of its own, so each filter has one note to keep and one to hide.
+  const firstCourse = await createCourse(request, fixture.token, uniqueName('Filter One'));
+  const secondCourse = await createCourse(request, fixture.token, uniqueName('Filter Two'));
+  createdCourses.push(firstCourse, secondCourse);
+  const firstBody = `E2E filter one ${run}: first course note.`;
+  const secondBody = `E2E filter two ${run}: second course note.`;
+  for (const [courseId, body] of [
+    [firstCourse, firstBody],
+    [secondCourse, secondBody],
+  ]) {
+    const posted = await request.post(`/api/v1/courses/${courseId}/announcements`, {
+      headers: { Authorization: `Bearer ${fixture.token}` },
+      data: { body },
+    });
+    expect(posted.ok(), `Posting "${body}"`).toBeTruthy();
+  }
+
+  const learner = await newLearner(request, 'filters');
+  await enroll(request, learner.token, firstCourse);
+  await enroll(request, learner.token, secondCourse);
+
+  await signIn(page, learner.email, 'password123');
+  await page.goto('/announcements');
+  await expect(page.getByText('2 notices')).toBeVisible();
+  await expect(page.getByText('2 unread', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Notices.*2 unread/ })).toBeVisible();
+
+  // One course narrows the list and its total; the unread pill and nav badge keep
+  // counting the whole feed.
+  await page.getByLabel('Filter notices by course').selectOption(String(firstCourse));
+  await expect(page.getByText('1 notice')).toBeVisible();
+  await expect(page.getByText(firstBody)).toBeVisible();
+  await expect(page.getByText(secondBody)).toHaveCount(0);
+  await expect(page.getByText('2 unread', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Notices.*2 unread/ })).toBeVisible();
+
+  // Both filters together still leave the unread note in that course.
+  await page.getByRole('checkbox', { name: 'Unread only' }).check();
+  await expect(page.getByText(firstBody)).toBeVisible();
+
+  // Back to every course under the unread filter.
+  await page.getByLabel('Filter notices by course').selectOption('');
+  await expect(page.getByText('2 notices')).toBeVisible();
+
+  // Marking everything read clears the badge and leaves the unread feed empty.
+  await page.getByRole('button', { name: 'Mark all read' }).click();
+  await expect(page.getByText('All caught up')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Notices.*unread/ })).toHaveCount(0);
+
+  await page.reload();
+  await page.getByRole('checkbox', { name: 'Unread only' }).check();
+  await expect(page.getByText('No notices match these filters')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Notices.*unread/ })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(page.getByText('2 notices')).toBeVisible();
+  await expect(page.getByText(firstBody)).toBeVisible();
+  await expect(page.getByText(secondBody)).toBeVisible();
+  await expect(page.getByText('All caught up')).toBeVisible();
+});
+
+test('both filters page past one page and a course filter hides Mark all read', async ({
+  page,
+  request,
+}) => {
+  // 25 notes in one course and two in another: the first page holds 20, so each
+  // filtered list only becomes complete if Load more keeps the same filters.
+  const courseNotes = 25;
+  const otherNoteCount = 2;
+  const totalNotes = courseNotes + otherNoteCount;
+  const pageSize = 20;
+
+  const post = async (courseId, body) => {
+    const posted = await request.post(`/api/v1/courses/${courseId}/announcements`, {
+      headers: { Authorization: `Bearer ${fixture.token}` },
+      data: { body },
+    });
+    expect(posted.ok(), `Posting "${body}"`).toBeTruthy();
+  };
+
+  const firstCourse = await createCourse(request, fixture.token, uniqueName('Paging One'));
+  const secondCourse = await createCourse(request, fixture.token, uniqueName('Paging Two'));
+  createdCourses.push(firstCourse, secondCourse);
+
+  for (let index = 1; index <= courseNotes; index += 1) {
+    await post(firstCourse, `E2E page note ${String(index).padStart(2, '0')} ${run}.`);
+  }
+  await post(secondCourse, `E2E other note one ${run}.`);
+  await post(secondCourse, `E2E other note two ${run}.`);
+
+  const learner = await newLearner(request, 'paging');
+  await enroll(request, learner.token, firstCourse);
+  await enroll(request, learner.token, secondCourse);
+
+  await signIn(page, learner.email, 'password123');
+  await page.goto('/announcements');
+
+  const rows = page.getByRole('main').getByRole('listitem');
+  const courseFilter = page.getByLabel('Filter notices by course');
+  const unreadFilter = page.getByRole('checkbox', { name: 'Unread only' });
+  const loadMore = page.getByRole('button', { name: /Load \d+ more/ });
+  const markAll = page.getByRole('button', { name: 'Mark all read' });
+  const otherNotes = page.getByText(new RegExp(`E2E other note .+ ${run}`));
+
+  await expect(page.getByText(`${totalNotes} notices`)).toBeVisible();
+  await expect(rows).toHaveCount(pageSize);
+  await expect(markAll).toBeVisible();
+
+  // The course filter narrows to 25 notes, so five stay on the second page.
+  await courseFilter.selectOption(String(firstCourse));
+  await expect(page.getByText(`${courseNotes} notices`)).toBeVisible();
+  await expect(rows).toHaveCount(pageSize);
+  await expect(otherNotes).toHaveCount(0);
+  await expect(markAll).toHaveCount(0);
+
+  await loadMore.click();
+  await expect(rows).toHaveCount(courseNotes);
+  await expect(page.getByText(`${courseNotes} notices`)).toBeVisible();
+  await expect(loadMore).toHaveCount(0);
+  await expect(otherNotes).toHaveCount(0);
+  await expect(markAll).toHaveCount(0);
+
+  // The pill and nav badge still count the whole feed, not the filtered 25.
+  await expect(page.getByText(`${totalNotes} unread`, { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: new RegExp(`Notices.*${totalNotes} unread`) }),
+  ).toBeVisible();
+
+  // Adding unread to the course filter keeps the same restriction.
+  await unreadFilter.check();
+  await expect(page.getByText(`${courseNotes} notices`)).toBeVisible();
+  await expect(rows).toHaveCount(pageSize);
+  await expect(otherNotes).toHaveCount(0);
+  await expect(markAll).toHaveCount(0);
+
+  // Unread on its own holds every note, and pages it the same way.
+  await courseFilter.selectOption('');
+  await expect(page.getByText(`${totalNotes} notices`)).toBeVisible();
+  await expect(rows).toHaveCount(pageSize);
+  await expect(markAll).toBeVisible();
+
+  await loadMore.click();
+  await expect(rows).toHaveCount(totalNotes);
+  await expect(loadMore).toHaveCount(0);
+  await expect(otherNotes).toHaveCount(otherNoteCount);
 });
 
 test('the notices page turns away staff and a learner cannot post', async ({ page, request }) => {
