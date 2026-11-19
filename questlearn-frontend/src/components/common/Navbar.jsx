@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, KeyRound, LayoutDashboard, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useAnnouncements } from '../../context/AnnouncementsContext.jsx';
 import ChangePasswordDialog from './ChangePasswordDialog.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 import Logo from './Logo.jsx';
@@ -37,6 +38,7 @@ const HOME_BY_ROLE = {
 
 export default function Navbar() {
   const { user, logout } = useAuth();
+  const { unread } = useAnnouncements();
   const navigate = useNavigate();
   const location = useLocation();
   const [accountOpen, setAccountOpen] = useState(false);
@@ -48,6 +50,19 @@ export default function Navbar() {
 
   const links = LINKS_BY_ROLE[user.role] ?? [];
   const home = HOME_BY_ROLE[user.role] ?? HOME_BY_ROLE.STUDENT;
+  // The badge belongs to the Notices link only, and never renders a zero.
+  const unreadBadge = (to) =>
+    to !== '/announcements' || unread <= 0 ? null : (
+      <>
+        <span
+          aria-hidden="true"
+          className="ml-1.5 inline-flex min-w-[16px] items-center justify-center rounded-full bg-gold px-1 py-0.5 text-[9px] font-bold leading-none text-background"
+        >
+          {unread > 99 ? '99+' : unread}
+        </span>
+        <span className="sr-only">, {unread} unread</span>
+      </>
+    );
   const initials = user.name
     .split(' ')
     .filter(Boolean)
@@ -123,6 +138,7 @@ export default function Navbar() {
               {({ isActive }) => (
                 <>
                   {link.label}
+                  {unreadBadge(link.to)}
                   <span
                     className={`absolute inset-x-3 -bottom-[13px] h-[2px] rounded-full transition-colors duration-150 ${
                       isActive ? 'bg-gold' : 'bg-transparent'
@@ -258,6 +274,7 @@ export default function Navbar() {
                 }
               >
                 {link.label}
+                {unreadBadge(link.to)}
               </NavLink>
             ))}
           </nav>

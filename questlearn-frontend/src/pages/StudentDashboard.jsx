@@ -115,7 +115,7 @@ export default function StudentDashboard() {
 
       <EmailVerificationBanner className="mb-5" />
 
-      <AnnouncementBanner courses={enrolledCourses} className="mb-5" />
+      <AnnouncementBanner className="mb-5" />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1.55fr_1fr_1fr]">
         <div className="col-span-2 lg:col-span-1">

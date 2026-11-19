@@ -1,37 +1,36 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Megaphone } from 'lucide-react';
-import { fetchAnnouncementsFor } from '../../services/announcements.js';
+import { fetchAnnouncementFeed } from '../../services/announcements.js';
 import { postedAt } from '../../utils/dates.js';
 
 /**
  * The newest note across the learner's courses, as the way into the notices page.
  *
  * <p>It is a banner rather than a card because it is one line of news with one
- * action: read the rest. A failed fetch or an empty list hides it entirely, so a
- * quiet course leaves the dashboard unchanged.</p>
+ * action: read the rest. One request (the first page of the feed, size one) brings
+ * the note, the unread count and the total with it, so a dashboard with six
+ * courses still costs one call. A failed fetch or an empty feed hides it entirely,
+ * so a quiet course leaves the dashboard unchanged.</p>
  */
-export default function AnnouncementBanner({ courses = [], className = '' }) {
-  const [items, setItems] = useState([]);
+export default function AnnouncementBanner({ className = '' }) {
+  const [latest, setLatest] = useState(null);
+  const [unread, setUnread] = useState(0);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // The dashboard rebuilds its course array on every render, so ids are the
-  // stable identity to fetch against.
-  const courseKey = courses.map((course) => course.id).join(',');
-
   useEffect(() => {
-    if (!courseKey) {
-      setItems([]);
-      setLoading(false);
-      return undefined;
-    }
-
     let cancelled = false;
     setLoading(true);
-    fetchAnnouncementsFor(courses)
-      .then((next) => {
+    fetchAnnouncementFeed({ page: 0, size: 1 })
+      .then((feed) => {
         if (cancelled) return;
-        setItems(next);
+        setLatest(feed.announcements[0] ?? null);
+        setUnread(feed.unreadCount);
+        setTotal(feed.total);
+      })
+      .catch(() => {
+        if (!cancelled) setLatest(null);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -40,13 +39,7 @@ export default function AnnouncementBanner({ courses = [], className = '' }) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseKey]);
-
-  // Newest first, so the first item is the latest.
-  const [latest] = items;
-  const total = items.length;
-  const unread = items.filter((item) => !item.read).length;
+  }, []);
 
   if (loading || !latest) {
     return null;
