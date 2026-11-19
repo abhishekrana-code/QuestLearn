@@ -48,6 +48,7 @@ features added after a database was first created. It is safe to restart repeate
 | `demonstrationPasswordNote()` | Produces the one-time console message that tells an operator where to find the generated password — without logging the password on later starts. |
 | `syncDemoPasswords()` | If the configured/resolved password changed, re-hashes it for all demo accounts so the published demo logins stay true. |
 | `seedSecondCourse()` | Seeds "Data Structures Detour" with its own node chain, so the catalogue and the AI/leaderboard screens have more than one shape of course. |
+| `seedDemoAnnouncements()` | Posts one course-wide note and one class note to the demo course, creating the "12B Web Engineering" class, enrolling the demo student and adding them to the class, so the notices channel has content on a fresh clone instead of only its empty state. The welcome note is the marker, so it seeds once. |
 | `backfillDemoAttempts()` | For databases seeded before attempt history existed, adds plausible attempts so the performance page is not empty. |
 | `backfillAttempts(User student)` | Writes the per-node attempts for one demo student. |
 | `attachDemoVideo()` | Stores a bundled 12-second clip through `MediaStorageService.storeNamed` and attaches it to one node, unless that node already has a video. |

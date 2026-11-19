@@ -3,7 +3,11 @@ package com.questlearn.config;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.questlearn.dto.AppUserPrincipal;
+import com.questlearn.model.Announcement;
 import com.questlearn.model.AttemptSource;
+import com.questlearn.model.Cohort;
+import com.questlearn.model.CohortMembership;
 import com.questlearn.model.Course;
 import com.questlearn.model.DemoCredential;
 import com.questlearn.model.Enrollment;
@@ -15,6 +19,9 @@ import com.questlearn.model.QuizType;
 import com.questlearn.model.Role;
 import com.questlearn.model.User;
 import com.questlearn.model.UserModuleProgress;
+import com.questlearn.repository.AnnouncementRepository;
+import com.questlearn.repository.CohortMembershipRepository;
+import com.questlearn.repository.CohortRepository;
 import com.questlearn.repository.CourseRepository;
 import com.questlearn.repository.DemoCredentialRepository;
 import com.questlearn.repository.EnrollmentRepository;
@@ -23,6 +30,7 @@ import com.questlearn.repository.ModuleRepository;
 import com.questlearn.repository.QuizRepository;
 import com.questlearn.repository.UserModuleProgressRepository;
 import com.questlearn.repository.UserRepository;
+import com.questlearn.service.CohortService;
 import com.questlearn.service.DemoAccounts;
 import com.questlearn.service.GamificationService;
 import com.questlearn.service.MediaStorageService;
@@ -84,6 +92,9 @@ public class DataInitializer implements SmartInitializingSingleton {
     private final UserRepository userRepository;
     private final DemoCredentialRepository demoCredentialRepository;
     private final CourseRepository courseRepository;
+    private final AnnouncementRepository announcementRepository;
+    private final CohortRepository cohortRepository;
+    private final CohortMembershipRepository membershipRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final ModuleRepository moduleRepository;
     private final QuizRepository quizRepository;
@@ -92,6 +103,7 @@ public class DataInitializer implements SmartInitializingSingleton {
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
     private final MediaStorageService mediaStorageService;
+    private final CohortService cohortService;
 
     // Seeding runs while the context is still being built, not as an ApplicationRunner.
     // Runners execute after the servlet container is already listening, so on a fresh
@@ -110,6 +122,7 @@ public class DataInitializer implements SmartInitializingSingleton {
             syncDemoPasswords();
             seedRivalProgress();
             seedSecondCourse();
+            seedDemoAnnouncements();
             attachDemoVideo();
             backfillDemoAttempts();
         } catch (Exception failure) {
@@ -130,7 +143,7 @@ public class DataInitializer implements SmartInitializingSingleton {
                 LocalDate.now().minusDays(2));
 
         Course course = courseRepository.save(Course.builder()
-                .title("Full-Stack Web Engineering Quest")
+                .title(DEMO_COURSE_TITLE)
                 .description("Six linked skill nodes that take you from semantic HTML to a deployed "
                         + "full-stack application. Complete a node, earn XP and unlock the next branch.")
                 .category("Web Development")
@@ -505,6 +518,94 @@ public class DataInitializer implements SmartInitializingSingleton {
         student.setTotalXp(totalXp);
         student.setCurrentLevel(GamificationService.levelForXp(totalXp));
         userRepository.save(student);
+    }
+
+    private static final String DEMO_COURSE_TITLE = "Full-Stack Web Engineering Quest";
+    private static final String DEMO_CLASS_NAME = "12B Web Engineering";
+    private static final String DEMO_WELCOME_NOTE =
+            "Welcome to the quest. Start with HTML Foundations, then follow a branch: layout, "
+                    + "JavaScript or React. Ask your instructor after class if a node blocks you "
+                    + "for more than an hour.";
+    private static final String DEMO_CLASS_NOTE =
+            "The lab moves to Thursday this week. Bring a laptop with Node installed; the "
+                    + "starter repository is already cloned.";
+
+    /**
+     * Two notes on the demo course, so the announcement channel is visible on a fresh
+     * clone instead of only its empty state: one to everyone enrolled, one to a class
+     * the demo student belongs to.
+     *
+     * <p>Like the second course this only ever adds. It runs against a database that
+     * already holds the demo data, and a teacher's own notes are kept: the welcome note
+     * is the marker, so the seeding happens once and a deletion stays deleted until the
+     * next restart puts the demo back.</p>
+     */
+    private void seedDemoAnnouncements() {
+        Course course = courseRepository.findAll().stream()
+                .filter(existing -> DEMO_COURSE_TITLE.equals(existing.getTitle()))
+                .findFirst()
+                .orElse(null);
+        if (course == null) {
+            return;
+        }
+
+        boolean alreadySeeded = announcementRepository
+                .findByCourseIdOrderByCreatedAtDescIdDesc(course.getId()).stream()
+                .anyMatch(note -> DEMO_WELCOME_NOTE.equals(note.getBody()));
+        if (alreadySeeded) {
+            return;
+        }
+
+        User instructor = userRepository.findByEmailIgnoreCase("instructor@questlearn.dev")
+                .orElse(null);
+        User student = userRepository.findByEmailIgnoreCase("student@questlearn.dev").orElse(null);
+        if (instructor == null || student == null) {
+            return;
+        }
+
+        // The same service the studio calls, so the join code is generated and checked
+        // for collisions the one way this codebase does it.
+        Long cohortId = cohortRepository.findByCourseIdOrderByNameAsc(course.getId()).stream()
+                .filter(existing -> DEMO_CLASS_NAME.equals(existing.getName()))
+                .map(Cohort::getId)
+                .findFirst()
+                .orElseGet(() -> cohortService.create(course.getId(), DEMO_CLASS_NAME,
+                        new AppUserPrincipal(instructor.getId(), instructor.getEmail(),
+                                Role.INSTRUCTOR)).id());
+
+        // Joining a class is what enrols a learner, and the notices page refuses a
+        // reader who is not enrolled. Without this, a fresh database seeds a channel
+        // its own demo student cannot open.
+        if (!enrollmentRepository.existsByUserIdAndCourseId(student.getId(), course.getId())) {
+            enrollmentRepository.save(Enrollment.builder()
+                    .userId(student.getId())
+                    .courseId(course.getId())
+                    .build());
+        }
+
+        if (!membershipRepository.existsByCohortIdAndUserId(cohortId, student.getId())) {
+            membershipRepository.save(CohortMembership.builder()
+                    .cohortId(cohortId)
+                    .userId(student.getId())
+                    .build());
+        }
+
+        // Written in this order, so the class note is the newer of the two and the demo
+        // student's banner opens on the class it was addressed to.
+        announcementRepository.save(Announcement.builder()
+                .courseId(course.getId())
+                .authorId(instructor.getId())
+                .body(DEMO_WELCOME_NOTE)
+                .build());
+        announcementRepository.save(Announcement.builder()
+                .courseId(course.getId())
+                .cohortId(cohortId)
+                .authorId(instructor.getId())
+                .body(DEMO_CLASS_NOTE)
+                .build());
+
+        System.out.printf("Demo announcements ready on \"%s\" (one course-wide, one for %s)%n",
+                course.getTitle(), DEMO_CLASS_NAME);
     }
 
     /**

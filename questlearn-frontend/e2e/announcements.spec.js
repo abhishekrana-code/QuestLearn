@@ -75,9 +75,21 @@ async function signIn(page, email, password = demoPassword()) {
 
 async function signOut(page) {
   await page.goto('/');
-  // The account button is named by initials and first name, e.g. "SS Smoke".
-  await page.getByRole('button', { name: /^[A-Z]{2} \S+$/ }).first().click();
-  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  const account = page.getByRole('button', { name: /^[A-Z]{2} \S+$/ }).first();
+  const signOutItem = page.getByRole('menuitem', { name: 'Sign out' });
+  // A fetch that lands while the menu is open re-renders the header and detaches
+  // the item, so reopen the menu only while it is closed and retry the click.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (!(await signOutItem.isVisible())) {
+      await account.click();
+    }
+    try {
+      await signOutItem.click({ timeout: 5_000 });
+      break;
+    } catch (error) {
+      if (attempt === 2) throw error;
+    }
+  }
   await expect(page).toHaveURL(/\/login/);
 }
 
