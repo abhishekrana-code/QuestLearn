@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 import {
+  ADMIN,
   INSTRUCTOR,
+  apiSignIn,
+  authHeaders,
   createCourse,
   deleteUserByEmail,
   demoPassword,
@@ -32,6 +35,11 @@ const createdEmails = [];
 // Courses a single test creates for itself, so the shared fixture course keeps the
 // notes the earlier tests posted.
 const createdCourses = [];
+const createdCohorts = [];
+// The receipts tests need more learners than a per-email sign-out would make
+// pleasant, so their accounts share a prefix and are deleted with one admin session.
+const receiptsPrefix = `e2e.receipts.${run}.`;
+const receiptsEmails = [];
 
 test.beforeAll(async ({ request }) => {
   const health = await request.get('http://localhost:8091/actuator/health');
@@ -57,11 +65,15 @@ test.beforeAll(async ({ request }) => {
 test.afterAll(async ({ request }) => {
   if (!fixture) return;
 
+  await deleteReceiptsLearners(request);
   for (const email of createdEmails) {
     await deleteUserByEmail(request, email);
   }
 
   const headers = { Authorization: `Bearer ${fixture.token}` };
+  for (const cohortId of createdCohorts) {
+    await request.delete(`/api/v1/cohorts/${cohortId}`, { headers });
+  }
   for (const courseId of createdCourses) {
     await removeCourse(request, fixture.token, courseId);
   }
@@ -112,6 +124,73 @@ async function postNote(request, body, cohortId = null) {
     data: { body, cohortId },
   });
   expect(response.ok(), `Posting "${body}"`).toBeTruthy();
+}
+
+/** Posts anywhere, unlike `postNote`, which is tied to the shared fixture course. */
+async function postAnnouncement(request, courseId, body, cohortId = null) {
+  const response = await request.post(`/api/v1/courses/${courseId}/announcements`, {
+    headers: { Authorization: `Bearer ${fixture.token}` },
+    data: { body, cohortId },
+  });
+  expect(response.ok(), `Posting "${body}"`).toBeTruthy();
+  return response.json();
+}
+
+/**
+ * Registers and enrols a roster in small parallel batches. Fifty-one is enough for
+ * the receipts panel to need its second page (the server caps a page at 50), and the
+ * batch stays under the API's five-connection pool so no request waits for one.
+ */
+async function addReceiptLearners(request, courseId, count) {
+  const learners = [];
+  for (let start = 0; start < count; start += 4) {
+    const batch = await Promise.all(
+      Array.from({ length: Math.min(4, count - start) }, async (_, offset) => {
+        const number = String(start + offset + 1).padStart(2, '0');
+        const email = `${receiptsPrefix}${number}@questlearn.dev`;
+        const token = await registerLearner(request, {
+          name: `Receipt Learner ${number}`,
+          email,
+        });
+        receiptsEmails.push(email);
+        await enroll(request, token, courseId);
+        return { email, token };
+      }),
+    );
+    learners.push(...batch);
+  }
+  return learners;
+}
+
+/**
+ * Records reads through the learner endpoint one at a time. Each mark opens its own
+ * short transaction (plus the recorder's), so a burst would compete for the pool.
+ */
+async function markLearnersRead(request, learners, announcementId) {
+  for (const { token } of learners) {
+    const response = await request.post(`/api/v1/announcements/${announcementId}/read`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok()) {
+      throw new Error(
+        `Marking announcement ${announcementId} read failed: ${response.status()} ${await response.text()}`,
+      );
+    }
+  }
+}
+
+/** One admin session removes the shared-prefix roster without signing in per email. */
+async function deleteReceiptsLearners(request) {
+  if (receiptsEmails.length === 0) return;
+  const admin = await apiSignIn(request, ADMIN.email);
+  const headers = authHeaders(admin);
+  for (const email of receiptsEmails) {
+    const found = await (
+      await request.get(`/api/v1/admin/users?query=${encodeURIComponent(email)}`, { headers })
+    ).json();
+    const match = (found.users ?? []).find((user) => user.email === email);
+    if (match) await request.delete(`/api/v1/admin/users/${match.id}`, { headers });
+  }
 }
 
 test('a learner who was sent nothing sees the empty state and no banner', async ({ page, request }) => {
@@ -476,4 +555,106 @@ test('the notices page turns away staff and a learner cannot post', async ({ pag
     data: { body: 'A learner should not be able to post this.' },
   });
   expect(response.status(), 'A learner posting a note is refused').toBe(403);
+});
+
+test('the studio receipts panel counts reads, lists and pages the unread names', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(600_000);
+  const courseId = await createCourse(request, fixture.token, uniqueName('Receipts Course'));
+  createdCourses.push(courseId);
+
+  const pagingBody = `E2E receipts page ${run}: every name is listed.`;
+  const readsBody = `E2E receipts reads ${run}: the roster is catching up.`;
+  await postAnnouncement(request, courseId, pagingBody);
+  const readsNote = await postAnnouncement(request, courseId, readsBody);
+
+  const learners = await addReceiptLearners(request, courseId, 51);
+  // Half the roster opens one note, so its count and percentage are partial.
+  await markLearnersRead(request, learners.slice(0, 25), readsNote.id);
+
+  await signIn(page, INSTRUCTOR.email);
+  await page.goto(`/studio?course=${courseId}&step=publish`);
+
+  const rowFor = (body) => page.getByRole('listitem').filter({ hasText: body });
+  const pagingRow = rowFor(pagingBody);
+  const pagingToggle = pagingRow.locator('button[aria-expanded]');
+  const pagingNames = pagingRow.locator('li.chip');
+
+  await expect(pagingToggle).toContainText('0 of 51 read');
+  await expect(pagingToggle).toContainText('0%');
+
+  await pagingToggle.click();
+  await expect(pagingRow.getByText('Not read yet')).toBeVisible();
+  await expect(pagingNames).toHaveCount(50);
+  await expect(pagingRow.getByText('50 of 51 shown')).toBeVisible();
+  // Names are ordered, so the 51st sits on the page that has not loaded yet.
+  await expect(pagingRow.getByText('Receipt Learner 51', { exact: true })).toHaveCount(0);
+
+  await pagingRow.getByRole('button', { name: 'Load more names' }).click();
+  await expect(pagingNames).toHaveCount(51);
+  await expect(pagingRow.getByText('Receipt Learner 51', { exact: true })).toBeVisible();
+  await expect(pagingRow.getByText('50 of 51 shown')).toHaveCount(0);
+  await expect(pagingRow.getByRole('button', { name: 'Load more names' })).toHaveCount(0);
+
+  // A fresh mount picks up the reads recorded through the API above.
+  await page.reload();
+  const readsRow = rowFor(readsBody);
+  const readsToggle = readsRow.locator('button[aria-expanded]');
+
+  await expect(readsToggle).toContainText('25 of 51 read');
+  await expect(readsToggle).toContainText('49%');
+
+  await readsToggle.click();
+  await expect(readsRow.getByText('Not read yet')).toBeVisible();
+  await expect(readsRow.locator('li.chip')).toHaveCount(26);
+  await expect(readsRow.getByRole('button', { name: 'Load more names' })).toHaveCount(0);
+
+  // Once the rest read it, the panel has a list of nobody and says so.
+  await markLearnersRead(request, learners.slice(25), readsNote.id);
+  await page.reload();
+
+  await expect(readsToggle).toContainText('51 of 51 read');
+  await expect(readsToggle).toContainText('100%');
+
+  await readsToggle.click();
+  await expect(readsRow.getByText('Everyone it was sent to has read it.')).toBeVisible();
+  await expect(readsRow.locator('li.chip')).toHaveCount(0);
+
+  // The paging note is still untouched, so its count did not move with the other.
+  await expect(pagingToggle).toContainText('0 of 51 read');
+});
+
+test('the studio receipts panel explains notes with nobody to read them', async ({
+  page,
+  request,
+}) => {
+  const courseId = await createCourse(request, fixture.token, uniqueName('Quiet Receipts'));
+  createdCourses.push(courseId);
+
+  const cohortResponse = await request.post(`/api/v1/courses/${courseId}/cohorts`, {
+    headers: { Authorization: `Bearer ${fixture.token}` },
+    data: { name: `Empty Class ${run}` },
+  });
+  expect(cohortResponse.ok(), 'Creating the empty class').toBeTruthy();
+  const cohort = await cohortResponse.json();
+  createdCohorts.push(cohort.id);
+
+  const courseWideBody = `E2E empty audience ${run}: nobody is here yet.`;
+  const classBody = `E2E empty class ${run}: nobody joined either.`;
+  await postAnnouncement(request, courseId, courseWideBody);
+  await postAnnouncement(request, courseId, classBody, cohort.id);
+
+  await signIn(page, INSTRUCTOR.email);
+  await page.goto(`/studio?course=${courseId}&step=publish`);
+
+  const courseRow = page.getByRole('listitem').filter({ hasText: courseWideBody });
+  const classRow = page.getByRole('listitem').filter({ hasText: classBody });
+
+  await expect(courseRow.getByText('Nobody has enrolled on this course yet.')).toBeVisible();
+  await expect(classRow.getByText(`Nobody has joined ${cohort.name} yet.`)).toBeVisible();
+  // With no audience there is no count and no list to expand.
+  await expect(courseRow.locator('button[aria-expanded]')).toHaveCount(0);
+  await expect(classRow.locator('button[aria-expanded]')).toHaveCount(0);
 });
