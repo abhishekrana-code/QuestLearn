@@ -14,6 +14,17 @@ export async function fetchAnnouncements(courseId) {
 }
 
 /**
+ * Records that the signed-in learner has read one note.
+ *
+ * <p>The server answers `204` and keeps the first read time, so calling it twice
+ * is harmless. The caller owns the failure: the page reports it and leaves the
+ * note unread rather than pretending it worked.</p>
+ */
+export async function markAnnouncementRead(announcementId) {
+  await api.post(`/announcements/${announcementId}/read`);
+}
+
+/**
  * Every note from the given courses, tagged with its course and newest first.
  *
  * <p>Announcements are supplementary, so one course that fails to answer drops

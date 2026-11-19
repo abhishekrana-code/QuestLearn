@@ -29,6 +29,9 @@ const cohortName = `E2E Class ${run}`;
 /** Filled in by beforeAll; every learner this suite makes is deleted in afterAll. */
 let fixture = null;
 const createdEmails = [];
+// Courses a single test creates for itself, so the shared fixture course keeps the
+// notes the earlier tests posted.
+const createdCourses = [];
 
 test.beforeAll(async ({ request }) => {
   const health = await request.get('http://localhost:8091/actuator/health');
@@ -59,6 +62,9 @@ test.afterAll(async ({ request }) => {
   }
 
   const headers = { Authorization: `Bearer ${fixture.token}` };
+  for (const courseId of createdCourses) {
+    await removeCourse(request, fixture.token, courseId);
+  }
   // The class goes before the course it belongs to; deleting a class keeps its
   // members' enrolment, so this only removes the grouping.
   await request.delete(`/api/v1/cohorts/${fixture.cohortId}`, { headers });
@@ -219,6 +225,50 @@ test('a class note reaches its class and stays out of the other learner’s list
   await expect(courseBanner).toContainText(courseWideBody);
   await expect(courseBanner).not.toContainText(classBody);
   await expect(courseBanner).toContainText('All notices');
+});
+
+test('an unread note counts on the dashboard and clears when the learner marks it read', async ({
+  page,
+  request,
+}) => {
+  // Its own course, so the only note this learner can see is the one under test and
+  // the count is not whatever the previous tests left behind.
+  const body = `E2E unread note ${run}: drafts are due Friday.`;
+  const courseId = await createCourse(request, fixture.token, uniqueName('Unread Course'));
+  createdCourses.push(courseId);
+  const posted = await request.post(`/api/v1/courses/${courseId}/announcements`, {
+    headers: { Authorization: `Bearer ${fixture.token}` },
+    data: { body },
+  });
+  expect(posted.ok(), 'Posting the unread fixture note').toBeTruthy();
+
+  const learner = await newLearner(request, 'unread');
+  await enroll(request, learner.token, courseId);
+
+  // 1. The dashboard banner leads with the note and says it is still unread.
+  await signIn(page, learner.email, 'password123');
+  await page.goto('/dashboard');
+  const banner = page.getByRole('link', { name: /Latest notice/ });
+  await expect(banner).toContainText(body);
+  await expect(banner).toContainText('1 unread');
+
+  // 2. The notices page marks the row itself, not just the banner.
+  await banner.click();
+  await expect(page).toHaveURL(/\/announcements$/);
+  await expect(page.getByText('Unread', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Mark as read' }).click();
+  await expect(page.getByText('All caught up')).toBeVisible();
+
+  // 3. The read row is on the server, so a reload keeps the note read.
+  await page.reload();
+  await expect(page.getByText('All caught up')).toBeVisible();
+
+  // 4. And the dashboard no longer counts it.
+  await page.goto('/dashboard');
+  const readBanner = page.getByRole('link', { name: /Latest notice/ });
+  await expect(readBanner).toContainText(body);
+  await expect(readBanner).not.toContainText('1 unread');
 });
 
 test('the notices page turns away staff and a learner cannot post', async ({ page, request }) => {

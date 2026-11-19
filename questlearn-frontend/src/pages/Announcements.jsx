@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Megaphone } from 'lucide-react';
+import { Check, Megaphone } from 'lucide-react';
 import api, { apiError } from '../services/api.js';
-import { fetchAnnouncementsFor } from '../services/announcements.js';
+import { fetchAnnouncementsFor, markAnnouncementRead } from '../services/announcements.js';
 import { postedAt } from '../utils/dates.js';
 
 /**
@@ -11,11 +11,18 @@ import { postedAt } from '../utils/dates.js';
  * <p>The server already limits the list to enrolled courses and to the classes
  * the learner belongs to, so this page only merges and renders. Course titles
  * come from the course list because an announcement row only carries ids.</p>
+ *
+ * <p>Unread is per note and per learner: a note is marked read on this page, not
+ * by opening it, so the list can still show what was waiting when it arrived.</p>
  */
 export default function Announcements() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // A failed mark leaves the list intact, so it is reported beside the notes
+  // instead of replacing them with an error panel.
+  const [markError, setMarkError] = useState('');
+  const [markingId, setMarkingId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,6 +41,23 @@ export default function Announcements() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function markRead(id) {
+    setMarkingId(id);
+    setMarkError('');
+    try {
+      await markAnnouncementRead(id);
+      setItems((current) =>
+        current.map((item) => (item.id === id ? { ...item, read: true } : item)),
+      );
+    } catch (markFailure) {
+      setMarkError(apiError(markFailure, 'Could not mark that notice as read.'));
+    } finally {
+      setMarkingId(null);
+    }
+  }
+
+  const unread = items.filter((item) => !item.read).length;
 
   return (
     <div className="shell py-8 sm:py-10">
@@ -76,12 +100,31 @@ export default function Announcements() {
         </div>
       ) : (
         <>
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-fg-subtle">
-            {items.length} {items.length === 1 ? 'notice' : 'notices'}
-          </p>
+          {markError ? (
+            <p role="alert" className="mb-3 text-[12px] leading-5 text-danger">
+              {markError}
+            </p>
+          ) : null}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-fg-subtle">
+              {items.length} {items.length === 1 ? 'notice' : 'notices'}
+            </p>
+            {unread > 0 ? (
+              <span className="rounded-full border border-gold/30 bg-gold/[0.12] px-2 py-0.5 text-[10px] font-semibold text-gold-text">
+                {unread} unread
+              </span>
+            ) : (
+              <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-fg-subtle">
+                All caught up
+              </span>
+            )}
+          </div>
           <ul className="space-y-3">
             {items.map((announcement) => (
-              <li key={announcement.id} className="panel p-5">
+              <li
+                key={announcement.id}
+                className={`panel p-5 ${announcement.read ? '' : 'border-gold/30 bg-brand-tint/40'}`}
+              >
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-fg-subtle">
                   <span className="chip text-fg-muted">
                     {announcement.courseEmoji || '🗺️'} {announcement.courseTitle}
@@ -91,13 +134,31 @@ export default function Announcements() {
                   </span>
                   <span aria-hidden="true">·</span>
                   <span>{postedAt(announcement.createdAt)}</span>
+                  {!announcement.read && (
+                    <span className="rounded-full bg-gold/[0.16] px-1.5 py-0.5 font-semibold uppercase tracking-[0.1em] text-gold-text">
+                      Unread
+                    </span>
+                  )}
                 </div>
                 <p className="mt-2.5 whitespace-pre-line text-[13px] leading-6 text-foreground">
                   {announcement.body}
                 </p>
-                <p className="mt-2 text-[11px] text-fg-subtle">
-                  {announcement.authorName || 'Your instructor'}
-                </p>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
+                  <p className="text-[11px] text-fg-subtle">
+                    {announcement.authorName || 'Your instructor'}
+                  </p>
+                  {!announcement.read && (
+                    <button
+                      type="button"
+                      onClick={() => markRead(announcement.id)}
+                      disabled={markingId === announcement.id}
+                      className="btn-ghost h-8 px-2.5 text-[11px]"
+                    >
+                      <Check size={12} />
+                      {markingId === announcement.id ? 'Marking…' : 'Mark as read'}
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

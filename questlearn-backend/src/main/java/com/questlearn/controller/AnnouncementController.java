@@ -23,8 +23,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * Course and class announcements. Reading is the only endpoint a learner uses;
- * the service decides what that learner is allowed to see.
+ * Course and class announcements. Reading, and recording that a note was read,
+ * are the endpoints a learner uses; the service decides what that learner is
+ * allowed to see.
  */
 @RestController
 @RequestMapping("/api/v1")
@@ -48,6 +49,14 @@ public class AnnouncementController {
                                   @Valid @RequestBody CreateAnnouncementRequest request,
                                   @AuthenticationPrincipal AppUserPrincipal principal) {
         return announcementService.create(courseId, request, principal);
+    }
+
+    @PostMapping("/announcements/{announcementId}/read")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Mark one announcement read for the caller; the visibility rules still apply")
+    public void markRead(@PathVariable Long announcementId,
+                         @AuthenticationPrincipal AppUserPrincipal principal) {
+        announcementService.markRead(announcementId, principal);
     }
 
     @DeleteMapping("/announcements/{announcementId}")

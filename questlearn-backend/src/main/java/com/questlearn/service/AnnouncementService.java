@@ -5,11 +5,13 @@ import com.questlearn.dto.AppUserPrincipal;
 import com.questlearn.dto.CreateAnnouncementRequest;
 import com.questlearn.exception.ApiException;
 import com.questlearn.model.Announcement;
+import com.questlearn.model.AnnouncementRead;
 import com.questlearn.model.Cohort;
 import com.questlearn.model.CohortMembership;
 import com.questlearn.model.Course;
 import com.questlearn.model.Role;
 import com.questlearn.model.User;
+import com.questlearn.repository.AnnouncementReadRepository;
 import com.questlearn.repository.AnnouncementRepository;
 import com.questlearn.repository.CohortMembershipRepository;
 import com.questlearn.repository.CohortRepository;
@@ -33,12 +35,17 @@ import java.util.stream.Collectors;
  * addressed to; a learner must be enrolled and sees the course-wide notes plus the
  * ones for their own classes. A learner enrolled in the course but not in 10B never
  * learns what 10B was told.</p>
+ *
+ * <p>Read state is per reader and follows the same boundary: a note the caller
+ * cannot read cannot be marked read either, because both go through the same
+ * visibility check.</p>
  */
 @Service
 @RequiredArgsConstructor
 public class AnnouncementService {
 
     private final AnnouncementRepository announcementRepository;
+    private final AnnouncementReadRepository announcementReadRepository;
     private final CohortRepository cohortRepository;
     private final CohortMembershipRepository membershipRepository;
     private final EnrollmentRepository enrollmentRepository;
@@ -48,19 +55,29 @@ public class AnnouncementService {
     @Transactional(readOnly = true)
     public List<AnnouncementDto> list(Long courseId, AppUserPrincipal principal) {
         Course course = courseService.loadCourse(courseId);
-        List<Announcement> announcements =
-                announcementRepository.findByCourseIdOrderByCreatedAtDescIdDesc(courseId);
         List<Cohort> cohorts = cohortRepository.findByCourseIdOrderByNameAsc(courseId);
+        List<Announcement> visible = visibleAnnouncements(course, cohorts, principal);
+        return toDtos(visible, cohorts, readIdsOf(principal, visible));
+    }
+
+    /**
+     * The notes this caller may read: everything for whoever runs the course, the
+     * course-wide notes and their own classes' notes for an enrolled learner. The
+     * page and the read marker both come through here, so their audiences agree.
+     */
+    private List<Announcement> visibleAnnouncements(Course course, List<Cohort> cohorts,
+                                                    AppUserPrincipal principal) {
+        List<Announcement> announcements =
+                announcementRepository.findByCourseIdOrderByCreatedAtDescIdDesc(course.getId());
 
         if (courseService.canManage(course, principal)) {
-            return toDtos(announcements, cohorts);
+            return announcements;
         }
-
         if (principal.role() != Role.STUDENT) {
             throw ApiException.forbidden(
                     "Only the course instructor, an admin, or an enrolled learner can read these");
         }
-        if (!enrollmentRepository.existsByUserIdAndCourseId(principal.id(), courseId)) {
+        if (!enrollmentRepository.existsByUserIdAndCourseId(principal.id(), course.getId())) {
             throw ApiException.forbidden("Join the course to read its announcements");
         }
         // An archived term is unpublished too, but "not published yet" would imply it
@@ -73,11 +90,10 @@ public class AnnouncementService {
         }
 
         Set<Long> myClasses = classIdsOf(principal, cohorts);
-        List<Announcement> visible = announcements.stream()
+        return announcements.stream()
                 .filter(announcement -> announcement.getCohortId() == null
                         || myClasses.contains(announcement.getCohortId()))
                 .toList();
-        return toDtos(visible, cohorts);
     }
 
     @Transactional
@@ -109,7 +125,37 @@ public class AnnouncementService {
                 .authorId(principal.id())
                 .body(body)
                 .build());
-        return toDto(saved, cohortName, authorName(saved.getAuthorId()));
+        // Its author has not read it back off the page, so the flag starts false.
+        return toDto(saved, cohortName, authorName(saved.getAuthorId()), false);
+    }
+
+    /**
+     * Records that the caller has read one note.
+     *
+     * <p>The note must be one the caller's page would show, so a learner cannot mark
+     * a note outside their courses or their class read by guessing its id. Marking
+     * twice is not an error and does not move the original timestamp.</p>
+     */
+    @Transactional
+    public void markRead(Long announcementId, AppUserPrincipal principal) {
+        Announcement announcement = announcementRepository.findById(announcementId)
+                .orElseThrow(() -> ApiException.notFound("Announcement not found"));
+
+        Course course = courseService.loadCourse(announcement.getCourseId());
+        List<Cohort> cohorts = cohortRepository.findByCourseIdOrderByNameAsc(course.getId());
+        boolean visible = visibleAnnouncements(course, cohorts, principal).stream()
+                .anyMatch(candidate -> candidate.getId().equals(announcementId));
+        if (!visible) {
+            throw ApiException.forbidden("That announcement is not in your notices");
+        }
+
+        if (announcementReadRepository.existsByAnnouncementIdAndUserId(announcementId, principal.id())) {
+            return;
+        }
+        announcementReadRepository.save(AnnouncementRead.builder()
+                .announcementId(announcementId)
+                .userId(principal.id())
+                .build());
     }
 
     /**
@@ -137,7 +183,20 @@ public class AnnouncementService {
                 .collect(Collectors.toSet());
     }
 
-    private List<AnnouncementDto> toDtos(List<Announcement> announcements, List<Cohort> cohorts) {
+    /** The caller's read rows among this page of notes. */
+    private Set<Long> readIdsOf(AppUserPrincipal principal, List<Announcement> announcements) {
+        List<Long> ids = announcements.stream().map(Announcement::getId).toList();
+        if (ids.isEmpty()) {
+            return Set.of();
+        }
+        return announcementReadRepository.findByUserIdAndAnnouncementIdIn(principal.id(), ids)
+                .stream()
+                .map(AnnouncementRead::getAnnouncementId)
+                .collect(Collectors.toSet());
+    }
+
+    private List<AnnouncementDto> toDtos(List<Announcement> announcements, List<Cohort> cohorts,
+                                         Set<Long> readIds) {
         if (announcements.isEmpty()) {
             return List.of();
         }
@@ -159,11 +218,13 @@ public class AnnouncementService {
                                 : cohortNames.get(announcement.getCohortId()),
                         announcement.getAuthorId() == null
                                 ? null
-                                : authorNames.get(announcement.getAuthorId())))
+                                : authorNames.get(announcement.getAuthorId()),
+                        readIds.contains(announcement.getId())))
                 .toList();
     }
 
-    private AnnouncementDto toDto(Announcement announcement, String cohortName, String authorName) {
+    private AnnouncementDto toDto(Announcement announcement, String cohortName, String authorName,
+                                  boolean read) {
         return new AnnouncementDto(
                 announcement.getId(),
                 announcement.getCourseId(),
@@ -171,7 +232,8 @@ public class AnnouncementService {
                 cohortName,
                 authorName,
                 announcement.getBody(),
-                announcement.getCreatedAt());
+                announcement.getCreatedAt(),
+                read);
     }
 
     private String authorName(Long authorId) {

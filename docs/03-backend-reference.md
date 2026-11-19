@@ -242,6 +242,7 @@ needed, and pick a status code. All paths are under `/api/v1` (declared per clas
 | --- | --- | --- |
 | `list` | `GET /courses/{courseId}/announcements` | Newest first. Staff who manage the course see every note; an enrolled learner sees course-wide notes plus their own classes' notes. |
 | `create` | `POST /courses/{courseId}/announcements` | Staff and owner-or-admin: posts to the whole course or one class. |
+| `markRead` | `POST /announcements/{announcementId}/read` | Records the caller's read; the note must be one the caller's page would show, so a guessed id outside their courses or classes is refused. `204`, idempotent. |
 | `delete` | `DELETE /announcements/{announcementId}` | Same permission as writing; `204`. |
 
 ### `AnalyticsController` — `/api/v1`
@@ -456,11 +457,14 @@ needed, and pick a status code. All paths are under `/api/v1` (declared per clas
 
 | Function | What it does |
 | --- | --- |
-| `list(courseId, principal)` | Managers (owner or admin) get every note with its class name. Anyone else must be a `STUDENT` enrolled on a published, non-archived course; that learner gets the course-wide notes plus the notes addressed to a class they belong to, filtered in the service so the classroom boundary is never a client concern. |
+| `list(courseId, principal)` | Maps `visibleAnnouncements` and adds each note's class name, author and the caller's own `read` flag. |
+| `visibleAnnouncements(course, cohorts, principal)` | The one visibility rule. Managers (owner or admin) get every note. Anyone else must be a `STUDENT` enrolled on a published, non-archived course; that learner gets the course-wide notes plus the notes addressed to a class they belong to, filtered in the service so the classroom boundary is never a client concern. |
 | `create(courseId, request, principal)` | Manage check; trims the body and refuses a blank note (the 2000-character cap is the request DTO's `@Size`); resolves the optional class and refuses one from another course (404); stores the author and the original text and returns the DTO with names resolved. |
+| `markRead(announcementId, principal)` | 404 for an unknown note, then the note must appear in `list` for this caller, so read state follows the same course and class boundary as reading. Writes one `announcement_reads` row; a second call is a no-op. |
 | `delete(announcementId, principal)` | 404 for an unknown note, then the same manage check on its course, then deletes. A learner has nothing to delete. |
-| `toDtos(announcements, cohorts)` | One cohort lookup and one author lookup for the page, so a dashboard card does not issue a query per note. |
-| `toDto(announcement, cohortName, authorName)` | Maps the row, leaving both names null when they do not apply. |
+| `readIdsOf(principal, announcements)` | One read-row lookup for the page, returned as a set of ids. |
+| `toDtos(announcements, cohorts, readIds)` | One cohort lookup and one author lookup for the page, so a dashboard card does not issue a query per note. |
+| `toDto(announcement, cohortName, authorName, read)` | Maps the row, leaving both names null when they do not apply. |
 | `authorName(authorId)` | Resolves the author for the single-note create response; null for a deleted account. |
 
 ### `AnalyticsService`

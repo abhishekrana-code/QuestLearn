@@ -46,6 +46,7 @@ export default function AnnouncementBanner({ courses = [], className = '' }) {
   // Newest first, so the first item is the latest.
   const [latest] = items;
   const total = items.length;
+  const unread = items.filter((item) => !item.read).length;
 
   if (loading || !latest) {
     return null;
@@ -61,8 +62,15 @@ export default function AnnouncementBanner({ courses = [], className = '' }) {
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-gold-text">
-          Latest notice · {latest.courseEmoji || '🗺️'} {latest.courseTitle}
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-gold-text">
+          <span>
+            Latest notice · {latest.courseEmoji || '🗺️'} {latest.courseTitle}
+          </span>
+          {unread > 0 && (
+            <span className="rounded-full bg-gold/[0.18] px-1.5 py-0.5 text-[9px] tracking-[0.1em]">
+              {unread} unread
+            </span>
+          )}
         </p>
         <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-foreground">{latest.body}</p>
         <p className="mt-1 text-[10px] text-fg-subtle">
