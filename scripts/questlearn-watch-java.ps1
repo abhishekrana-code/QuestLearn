@@ -55,8 +55,22 @@ function Rebuild-And-Restart {
     if (Test-Path $jar) {
         Copy-Item -Path $jar -Destination $jarBackup -Force
     }
-    Stop-Backend | Out-Null
+    $stopped = Stop-Backend
+    Write-Output ('[{0:HH:mm:ss}] stop: {1}' -f (Get-Date), $stopped)
     Wait-PortFree -Seconds 10 | Out-Null
+
+    # Stop-Backend cannot stop a process owned by another account or one running at
+    # a higher integrity level, for example the backend an elevated shell started.
+    # The port stays bound, the jar stays locked for Maven, and the old JVM keeps
+    # answering /actuator/health, so the run below used to build nothing, start
+    # nothing and still print "healthy". Say so instead of reporting a success.
+    $remaining = Get-BackendOwner
+    if ($remaining.Count -gt 0) {
+        $line = '[{0:HH:mm:ss}] STOP FAILED: pid {1} still owns port 8091 after 10s, so the old jar is still running. Nothing was rebuilt or restarted; stop that process (an elevated shell may be needed) and save a Java file to retry.' -f (Get-Date), ($remaining -join ', ')
+        Write-Output $line
+        [Console]::Error.WriteLine($line)
+        return
+    }
 
     Write-Output ('[{0:HH:mm:ss}] change detected, packaging...' -f (Get-Date))
     $buildTimer = [System.Diagnostics.Stopwatch]::StartNew()
