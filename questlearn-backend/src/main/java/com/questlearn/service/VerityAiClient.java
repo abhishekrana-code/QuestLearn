@@ -14,13 +14,18 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
@@ -277,6 +282,9 @@ public class VerityAiClient {
                 return action.apply(refreshCsrf(current));
             }
             throw ex;
+        } catch (ResourceAccessException ex) {
+            // No HTTP status exists here: the request never became a response.
+            throw unreachable(ex);
         }
     }
 
@@ -340,6 +348,9 @@ public class VerityAiClient {
             log.warn("VerityAI sign-in failed with HTTP {}", ex.getStatusCode().value());
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
                     "The course materials service is not available right now.");
+        } catch (ResourceAccessException ex) {
+            log.warn("VerityAI sign-in could not reach the service");
+            throw unreachable(ex);
         }
     }
 
@@ -370,6 +381,9 @@ public class VerityAiClient {
             log.warn("VerityAI CSRF request failed with HTTP {}", ex.getStatusCode().value());
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
                     "The course materials service is not available right now.");
+        } catch (ResourceAccessException ex) {
+            log.warn("VerityAI CSRF request could not reach the service");
+            throw unreachable(ex);
         }
     }
 
@@ -435,6 +449,29 @@ public class VerityAiClient {
         }
         return ApiException.badGateway(
                 "The document service could not " + action + ". Try again shortly.");
+    }
+
+    /**
+     * A connection that never opened, or one that opened and then stalled, is a
+     * gateway failure rather than a QuestLearn bug. Without this mapping the
+     * catch-all handler reported an unreachable VerityAI as a generic 500, so a
+     * caller could not tell "the service is down" from "this app is broken".
+     */
+    private ApiException unreachable(ResourceAccessException ex) {
+        Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+        log.warn("VerityAI could not be reached: {}", cause.toString());
+
+        boolean couldNotConnect = cause instanceof ConnectException
+                || cause instanceof UnknownHostException
+                || (cause instanceof SocketTimeoutException
+                        && cause.getMessage() != null
+                        && cause.getMessage().toLowerCase(Locale.ROOT).contains("connect"));
+        if (couldNotConnect) {
+            return new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "The document service is not reachable right now. Try again shortly.");
+        }
+        return ApiException.badGateway(
+                "The document service did not answer in time. Try again shortly.");
     }
 
     private String upstreamMessage(RestClientResponseException ex) {

@@ -1,6 +1,7 @@
 package com.questlearn.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.questlearn.exception.ApiException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -8,17 +9,21 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.http.HttpMethod.DELETE;
 import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
@@ -169,4 +174,27 @@ class VerityAiClientTest {
         server.verify();
     }
 
+    @Test
+    void aRefusedConnectionIsA503NotAGenericError() {
+        expectLogin();
+        server.expect(requestTo(BASE + "/documents/" + DOCUMENT + "/status"))
+                .andExpect(method(GET))
+                .andRespond(withException(new ConnectException("Connection refused")));
+
+        assertThatThrownBy(() -> client.state(UUID.fromString(DOCUMENT)))
+                .isInstanceOfSatisfying(ApiException.class, ex ->
+                        assertThat(ex.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+    }
+
+    @Test
+    void anUpstreamReadTimeoutIsA502() {
+        expectLogin();
+        server.expect(requestTo(BASE + "/documents/" + DOCUMENT + "/status"))
+                .andExpect(method(GET))
+                .andRespond(withException(new SocketTimeoutException("Read timed out")));
+
+        assertThatThrownBy(() -> client.state(UUID.fromString(DOCUMENT)))
+                .isInstanceOfSatisfying(ApiException.class, ex ->
+                        assertThat(ex.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY));
+    }
 }
