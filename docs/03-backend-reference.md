@@ -14,15 +14,15 @@ beyond their name.
 | --- | ---: | --- |
 | `com.questlearn` | 1 | Spring Boot entry point. |
 | `config` | 10 | Startup seeding, security wiring, mail/media choice, scheduling, OpenAPI. |
-| `controller` | 13 | HTTP surface. |
-| `dto` | 67 | Immutable request/response records. |
+| `controller` | 14 | HTTP surface. |
+| `dto` | 78 | Immutable request/response records. |
 | `email` | 5 | Delivery adapters behind one interface. |
 | `exception` | 3 | Typed failures and the single JSON error handler. |
 | `mapper` | 1 | Entity → DTO. |
-| `model` (incl. `service.media`) | 22 + 4 | JPA entities, enums, media drivers. |
-| `repository` | 16 | Spring Data interfaces. |
+| `model` (incl. `service.media`) | 24 + 4 | JPA entities, enums, media drivers. |
+| `repository` | 18 | Spring Data interfaces. |
 | `security` | 4 | JWT, one-time tokens, request tracing. |
-| `service` | 28 | Business rules and transactions. |
+| `service` | 31 | Business rules and transactions. |
 | `util` | 1 | Email normalisation. |
 
 ## 3.2 Entry point
@@ -197,6 +197,15 @@ needed, and pick a status code. All paths are under `/api/v1` (declared per clas
 | `updateModule` | `PUT /modules/{moduleId}` | Lesson prose and XP; preserves video fields. |
 | `attachQuiz` | `POST /modules/{moduleId}/quiz` | Validates and upserts the node's quiz (default pass 60). |
 
+### `CourseMaterialController` — `/api/v1/courses/{courseId}/materials`
+
+| Method | Path | Behaviour |
+| --- | --- | --- |
+| `list` | `GET /courses/{courseId}/materials?refresh=` | Lists readings. With `refresh=true`, unfinished rows are re-read from VerityAI and saved. |
+| `upload` | `POST /courses/{courseId}/materials` (multipart `file`) | Instructor/owner or admin. Validates the PDF, uploads it to VerityAI, stores the document id. 201. |
+| `delete` | `DELETE /courses/{courseId}/materials/{materialId}` | Removes the VerityAI document, then the row. 204. |
+| `ask` | `POST /courses/{courseId}/materials/ask` | Answers over this course's `READY` documents only; returns citations. Consumes one AI quota unit. |
+
 ### `ProgressController` — `/api/v1`
 
 | Method | Path | Behaviour |
@@ -351,6 +360,33 @@ needed, and pick a status code. All paths are under `/api/v1` (declared per clas
 | `toCourseDto(course, principal)` | Single-course mapping (null caches). |
 | `toCourseDto(course, principal, enrolledIds, rosterCounts)` | Page-aware mapping: completed count, roster size, enrollment flag. |
 | `moduleIds(courseId)` | Ordered node ids. |
+
+### `CourseMaterialService`
+
+| Function | What it does |
+| --- | --- |
+| `list(courseId, principal, refresh)` | View check; optional VerityAI status refresh for rows not yet `READY`/`FAILED`. |
+| `upload(courseId, principal, file)` | Manage check; rejects missing/oversized/non-PDF files before the network call; enforces the per-course cap; uploads and stores the mapping; audited. |
+| `delete(courseId, materialId, principal)` | Manage check; deletes the VerityAI document first so a failure leaves a retryable row; audited. |
+| `ask(courseId, principal, question)` | View check; trims and bounds the question; collects only `READY` document ids; consumes one AI quota unit; maps citations back to material rows. |
+| `refreshProcessing(materials)` | Best-effort status refresh. A VerityAI failure keeps the last known state rather than failing the list. |
+
+### `VerityAiClient`
+
+The HTTP boundary to the separate VerityAI service.
+
+| Function | What it does |
+| --- | --- |
+| `isConfigured()` / `maxFileBytes()` | Whether the switch and credentials are present; the upload cap used by the service. |
+| `upload(filename, bytes)` | `POST /documents` as multipart; returns the VerityAI id, filename and initial status. |
+| `state(documentId)` | `GET /documents/{id}/status`. |
+| `ask(title, documentIds, question)` | Creates a short-lived conversation over exactly those documents, asks `POST /conversations/{id}/messages`, parses citations, then deletes the conversation. |
+| `delete(documentId)` | Deletes a document; `404` is treated as already gone. |
+| `call(action)` | Runs an action with the cached session; retries once after `401` (new login) or `403` (new CSRF token). |
+| `currentSession()` / `reauthenticate()` / `refreshCsrf()` | One-at-a-time session cache; a waiting thread reuses another thread's refresh. |
+| `login()` / `fetchCsrf()` | Cookie + token acquisition. The password is never logged. |
+| `mapFailure(ex, action)` | Translates VerityAI statuses into `ApiException` with a human message (400/422 → 400, 404, 429, 503, otherwise 502). |
+| `unreachable(ex)` | No status exists when the request never became a response: a refused connection, unknown host or connect timeout is 503; any other transport failure, such as a read timeout, is 502. Before this the catch-all handler answered 500. |
 
 ### `ProgressService`
 
@@ -725,7 +761,8 @@ filtering agree on which accounts are fictional.
 | `EmailSender` (interface) | `send(EmailMessage)` | One delivery call. |
 | | `isDeliveryConfigured()` | Whether this adapter can actually deliver. |
 | | `EmailDeliveryException` | Wraps a provider failure with a retryable/not signal. |
-| `LogEmailSender` | `send(message)` | Writes a structured line; used when no provider is configured, so reset links remain recoverable by an operator. |
+| `LogEmailSender` | `send(message)` | Writes a structured line; used when no provider is configured and for reserved test recipients, so links remain recoverable without bouncing. |
+| | `write(message, reason, hint)` | Static form used by the fallback and by `MailService`, with the reason and an operator hint in the line. |
 | | `isDeliveryConfigured()` | `false`. |
 | `SmtpEmailSender` | `send(message)` | Sends via `JavaMailSender` (text + HTML alternative). |
 | | `isDeliveryConfigured()` | `true`. |
@@ -788,6 +825,8 @@ All entities use Lombok builders/getters/setters; ids are identity columns.
 | `Cohort` | courseId, name, joinCode, createdAt | `joinCode` is unique. |
 | `CohortMembership` | cohortId, userId, joinedAt | Unique pair enforced in the schema. |
 | `Announcement` | courseId, cohortId, authorId, body, createdAt | `cohortId` null means the whole course. Cascades with its course and class; `authorId` is set to null when the author is deleted, so the note the class already read survives. |
+| `AnnouncementRead` | announcementId, userId, readAt | One row per reader; unique pair, so opening twice cannot count twice. |
+| `CourseMaterial` | courseId, verityDocumentId, uploadedBy, filename, sizeBytes, status, errorMessage, createdAt, updatedAt | `verityDocumentId` is unique: one VerityAI document belongs to one course. Cascades with the course; the uploader reference is cleared on account deletion. |
 | `CohortDeadline` | cohortId, moduleId, dueAt, createdAt | One per (class, node). |
 | `DeadlineReminder` | user, module, kind, dueAt, sentAt | The send ledger. |
 | `PasswordResetToken` | user, tokenHash, createdAt, expiresAt, usedAt | Only the hash is stored; atomic claim. |
@@ -808,7 +847,7 @@ Spring Data derives the SQL from these names. The important ones:
 | Repository | Methods and why they exist |
 | --- | --- |
 | `UserRepository` | `findByEmailIgnoreCase`, `existsByEmailIgnoreCase`, `findAllByOrderByTotalXpDesc`, paged name/email search, `findTop10ByRoleOrderByTotalXpDesc`, `findByRoleAndNotifyDeadlinesTrue`, `countByRole`. |
-| `CourseRepository` | `findAllByOrderByIdAsc`, `findByPublishedTrueOrderByIdAsc`, `findByInstructorIdOrderByIdAsc`, `countByPublishedTrue`. |
+| `CourseRepository` | `findWithInstructorById` (loads the owner so a permission check outside a transaction does not trip a lazy association), `findAllByOrderByIdAsc`, `findByPublishedTrueOrderByIdAsc`, `findByInstructorIdOrderByIdAsc`, `countByPublishedTrue`. |
 | `ModuleRepository` | ordered by course/order, nodes with dates, nodes by course set, children by parent, roots, `findByIdAndCourseId` (ownership-safe lookup), count by course. |
 | `QuizRepository` | `findByModuleId`, `existsByModuleId`. |
 | `UserModuleProgressRepository` | by user/module, by user+course, all by user, counts by status and course, rows by course+status, rows by course+user set, delete by user. |
@@ -817,6 +856,8 @@ Spring Data derives the SQL from these names. The important ones:
 | `CohortRepository` | ordered by course, by course set, case-insensitive join-code lookup, code existence. |
 | `CohortMembershipRepository` | exists, count, ordered members, memberships for a user in a set of classes. |
 | `AnnouncementRepository` | `findByCourseIdOrderByCreatedAtDescIdDesc` (newest first, id breaking a same-instant tie). |
+| `AnnouncementReadRepository` | read rows for a user across a set of notes, counts per note, delete by note or user. |
+| `CourseMaterialRepository` | ordered by course and newest first, one by id+course, count per course, one by VerityAI document id. |
 | `CohortDeadlineRepository` | ordered overrides for a class, overrides for a set of classes, one by class+node. |
 | `DeadlineReminderRepository` | recent rows per user, delete older than a cutoff. |
 | `PasswordResetTokenRepository` / `EmailVerificationTokenRepository` | hash lookup, atomic `claim` (sets `usedAt` only if unused), invalidate all for a user. |

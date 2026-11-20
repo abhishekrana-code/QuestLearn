@@ -25,6 +25,11 @@
 │                                                                         │
 │  scheduled: DeadlineReminderJob (opt-in)                                 │
 │  optional: SMTP / Resend, Groq, S3                                       │
+└───────────────────────────────┬─────────────────────────────────────────┘
+                                │ HTTP (service account, SESSION + CSRF)
+┌───────────────────────────────▼─────────────────────────────────────────┐
+│  optional: VerityAI (:8080)                                              │
+│  PDF ingestion → chunks/embeddings → retrieval → cited answers           │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -32,6 +37,11 @@ There is no separate API gateway, message broker or cache tier. The backend is o
 process and one database; the frontend is static files. That is deliberate: the
 project targets a laptop with 8 GB of RAM, and every extra moving part would cost
 more than it returns at this scale.
+
+VerityAI is the one deliberate exception, and it is optional: course readings are a
+separate document-intelligence service reached over HTTP, with its own database and
+its own Groq key. When it is not configured, only the materials page is affected (see
+[08-verityai-integration.md](08-verityai-integration.md)).
 
 ## 2.2 Repository boundaries
 
@@ -82,7 +92,7 @@ imports an entity.
 ```
 main()
  └─ Spring context
-     ├─ Flyway migrates/validates the schema (V1–V14)
+     ├─ Flyway migrates/validates the schema (V1–V17)
      ├─ JPA validates entities against the schema (ddl-auto=validate)
      ├─ DataInitializer (ApplicationRunner)
      │    ├─ demo password resolved (configured, or generated once)
@@ -98,7 +108,7 @@ overwrites a learner's real progress.
 
 ## 2.5 Data model
 
-Fourteen migrations build the schema. Entity relationships:
+Seventeen migrations build the schema. Entity relationships:
 
 ```
 users 1 ──< enrollments >── 1 courses
@@ -109,6 +119,8 @@ modules 1 ──1 quizzes
 courses 1 ──< cohorts 1 ──< cohort_memberships >── users
 cohorts 1 ──< cohort_deadlines >── modules
 modules 1 ──< deadline_reminders >── users
+courses 1 ──< announcements 1 ──< announcement_reads >── users
+courses 1 ──< course_materials
 users 1 ──< password_reset_tokens
 users 1 ──< email_verification_tokens
 admin_audit_log (standalone, append-only)
@@ -130,6 +142,9 @@ demo_credential (single row, hashed shared demo password)
 | `deadline_reminders` | Sent-digest ledger | `user_id`, `module_id`, `kind`, `due_at`, `sent_at` |
 | `password_reset_tokens` | Hashed reset tokens | `token_hash`, `expires_at`, `used_at` |
 | `email_verification_tokens` | Hashed verify tokens | `token_hash`, `expires_at`, `used_at` |
+| `announcements` | Teacher notes to a course or class | `course_id`, `cohort_id`, `author_id`, `body`, `created_at` |
+| `announcement_reads` | Per-reader read state | `announcement_id`, `user_id`, unique pair |
+| `course_materials` | Maps a VerityAI document to one course | `course_id`, `verity_document_id` (unique), `status`, `error_message` |
 | `admin_audit_log` | Who changed what | `actor_id`, `actor_email`, `action`, `target`, `detail` |
 | `demo_credential` | Shared demo password | `password_hash`, `rotated_at`, `rotated_by` |
 
@@ -219,6 +234,7 @@ classes with the same code).
 | --- | --- |
 | Database down | Requests fail fast (10 s connection timeout); the health endpoint reports down; the static frontend still loads and shows errors with a retry banner. |
 | Groq down or rate-limited | 502/429 with a human message; the quiz route still works. A `429` is surfaced as "examiner busy" with the two alternatives. |
+| VerityAI down or not configured | Materials endpoints answer 503 (not configured, or the connection is refused or the host is unknown) or 502 (it connects but stalls or fails mid-call); every other feature is unaffected. |
 | Mail provider down | The account action is still stored; delivery is retried a couple of times and then logged. Reset/verify links remain in the log for an operator. |
 | Disk full | Upload fails with a clear 400/500; existing media keeps serving. |
 | Restart | JWT sessions survive (stateless). In-memory throttles reset. Scheduled reminders resume; the ledger prevents duplicate sends. |
@@ -275,6 +291,18 @@ Token lifetimes are 30 minutes (reset) and 48 hours (verification).
 | `AI_HOURLY_LIMIT` | `30` | Per-account calls per rolling hour. |
 | `AI_MAX_CONCURRENT_VIVAS` | `4` | Simultaneous grading permits. |
 | `AI_MAX_AUDIO_BYTES` | `26214400` | 25 MB audio cap. |
+
+### Course materials (VerityAI)
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `VERITY_ENABLED` | `false` | Master switch; off means the materials endpoints answer 503. |
+| `VERITY_BASE_URL` | `http://localhost:8080/api/v1` | VerityAI API root, including `/api/v1`. |
+| `VERITY_SERVICE_EMAIL` / `VERITY_SERVICE_PASSWORD` | empty / secret | Dedicated VerityAI service account. |
+| `VERITY_MAX_FILE_BYTES` | `26214400` | PDF upload cap (25 MB). |
+| `VERITY_MAX_MATERIALS_PER_COURSE` | `20` | Readings per course. |
+| `VERITY_CONNECT_TIMEOUT_MS` | `5000` | Connect timeout. |
+| `VERITY_READ_TIMEOUT_MS` | `120000` | Read timeout for uploads and answers. |
 
 ### Media
 

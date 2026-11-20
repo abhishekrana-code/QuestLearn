@@ -20,6 +20,7 @@ The root [`README.md`](../README.md) stays the quick-start. These pages are the 
 | [05-flows.md](05-flows.md) | End-to-end stories: sign-up, joining a class, clearing a node, the viva, deadlines, roster import, authoring, AI generation, admin work. |
 | [06-api.md](06-api.md) | Endpoint-by-endpoint reference: method, path, who may call it, request body, response shape, and the errors that matter. |
 | [07-operations-testing.md](07-operations-testing.md) | Build, run, publish, back up, test, observe, and troubleshoot. Includes the CI jobs and the known local limitations. |
+| [08-verityai-integration.md](08-verityai-integration.md) | How course PDFs are processed by the separate VerityAI service and how cited answers stay inside one course. |
 
 ## Conventions used here
 
@@ -41,7 +42,7 @@ QuestLearn/
 ├── questlearn-backend/     Spring Boot 3.4.5 · Java 21 · Maven · PostgreSQL 16
 │   ├── src/main/java/com/questlearn/
 │   │   ├── config/         startup, security, media, mail, scheduling
-│   │   ├── controller/     12 REST controllers
+│   │   ├── controller/     14 REST controllers
 │   │   ├── dto/            request and response records
 │   │   ├── email/          pluggable delivery (log, SMTP, Resend)
 │   │   ├── exception/      ApiException + one global handler
@@ -53,17 +54,17 @@ QuestLearn/
 │   │   └── util/
 │   ├── src/main/resources/
 │   │   ├── application.properties
-│   │   └── db/migration/   Flyway V1–V14
+│   │   └── db/migration/   Flyway V1–V17
 │   └── src/test/java/      unit + PostgreSQL integration tests
 ├── questlearn-frontend/    React 18 · Vite 8 · Tailwind 3 · React Router 7
 │   ├── src/
 │   │   ├── components/     auth, common, deadlines, gamification, quiz, skilltree, studio, viva
 │   │   ├── context/        auth, gamification, theme
 │   │   ├── hooks/          auto-retry, dialog focus
-│   │   ├── pages/          20 route-level screens
+│   │   ├── pages/          21 route-level screens
 │   │   ├── services/       HTTP, media, AI, deadlines, CSV, lesson payloads
 │   │   └── utils/
-│   └── e2e/                five Playwright specs
+│   └── e2e/                six Playwright specs (23 tests)
 ├── scripts/                Windows build/publish helpers
 ├── deploy/                 deployment notes and units
 ├── .github/workflows/      three-job CI (backend, frontend, e2e)
@@ -81,6 +82,6 @@ awards the node's XP once, recomputes the level from total XP, advances the dail
 streak, and unlocks the children. Instructors build the same tree in a studio, can
 add classes (cohorts) with join codes and class-specific deadlines, and can read a
 roster and a per-node funnel. Admins manage accounts, roles, demo credentials,
-publishing and the server's own telemetry. AI and email are optional: when no key or
-provider is configured, the affected feature degrades with an explanation instead of
-breaking the rest of the app.
+publishing and the server's own telemetry. AI, email and course materials are
+optional: when no key, provider or VerityAI service is configured, the affected
+feature degrades with an explanation instead of breaking the rest of the app.

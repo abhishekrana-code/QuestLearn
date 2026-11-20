@@ -46,6 +46,7 @@ the form quickly.
 | `/announcements` | `Announcements` | `STUDENT` | Every notice for the learner's courses and classes, newest first. |
 | `/explore` | `ExploreCourses` | `STUDENT` | Joining and leaving courses is a learner action. |
 | `/courses/:courseId` | `SkillTreePage` | all three roles | Learners play it; teachers and admins preview it. |
+| `/courses/:courseId/materials` | `CourseMaterials` | all three roles | The course readings; the owning instructor uploads, everyone who may view the course can ask cited questions. |
 | `/performance` | `StudentPerformance` | `STUDENT` | Cross-course grades and attempt history. |
 | `/leaderboard` | `Leaderboard` | all three roles | Students see the board; staff can rank one course or class. |
 | `/studio/courses` | `InstructorCourses` | `INSTRUCTOR`, `ADMIN` | The course library. |
@@ -486,7 +487,32 @@ and/or viva entry point, and the attempt history with a "Try again" action. The 
 sits beside it from `xl` upward; below that, selecting a node scrolls the briefing
 into view after it renders.
 
-### 4.10.13 `StudentPerformance.jsx` — `/performance`
+The header also links to `/courses/:courseId/materials`, so the readings are one tap
+from the map.
+
+### 4.10.13 `CourseMaterials.jsx` — `/courses/:courseId/materials`
+
+The course readings and the questions asked about them. The PDF is processed by the
+separate VerityAI service; this page only uploads, watches status and presents cited
+answers.
+
+| Function | Behaviour |
+| --- | --- |
+| `load(refresh)` | `GET /courses/{id}/materials?refresh=true`; returns the list. |
+| polling effect | While any row is `UPLOADED` or `PROCESSING`, refreshes every 4 seconds. A settled course stops polling. |
+| `upload(event)` | Sends the chosen file as `FormData` to `POST /courses/{id}/materials`; then reloads. |
+| `remove(material)` | Confirms, then `DELETE /courses/{id}/materials/{id}`; clears any visible answer. |
+| `ask(event)` | `POST /courses/{id}/materials/ask` with the trimmed question; renders the answer and its page citations. |
+| course fetch | `GET /courses/{id}` once on mount; `instructorId` compared with the signed-in user decides whether the upload and delete controls render at all. |
+
+Only an `ADMIN` or the `INSTRUCTOR` who owns the course sees the upload and delete
+controls; the server enforces the same rule. An instructor teaching another
+instructor's course can read the list and ask questions, but no upload or delete
+action is rendered for them. The answer panel labels VerityAI's evidence status in plain language
+("Grounded in the readings", "Answered without a citation", "No matching passage"),
+and each source shows the document name, page number and excerpt.
+
+### 4.10.14 `StudentPerformance.jsx` — `/performance`
 
 Cross-course progress, folded up by subject.
 
@@ -506,7 +532,7 @@ Cross-course progress, folded up by subject.
 Topics expand per subject; a topic with history can expand again to show each try,
 its source (quiz/spoken viva/typed viva) and the delta from the first try.
 
-### 4.10.14 `Leaderboard.jsx` — `/leaderboard`
+### 4.10.15 `Leaderboard.jsx` — `/leaderboard`
 
 Three boards behind one control: `overall` (every course added up, each node counted
 once), `all` (lifetime XP) and one course (XP earned inside it). Staff can narrow a
@@ -524,7 +550,7 @@ course board to one class.
 The signed-in user's row is ringed. The podium uses rank labels as text, not colour
 alone.
 
-### 4.10.15 `InstructorCourses.jsx` — `/studio/courses`
+### 4.10.16 `InstructorCourses.jsx` — `/studio/courses`
 
 The course library: active/archived tabs, search, and per-course actions.
 
@@ -542,7 +568,7 @@ The course library: active/archived tabs, search, and per-course actions.
 Each card links to the builder, roster, analytics and classes, and shows status
 (draft/live/archived), node count, enrolment count and last update.
 
-### 4.10.16 `InstructorStudio.jsx` — `/studio`
+### 4.10.17 `InstructorStudio.jsx` — `/studio`
 
 The five-step builder: Course → Nodes → Quiz → Videos → Publish. The step lives in
 `?step=` and the course in `?course=`, so a shared link reopens the same screen.
@@ -581,7 +607,7 @@ Step details:
   video is attached), a student preview link, publish/unpublish, and an explanation
   of what each state means.
 
-### 4.10.17 `CourseRoster.jsx` — `/studio/courses/:courseId/roster`
+### 4.10.18 `CourseRoster.jsx` — `/studio/courses/:courseId/roster`
 
 Answers "who is enrolled, and who is stuck".
 
@@ -600,7 +626,7 @@ Filters: class, node, and cleared/not-cleared (default "not cleared"). The heade
 shows learner count, average cleared nodes and the active filters; export and print
 buttons are print-hidden appropriately.
 
-### 4.10.18 `LearnerDetail.jsx` — `/studio/courses/:courseId/roster/:userId`
+### 4.10.19 `LearnerDetail.jsx` — `/studio/courses/:courseId/roster/:userId`
 
 One learner's attempt trail in one course.
 
@@ -614,7 +640,7 @@ The header summarises cleared nodes, XP, level, streak, last activity and join d
 Reset is available to instructors and admins; the copy states that all attempts and
 the XP for that node are lost and other work is untouched.
 
-### 4.10.19 `CourseAnalytics.jsx` — `/studio/courses/:courseId/analytics`
+### 4.10.20 `CourseAnalytics.jsx` — `/studio/courses/:courseId/analytics`
 
 The funnel per node, optionally limited to one class.
 
@@ -628,7 +654,7 @@ The funnel per node, optionally limited to one class.
 - The table shows reached, started, cleared, attempts and median hours to clear per
   node, with bar widths relative to the learner count.
 
-### 4.10.20 `InstructorCohorts.jsx` — `/studio/courses/:courseId/cohorts`
+### 4.10.21 `InstructorCohorts.jsx` — `/studio/courses/:courseId/cohorts`
 
 Classes inside one course. A class code both adds a student to the class list and
 enrols them in the course.
@@ -643,7 +669,7 @@ enrols them in the course.
 The page also renders `CohortDeadlineEditor` for each class, and links to the roster
 and analytics.
 
-### 4.10.21 `AdminPanel.jsx` — `/admin`
+### 4.10.22 `AdminPanel.jsx` — `/admin`
 
 The operations screen. It loads stats, all courses, the audit feed, telemetry and the
 demo-login status in parallel, then pages accounts from the server.
@@ -719,11 +745,13 @@ Unit tests run in Vitest with Testing Library:
 | `services/media.test.js` | Direct-play detection and YouTube/Vimeo extraction. |
 | `services/rosterCsv.test.js` | Quoting, filenames and row shape. |
 | `pages/VerifyEmail.test.jsx` | Success, expired and missing-token states. |
+| `pages/CourseMaterials.test.jsx` | Owner upload control, non-owner and learner views, cited answer, multipart body. |
 
 End-to-end specs live in `e2e/` and run through Playwright against a real backend
-(see [07-operations-testing.md](07-operations-testing.md)). Five specs cover the
-public pages and the learner loop, studio authoring safeguards, the dashboard's
-next-node deep link, mobile navigation and the admin health/accessibility claims.
+(see [07-operations-testing.md](07-operations-testing.md)). Six specs (23 tests) cover
+the public pages and the learner loop, studio authoring safeguards, the dashboard's
+next-node deep link, mobile navigation, the admin health/accessibility claims and
+class announcements.
 
 ## 4.13 Adding a screen safely
 

@@ -181,6 +181,10 @@ answered with a generic sentence plus the request id.
 | GET | `/courses/{courseId}/announcements/receipts` | staff | 200 `AnnouncementReceiptSummaryDto[]` |
 | GET | `/announcements/{announcementId}/receipts` | staff | 200 `AnnouncementReceiptsDto` |
 | DELETE | `/announcements/{announcementId}` | staff | 204 |
+| GET | `/courses/{courseId}/materials` | any viewer | 200 `CourseMaterialDto[]` |
+| POST | `/courses/{courseId}/materials` (multipart) | staff, owner or admin | 201 `CourseMaterialDto` |
+| DELETE | `/courses/{courseId}/materials/{materialId}` | staff, owner or admin | 204 |
+| POST | `/courses/{courseId}/materials/ask` | any viewer | 200 `MaterialAnswerDto` |
 | POST | `/modules/{moduleId}/video` | staff | 200 `VideoAttachmentDto` |
 | POST | `/modules/{moduleId}/video/upload-ticket` | staff | 200 `VideoUploadTicketDto` |
 | POST | `/modules/{moduleId}/video/attachments` | staff | 200 `VideoAttachmentDto` |
@@ -562,7 +566,42 @@ teacher knows which nodes still need a quiz. Generation is quota-limited per acc
 per rolling hour (30 by default) and per deployment per calendar day (150); exceeding
 either is **429**. The quota is in memory.
 
-## 6.12 Analytics
+## 6.12 Course materials (VerityAI)
+
+Readings belong to a course; the PDF itself is processed by a separate VerityAI
+service. Full design in [08-verityai-integration.md](08-verityai-integration.md).
+
+| Endpoint | Request | Behaviour and failures |
+| --- | --- | --- |
+| `GET /courses/{courseId}/materials?refresh=` | — | 200 `CourseMaterialDto[]`, newest first. `refresh=true` re-reads unfinished rows from VerityAI; a failure there leaves the last known status. View permission on the course is required. |
+| `POST /courses/{courseId}/materials` | multipart `file` | 201 `CourseMaterialDto`. Owner-instructor or admin. PDF-only by name and `%PDF-` signature, 25 MB and 20-per-course defaults. 400 for the wrong file, 429 when VerityAI's queue is full, 503 when the service is not configured. |
+| `DELETE /courses/{courseId}/materials/{materialId}` | — | 204. Owner-instructor or admin. The VerityAI document is removed before the row; `404` from VerityAI means the document is already gone. |
+| `POST /courses/{courseId}/materials/ask` | `{ question }` | 200 `MaterialAnswerDto`. View permission. Only `READY` materials are sent; 400 with an explanation when none are ready. Each question consumes one AI quota unit, so 429 applies. |
+
+`CourseMaterialDto`:
+
+```text
+id, filename, sizeBytes, status, errorMessage, createdAt
+```
+
+`status` is `UPLOADED`, `PROCESSING`, `READY` or `FAILED` — VerityAI's lifecycle.
+
+`MaterialAnswerDto`:
+
+```text
+answer, evidenceStatus,
+citations: [{ materialId, documentName, pageNumber, excerpt }]
+```
+
+`evidenceStatus` is `SUFFICIENT`, `INSUFFICIENT` or `NONE`. `materialId` is
+QuestLearn's row id; it is null only if VerityAI cited a document outside the ids
+QuestLearn sent, which the UI then renders without a local link.
+
+A 503 with "Course materials are not configured on this server." means
+`VERITY_ENABLED` or the service credentials are missing; it is not a database or
+course-permission failure.
+
+## 6.13 Analytics
 
 `GET /courses/{courseId}/analytics?cohortId=` — **staff**, owner-or-admin.
 
@@ -584,7 +623,7 @@ with the largest reached-minus-cleared gap, already computed by the server so ev
 client names the same teaching target. An unknown class, or one from another course,
 is 404.
 
-## 6.13 Administration — `/api/v1/admin`
+## 6.14 Administration - `/api/v1/admin`
 
 Every endpoint in this group is **admin** except the node-progress reset, which is
 **staff** and limited to the teacher's own course.
@@ -614,7 +653,7 @@ and the server log describe the same incident.
 | `GET /actuator/metrics`, other actuator paths | admin | Micrometer metrics; `TelemetryService` reads the same registry for the admin view. |
 | `GET /swagger-ui.html`, `/v3/api-docs` | public in dev | Interactive schema. Disabled by the `prod` profile because production should not publish the whole surface. |
 
-## 6.14 Client guidance
+## 6.15 Client guidance
 
 - **Never compute a grade, an unlock, a level or a deadline state locally.** Every
   one of them is returned by the API, and the browser is only a renderer.

@@ -186,14 +186,16 @@ dangerous ones mandatory. The keys worth knowing:
 | Reminders | `NOTIFICATIONS_ENABLED`, `NOTIFICATIONS_CRON`, `NOTIFICATIONS_DUE_SOON_DAYS`, `NOTIFICATIONS_RETENTION_DAYS` | Off; 07:00 UTC; a 7-day due-soon window; 120-day ledger retention. |
 | Login throttle | `LOGIN_MAX_ATTEMPTS`, `LOGIN_LOCK_MINUTES` | 5 failures, 15-minute lock. In memory. |
 | AI | `GROQ_API_KEY`, `GROQ_REASONING_MODEL`, `GROQ_FALLBACK_MODEL`, `GROQ_TRANSCRIPTION_MODEL`, `AI_DAILY_LIMIT`, `AI_HOURLY_LIMIT`, `AI_MAX_CONCURRENT_VIVAS`, `AI_MAX_AUDIO_BYTES` | No key means AI answers 503; models `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `whisper-large-v3-turbo`; 150/day, 30/hour, 4 concurrent, 25 MB audio. `prod` lowers the audio cap to 8 MB. |
+| Course materials | `VERITY_ENABLED`, `VERITY_BASE_URL`, `VERITY_SERVICE_EMAIL`, `VERITY_SERVICE_PASSWORD`, `VERITY_MAX_FILE_BYTES`, `VERITY_MAX_MATERIALS_PER_COURSE`, `VERITY_CONNECT_TIMEOUT_MS`, `VERITY_READ_TIMEOUT_MS` | Off by default: the materials page answers 503. When on, `http://localhost:8080/api/v1`, 25 MB PDFs, 20 per course, 5 s connect / 120 s read. |
 | Lesson media | `MEDIA_STORAGE`, `MEDIA_VIDEO_DIR`, `MEDIA_UPLOAD_TTL_MINUTES`, `MEDIA_PLAYBACK_TTL_MINUTES`, `MEDIA_MAX_VIDEO_BYTES`, `MEDIA_S3_*` | `disk` in `./uploads/videos`; 15-minute upload links, 60-minute playback links, 100 MB per video. `s3` requires the bucket, endpoint and keys. |
 | Multipart | `MEDIA_MAX_UPLOAD`, `MEDIA_MAX_REQUEST` | 110 MB / 120 MB. This is the transport ceiling; the service checks are smaller. |
 | Bootstrap admin | `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_PASSWORD` | Only read on the first start of an empty database in `prod`. Remove the password afterwards. |
 | Observability | Actuator `health,info,metrics`, SLO buckets, 365-day histogram expiry | `/actuator/health` is public; every other actuator endpoint is admin-only. |
 
 Never print the values of `JWT_SECRET`, `DEMO_PASSWORD`, `DB_PASSWORD`,
-`GROQ_API_KEY`, `RESEND_API_KEY` or the SMTP password in a terminal transcript,
-issue, screenshot or support message. The files are gitignored for a reason.
+`GROQ_API_KEY`, `RESEND_API_KEY`, `VERITY_SERVICE_PASSWORD` or the SMTP password in
+a terminal transcript, issue, screenshot or support message. The files are
+gitignored for a reason.
 
 ### 3. Backend
 
@@ -354,12 +356,12 @@ instructor, course, nodes and quiz, so it does not depend on the demo seed.
 reads the Surefire XML and fails if the class is missing, skipped, or reports fewer
 than ten tests. A green CI backend job means the PostgreSQL suite really ran.
 
-At the time of writing the backend suite is **212 tests across 25 test classes**
-(unit plus PostgreSQL). It covers grading, gamification arithmetic, deadline
-resolution, viva parsing and concurrency, quotas, telemetry, media storage, mail,
-auth, admin rules, announcement visibility and the end-to-end API. On this demo machine the `it` profile is not
-configured, so a local `mvn verify` reports the integration class as skipped; CI is
-the run that proves it.
+At the time of writing the backend suite is **232 tests across 27 test classes**
+(unit plus PostgreSQL, 68 of them skipped locally because `IT_DB_URL` is unset). It
+covers grading, gamification arithmetic, deadline resolution, viva parsing and
+concurrency, quotas, telemetry, media storage, auth, admin rules, announcement
+visibility, course-material mapping and the VerityAI HTTP client, and the end-to-end
+API. CI is the run that proves the PostgreSQL suite.
 
 ### Frontend unit tests
 
@@ -372,10 +374,10 @@ npx vitest run src/services/deadlines.test.js
 
 Vitest runs in jsdom. Playwright owns `e2e/`, and `vite.config.js` excludes that folder
 from Vitest so the two runners never collect each other's specs. At the time of
-writing there are **51 unit tests**. They cover the change-password dialog, the
+writing there are **55 unit tests**. They cover the change-password dialog, the
 verification banner, formatted text escaping, the deadline panel, MCQ selection, the
 quiz editor's JSON round-trip, dialog focus, deadline helpers, media URL detection,
-CSV quoting and the verification page.
+CSV quoting, the verification page and the course-materials page.
 
 ### Browser tests (Playwright)
 
@@ -395,7 +397,7 @@ Prerequisites:
 - port 5180 free, or an existing preview/dev server that `reuseExistingServer` can
   reuse. If none exists, Playwright starts `npm run dev -- --port 5180 --strictPort`.
 
-At the time of writing there are **13 tests across five specs**:
+At the time of writing there are **23 tests across six specs**:
 
 | Spec | Covers |
 | --- | --- |
@@ -404,6 +406,7 @@ At the time of writing there are **13 tests across five specs**:
 | `next-node.spec.js` | The dashboard's "pick up here" deep link into the skill tree, and the message for a stale `node` parameter. |
 | `mobile-nav.spec.js` | The mobile menu closes on its own X and on an outside tap without fighting the toggle. |
 | `admin.spec.js` | The telemetry health card, named demo logins, and the narrowed accessibility claims. |
+| `announcements.spec.js` | The learner banner and empty state, class vs course visibility, unread counts, mark-all-read, the paged and filtered notices page, staff access, and the studio receipts panel. |
 
 One worker and no parallelism are deliberate: the specs create accounts and mutate
 shared demo courses. Each spec deletes the accounts and classes it created, even when
@@ -618,7 +621,49 @@ If the scan reports a real value, rotate it. Deleting the commit or force pushin
 over it does not help once it has been pushed: GitHub keeps the object reachable and
 the value has to be assumed public.
 
-## 7.9 Announcements
+## 7.9 Course materials (VerityAI)
+
+Course readings are the one feature that depends on a second service. It is optional:
+with `VERITY_ENABLED=false` (the default) the Materials page loads and every action
+explains that the service is not configured. Nothing else in QuestLearn is affected.
+
+To turn it on:
+
+1. Start VerityAI with its own PostgreSQL/pgvector database and a Groq key. Its
+   default port is 8080; QuestLearn's local backend uses 8091, so one of the two
+   needs a different port on a shared machine.
+2. Register one VerityAI account for QuestLearn. It needs no mailbox; it is only used
+   by the backend. VerityAI permits one live session per account, so do not sign in
+   as it elsewhere while QuestLearn is running.
+3. Put `VERITY_ENABLED=true`, `VERITY_BASE_URL`, `VERITY_SERVICE_EMAIL` and
+   `VERITY_SERVICE_PASSWORD` in `questlearn-backend/.env`, then restart the backend.
+4. Flyway applies `V17__course_materials.sql` on startup. A failure here is a schema
+   problem, not a VerityAI problem.
+5. Sign in as the instructor who owns a course, open **Materials**, upload a PDF and wait for
+   `Ready`. Ask a question and check that the answer cites a page.
+
+Uploads are PDF-only by name and signature, capped at 25 MB and 20 per course by
+default. Questions are charged to the same `AI_HOURLY_LIMIT` / `AI_DAILY_LIMIT` quota
+as the viva, so a `429` can come from QuestLearn's quota even when VerityAI is idle.
+Only `READY` readings are searched; a course whose uploads are still processing
+returns 400 with an explanation rather than an uncited guess.
+
+The document lives in VerityAI, not in QuestLearn's database or media store, so
+`questlearn-backup.ps1` does **not** back it up. Back up VerityAI's database and its
+file store separately, or accept that readings must be re-uploaded after a restore.
+Deleting a course removes its `course_materials` rows but cannot remove the VerityAI
+documents, because the cascade happens in SQL; clean those up in VerityAI if the
+service account's workspace matters.
+
+Verify the integration at three levels:
+
+| Level | Command or action |
+| --- | --- |
+| Unit | `mvn -Dtest=VerityAiClientTest,CourseMaterialServiceTest test` |
+| Frontend | `npm test` (includes `CourseMaterials.test.jsx`) |
+| Live | Upload one PDF, wait for `Ready`, ask a question whose answer is on a known page, then delete the material and confirm it disappears from VerityAI too. |
+
+## 7.10 Announcements
 
 The class announcement channel is deliberately **in-app only** in this version:
 posting a note sends no mail, so there is no provider, queue or scheduled job to
@@ -666,7 +711,7 @@ own because the suite truncates every table: create one, then pass
 student in a class that was not addressed and confirm the other class's note is
 absent from the dashboard banner, the nav badge count and the notices page.
 
-## 7.10 Known limits of this deployment
+## 7.11 Known limits of this deployment
 
 These are deliberate trade-offs for a single-machine classroom demo, not hidden bugs.
 They are listed here so nobody plans around them by accident.
@@ -681,9 +726,11 @@ They are listed here so nobody plans around them by accident.
 | The local integration suite is **opt-in** (`IT_DB_URL`) | `mvn verify` can be green while the PostgreSQL suite is skipped. | CI's report guard is the required proof. |
 | H2 profile is **not schema-equivalent** | It is fine for a smoke run, not for trusting JSONB or migrations. | Always test on PostgreSQL. |
 | The public demo serves a **production build**, not the dev server | Source edits are invisible until a rebuild. | That is the intended behaviour. |
+| VerityAI allows **one live session per service account** | A second QuestLearn backend using the same account fights the first for the session. | One account per backend, or a multi-session service account in VerityAI. |
+| Deleting a course cascades **only the mapping rows** | The PDFs remain in VerityAI's workspace. | A cleanup job or a VerityAI bulk-delete by course tag. |
 | `tailscale funnel` is machine-local | A new machine or hostname needs the Funnel and Vite `allowedHosts` updated together. | Configuration management. |
 
-## 7.11 Troubleshooting
+## 7.12 Troubleshooting
 
 | Symptom | First check | Likely fix |
 | --- | --- | --- |
@@ -708,7 +755,7 @@ They are listed here so nobody plans around them by accident.
 | Backup check fails with "past the 48 hour limit" | Task Scheduler and `backups/` | Re-register the backup task; run a backup manually and verify it. |
 | Two instances fight over the port | `Get-NetTCPConnection -LocalPort 8091` | Stop the extra process; the scripts stop the owner of the port, never a name match. |
 
-## 7.12 A short release checklist
+## 7.13 A short release checklist
 
 1. `mvn -B verify` in `questlearn-backend` with `IT_DB_*` set, or confirm CI ran the
    PostgreSQL suite.
