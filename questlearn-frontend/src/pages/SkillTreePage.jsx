@@ -321,6 +321,12 @@ export default function SkillTreePage() {
                 </p>
               </div>
             )}
+            <Link
+              to={`/courses/${courseId}/materials`}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-card px-3 py-2 text-[11px] font-semibold text-fg-muted transition-colors hover:border-line-strong hover:text-foreground"
+            >
+              <BookOpen size={13} /> Materials
+            </Link>
             <span className="chip border-transparent bg-brand-tint text-gold-text">
               <Sparkles size={12} /> {tree.totalXp} XP
             </span>

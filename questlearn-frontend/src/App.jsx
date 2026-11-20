@@ -18,6 +18,7 @@ import VerifyEmail from './pages/VerifyEmail.jsx';
 const StudentDashboard = lazy(() => import('./pages/StudentDashboard.jsx'));
 const Announcements = lazy(() => import('./pages/Announcements.jsx'));
 const SkillTreePage = lazy(() => import('./pages/SkillTreePage.jsx'));
+const CourseMaterials = lazy(() => import('./pages/CourseMaterials.jsx'));
 const Leaderboard = lazy(() => import('./pages/Leaderboard.jsx'));
 const InstructorStudio = lazy(() => import('./pages/InstructorStudio.jsx'));
 const InstructorCourses = lazy(() => import('./pages/InstructorCourses.jsx'));
@@ -117,6 +118,14 @@ export default function App() {
               element={
                 <ProtectedRoute roles={['STUDENT', 'INSTRUCTOR', 'ADMIN']}>
                   <SkillTreePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/courses/:courseId/materials"
+              element={
+                <ProtectedRoute roles={['STUDENT', 'INSTRUCTOR', 'ADMIN']}>
+                  <CourseMaterials />
                 </ProtectedRoute>
               }
             />
